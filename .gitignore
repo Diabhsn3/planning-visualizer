@@ -1,17 +1,19 @@
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtualenv
 venv/
 .env
+*.env
 
 # macOS
 .DS_Store
 
-# Fast Downward build + artifacts
+# Planner build artifacts
 planning-tools/downward/builds/
-planning-tools/downward/*.sas
 planning-tools/downward/output.sas
+planning-tools/downward/*.sas
 planning-tools/downward/plan.txt
-
-# Ignore the whole downward repo (treated as external)
-planning-tools/downward/
