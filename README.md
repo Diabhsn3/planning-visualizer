@@ -1,83 +1,78 @@
 # Planning Visualizer
 
-Visualizing plans from a classical planner (**Fast Downward**) for several PDDL domains:
-Blocks World, Logistics, Depot, Gripper, Hanoi, Rovers, Satellite.  [oai_citation:0‡README.md](sediment://file_00000000794c71fd9f75ec39ce23c1a2)
+A modular framework that executes the **Fast Downward** classical planner on multiple PDDL domains and extracts grounded action sequences. This output will later feed into a visualization pipeline.
 
-The project runs a PDDL planner, extracts the action sequence, and (next steps) will feed it
-into a visualization pipeline.
+Supported example domains: **Blocks World, Logistics, Depot, Gripper, Hanoi, Rovers, Satellite.**
 
 ---
 
 ## 1. Prerequisites
 
 - Python 3.10+
-- `git`
-- C++ toolchain + CMake (needed to build Fast Downward)
-  - On macOS: Xcode Command Line Tools are enough (`xcode-select --install`)
+- Git
+- CMake + C++ toolchain  
+  - macOS: install Xcode CLI tools:  
+    ```bash
+    xcode-select --install
+    ```
 
 ---
 
-## 2. Clone and set up the repo
+## 2. Clone and Set Up the Repository
 
 ```bash
-# Clone
 git clone https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
 
-# Pull Fast Downward submodule
 git submodule update --init --recursive
+```
 
+---
 
-⸻
+## 3. Create Virtual Environment & Install Dependencies
 
-3. Create virtual environment & install Python deps
-
+```bash
 python3 -m venv venv
-source venv/bin/activate    # On Windows: venv\Scripts\activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
+```
 
+---
 
-⸻
+## 4. Build Fast Downward
 
-4. Build Fast Downward
-
-From the project root:
-
+```bash
 cd planning-tools/downward
 ./build.py release
 cd ../..
+```
 
-This should create the planner binary under:
+The resulting binary will appear at:
 
+```
 planning-tools/downward/builds/release/bin/downward
+```
 
+---
 
-⸻
+## 5. Smoke Test
 
-5. Smoke test: run example domains
+Run the multi‑domain test script:
 
-There is a simple smoke-test script that runs the planner on multiple domains:
-
+```bash
 python tests/test1.py
+```
 
-You should see printed plans for:
-	•	Blocks World
-	•	Logistics
-	•	Depot
-	•	Gripper
-	•	Hanoi
-	•	Rovers
-	•	Satellite
+Expected output: a plan for each domain listed above.
 
-If this works, your environment is wired correctly.
+---
 
-⸻
+## 6. Project Structure
 
-6. Project structure
-
+```
 planning-visualizer/
-├── domains/                   # PDDL domains + example problems
+├── domains/                  
 │   ├── blocks_world/
 │   ├── logistics/
 │   ├── depot/
@@ -86,22 +81,21 @@ planning-visualizer/
 │   ├── rovers/
 │   └── satellite/
 ├── planning-tools/
-│   └── downward/              # Fast Downward (git submodule)
+│   └── downward/
 ├── src/
 │   └── planner_runner/
-│       └── runner.py          # run_planner(domain_pddl, problem_pddl)
+│       └── runner.py
 ├── tests/
-│   └── test1.py               # Simple script that calls run_planner()
+│   └── test1.py
 ├── requirements.txt
 └── README.md
+```
 
+---
 
-⸻
+## 7. Using `run_planner`
 
-7. Using run_planner in your own code
-
-Example usage:
-
+```python
 from src.planner_runner.runner import run_planner
 
 actions = run_planner(
@@ -109,39 +103,40 @@ actions = run_planner(
     "domains/blocks_world/p1.pddl",
 )
 
-print("PLAN:", actions)
+print(actions)
+```
 
-actions is a list of grounded operator names returned by Fast Downward.
+`actions` is a list of grounded operator names returned by Fast Downward.
 
-⸻
+---
 
-8. Common issues / troubleshooting
+## 8. Troubleshooting
 
-1. ModuleNotFoundError: No module named 'src'
+### Issue: `ModuleNotFoundError: No module named 'src'`
+Run Python from the repository root:
 
-Make sure you run Python from the project root:
-
+```bash
 cd planning-visualizer
 source venv/bin/activate
 python tests/test1.py
+```
 
-2. Submodule errors after clone
+### Issue: Submodule Missing or Empty
 
-If Fast Downward did not appear:
-
+```bash
 git submodule update --init --recursive
 cd planning-tools/downward
 ./build.py release
+```
 
-If that fails, delete the clone and restart:
+If needed, reclone:
 
+```bash
 cd ..
 rm -rf planning-visualizer
 git clone https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
 git submodule update --init --recursive
+```
 
-
-⸻
-
-
+---
