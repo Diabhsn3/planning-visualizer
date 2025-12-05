@@ -30,3 +30,4 @@ def run_case(name: str, domain: str, problem: str):
 if __name__ == "__main__":
     for name, dom, prob in CASES:
         run_case(name, dom, prob)
+        print("done")
