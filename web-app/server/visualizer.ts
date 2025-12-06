@@ -1,0 +1,168 @@
+import { publicProcedure, router } from "./_core/trpc";
+import { z } from "zod";
+import { readFile, writeFile, mkdir } from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, "data");
+
+// Domain configurations
+const DOMAIN_CONFIGS = {
+  "blocks-world": {
+    name: "Blocks World",
+    description: "Classic block stacking problem",
+    domainFile: "python_modules/domains/blocks_world/domain.pddl",
+  },
+  "gripper": {
+    name: "Gripper",
+    description: "Robot with grippers moving balls between rooms",
+    domainFile: "python_modules/domains/gripper/domain.pddl",
+  },
+};
+
+export const visualizerRouter = router({
+  /**
+   * Generate states for pre-built examples
+   */
+  generateStates: publicProcedure
+    .input(
+      z.object({
+        domain: z.enum(["blocks-world", "gripper"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const dataFile = path.join(
+          DATA_DIR,
+          `${input.domain.replace("-", "_")}_rendered.json`
+        );
+        const data = JSON.parse(await readFile(dataFile, "utf-8"));
+
+        // Extract plan from states
+        const plan: string[] = [];
+        for (let i = 1; i < data.states.length; i++) {
+          const action = data.states[i].metadata?.action;
+          if (action) {
+            plan.push(action);
+          }
+        }
+
+        return {
+          success: true,
+          domain: input.domain,
+          problem: "example",
+          plan,
+          num_states: data.states.length,
+          states: data.states,
+        };
+      } catch (error) {
+        console.error("Error generating states:", error);
+        throw new Error(
+          error instanceof Error
+            ? error.message
+            : "Failed to generate states"
+        );
+      }
+    }),
+
+  /**
+   * Upload custom problem file and solve with planner
+   */
+  uploadAndGenerate: publicProcedure
+    .input(
+      z.object({
+        domainContent: z.string(),
+        problemContent: z.string(),
+        domainName: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Create uploads directory
+        const uploadsDir = path.join(__dirname, "uploads");
+        await mkdir(uploadsDir, { recursive: true });
+
+        const timestamp = Date.now();
+        let domainPath: string;
+        let problemPath: string;
+
+        // If domainContent is empty, use the domain file from repository
+        if (!input.domainContent || input.domainContent.trim() === "") {
+          // Use existing domain file
+          const domainConfig = DOMAIN_CONFIGS[input.domainName as keyof typeof DOMAIN_CONFIGS];
+          if (!domainConfig) {
+            throw new Error(`Unknown domain: ${input.domainName}`);
+          }
+          domainPath = path.join(__dirname, "..", domainConfig.domainFile);
+        } else {
+          // Save uploaded domain file
+          domainPath = path.join(uploadsDir, `domain_${timestamp}.pddl`);
+          await writeFile(domainPath, input.domainContent, "utf-8");
+        }
+
+        // Save problem file
+        problemPath = path.join(uploadsDir, `problem_${timestamp}.pddl`);
+        await writeFile(problemPath, input.problemContent, "utf-8");
+
+        // Run Python pipeline with planner
+        const pythonScript = path.join(
+          __dirname,
+          "../python_modules/visualizer_api.py"
+        );
+
+        const { stdout, stderr } = await execAsync(
+          `/usr/bin/python3.11 "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}"`,
+          {
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: 120000, // 2 minute timeout for planner
+          }
+        );
+
+        if (stderr && !stdout) {
+          throw new Error(`Python error: ${stderr}`);
+        }
+
+        // Parse JSON output
+        const data = JSON.parse(stdout);
+
+        if (!data.success) {
+          throw new Error(data.error || "Failed to solve problem");
+        }
+
+        return {
+          success: true,
+          domain: data.domain,
+          problem: data.problem,
+          plan: data.plan,
+          num_states: data.num_states,
+          states: data.states,
+          used_planner: data.used_planner,
+          planner_info: data.planner_info,
+        };
+      } catch (error) {
+        console.error("Error processing uploaded files:", error);
+        throw new Error(
+          error instanceof Error
+            ? error.message
+            : "Failed to process uploaded files"
+        );
+      }
+    }),
+
+  /**
+   * Get list of available domains
+   */
+  listDomains: publicProcedure.query(() => {
+    return Object.entries(DOMAIN_CONFIGS).map(([id, config]) => ({
+      id,
+      name: config.name,
+      description: config.description,
+    }));
+  }),
+});

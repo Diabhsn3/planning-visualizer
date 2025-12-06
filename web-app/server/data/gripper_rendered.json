@@ -1,0 +1,1007 @@
+{
+  "domain": "gripper",
+  "num_states": 6,
+  "states": [
+    {
+      "domain": "gripper",
+      "objects": [
+        {
+          "id": "rooma",
+          "type": "room",
+          "label": "ROOMA",
+          "position": [
+            50,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E8F5E9",
+            "has_robot": true
+          }
+        },
+        {
+          "id": "roomb",
+          "type": "room",
+          "label": "ROOMB",
+          "position": [
+            350,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E3F2FD",
+            "has_robot": false
+          }
+        },
+        {
+          "id": "robot",
+          "type": "robot",
+          "label": "Robot",
+          "position": [
+            150.0,
+            250.0
+          ],
+          "properties": {
+            "width": 60,
+            "height": 80,
+            "color": "#607D8B",
+            "location": "rooma"
+          }
+        },
+        {
+          "id": "ball",
+          "type": "gripper",
+          "label": "BALL",
+          "position": [
+            120.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": null
+          }
+        },
+        {
+          "id": "left",
+          "type": "gripper",
+          "label": "LEFT",
+          "position": [
+            180.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#4CAF50",
+            "free": true,
+            "holding": null
+          }
+        },
+        {
+          "id": "right",
+          "type": "gripper",
+          "label": "RIGHT",
+          "position": [
+            240.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#4CAF50",
+            "free": true,
+            "holding": null
+          }
+        },
+        {
+          "id": "ball1",
+          "type": "ball",
+          "label": "BALL1",
+          "position": [
+            80,
+            350
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#FF6B6B",
+            "status": "in rooma"
+          }
+        },
+        {
+          "id": "ball2",
+          "type": "ball",
+          "label": "BALL2",
+          "position": [
+            120,
+            350
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#4ECDC4",
+            "status": "in rooma"
+          }
+        },
+        {
+          "id": "room",
+          "type": "ball",
+          "label": "ROOM",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#9E9E9E",
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-robby",
+          "source": "robot",
+          "target": "rooma",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "at",
+          "source": "ball1",
+          "target": "rooma",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "at",
+          "source": "ball2",
+          "target": "rooma",
+          "properties": {
+            "relationship": "located_in"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 0
+      }
+    },
+    {
+      "domain": "gripper",
+      "objects": [
+        {
+          "id": "rooma",
+          "type": "room",
+          "label": "ROOMA",
+          "position": [
+            50,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E8F5E9",
+            "has_robot": true
+          }
+        },
+        {
+          "id": "roomb",
+          "type": "room",
+          "label": "ROOMB",
+          "position": [
+            350,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E3F2FD",
+            "has_robot": false
+          }
+        },
+        {
+          "id": "robot",
+          "type": "robot",
+          "label": "Robot",
+          "position": [
+            150.0,
+            250.0
+          ],
+          "properties": {
+            "width": 60,
+            "height": 80,
+            "color": "#607D8B",
+            "location": "rooma"
+          }
+        },
+        {
+          "id": "ball",
+          "type": "gripper",
+          "label": "BALL",
+          "position": [
+            120.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": null
+          }
+        },
+        {
+          "id": "left",
+          "type": "gripper",
+          "label": "LEFT",
+          "position": [
+            180.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": "ball1"
+          }
+        },
+        {
+          "id": "right",
+          "type": "gripper",
+          "label": "RIGHT",
+          "position": [
+            240.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#4CAF50",
+            "free": true,
+            "holding": null
+          }
+        },
+        {
+          "id": "ball1",
+          "type": "ball",
+          "label": "BALL1",
+          "position": [
+            180.0,
+            230.0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#FF6B6B",
+            "status": "held by left"
+          }
+        },
+        {
+          "id": "ball2",
+          "type": "ball",
+          "label": "BALL2",
+          "position": [
+            80,
+            350
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#4ECDC4",
+            "status": "in rooma"
+          }
+        },
+        {
+          "id": "room",
+          "type": "ball",
+          "label": "ROOM",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#9E9E9E",
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-robby",
+          "source": "robot",
+          "target": "rooma",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "at",
+          "source": "ball2",
+          "target": "rooma",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "carry",
+          "source": "left",
+          "target": "ball1",
+          "properties": {
+            "relationship": "holding"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 1,
+        "action": "(pick ball1 rooma left)"
+      }
+    },
+    {
+      "domain": "gripper",
+      "objects": [
+        {
+          "id": "rooma",
+          "type": "room",
+          "label": "ROOMA",
+          "position": [
+            50,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E8F5E9",
+            "has_robot": true
+          }
+        },
+        {
+          "id": "roomb",
+          "type": "room",
+          "label": "ROOMB",
+          "position": [
+            350,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E3F2FD",
+            "has_robot": false
+          }
+        },
+        {
+          "id": "robot",
+          "type": "robot",
+          "label": "Robot",
+          "position": [
+            150.0,
+            250.0
+          ],
+          "properties": {
+            "width": 60,
+            "height": 80,
+            "color": "#607D8B",
+            "location": "rooma"
+          }
+        },
+        {
+          "id": "ball",
+          "type": "gripper",
+          "label": "BALL",
+          "position": [
+            120.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": null
+          }
+        },
+        {
+          "id": "left",
+          "type": "gripper",
+          "label": "LEFT",
+          "position": [
+            180.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": "ball1"
+          }
+        },
+        {
+          "id": "right",
+          "type": "gripper",
+          "label": "RIGHT",
+          "position": [
+            240.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": "ball2"
+          }
+        },
+        {
+          "id": "ball1",
+          "type": "ball",
+          "label": "BALL1",
+          "position": [
+            180.0,
+            230.0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#FF6B6B",
+            "status": "held by left"
+          }
+        },
+        {
+          "id": "ball2",
+          "type": "ball",
+          "label": "BALL2",
+          "position": [
+            240.0,
+            230.0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#4ECDC4",
+            "status": "held by right"
+          }
+        },
+        {
+          "id": "room",
+          "type": "ball",
+          "label": "ROOM",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#9E9E9E",
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-robby",
+          "source": "robot",
+          "target": "rooma",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "carry",
+          "source": "left",
+          "target": "ball1",
+          "properties": {
+            "relationship": "holding"
+          }
+        },
+        {
+          "type": "carry",
+          "source": "right",
+          "target": "ball2",
+          "properties": {
+            "relationship": "holding"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 2,
+        "action": "(pick ball2 rooma right)"
+      }
+    },
+    {
+      "domain": "gripper",
+      "objects": [
+        {
+          "id": "rooma",
+          "type": "room",
+          "label": "ROOMA",
+          "position": [
+            50,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E8F5E9",
+            "has_robot": false
+          }
+        },
+        {
+          "id": "roomb",
+          "type": "room",
+          "label": "ROOMB",
+          "position": [
+            350,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E3F2FD",
+            "has_robot": true
+          }
+        },
+        {
+          "id": "robot",
+          "type": "robot",
+          "label": "Robot",
+          "position": [
+            450.0,
+            250.0
+          ],
+          "properties": {
+            "width": 60,
+            "height": 80,
+            "color": "#607D8B",
+            "location": "roomb"
+          }
+        },
+        {
+          "id": "ball",
+          "type": "gripper",
+          "label": "BALL",
+          "position": [
+            420.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": null
+          }
+        },
+        {
+          "id": "left",
+          "type": "gripper",
+          "label": "LEFT",
+          "position": [
+            480.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": "ball1"
+          }
+        },
+        {
+          "id": "right",
+          "type": "gripper",
+          "label": "RIGHT",
+          "position": [
+            540.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": "ball2"
+          }
+        },
+        {
+          "id": "ball1",
+          "type": "ball",
+          "label": "BALL1",
+          "position": [
+            480.0,
+            230.0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#FF6B6B",
+            "status": "held by left"
+          }
+        },
+        {
+          "id": "ball2",
+          "type": "ball",
+          "label": "BALL2",
+          "position": [
+            540.0,
+            230.0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#4ECDC4",
+            "status": "held by right"
+          }
+        },
+        {
+          "id": "room",
+          "type": "ball",
+          "label": "ROOM",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#9E9E9E",
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-robby",
+          "source": "robot",
+          "target": "roomb",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "carry",
+          "source": "left",
+          "target": "ball1",
+          "properties": {
+            "relationship": "holding"
+          }
+        },
+        {
+          "type": "carry",
+          "source": "right",
+          "target": "ball2",
+          "properties": {
+            "relationship": "holding"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 3,
+        "action": "(move rooma roomb)"
+      }
+    },
+    {
+      "domain": "gripper",
+      "objects": [
+        {
+          "id": "rooma",
+          "type": "room",
+          "label": "ROOMA",
+          "position": [
+            50,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E8F5E9",
+            "has_robot": false
+          }
+        },
+        {
+          "id": "roomb",
+          "type": "room",
+          "label": "ROOMB",
+          "position": [
+            350,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E3F2FD",
+            "has_robot": true
+          }
+        },
+        {
+          "id": "robot",
+          "type": "robot",
+          "label": "Robot",
+          "position": [
+            450.0,
+            250.0
+          ],
+          "properties": {
+            "width": 60,
+            "height": 80,
+            "color": "#607D8B",
+            "location": "roomb"
+          }
+        },
+        {
+          "id": "ball",
+          "type": "gripper",
+          "label": "BALL",
+          "position": [
+            420.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": null
+          }
+        },
+        {
+          "id": "left",
+          "type": "gripper",
+          "label": "LEFT",
+          "position": [
+            480.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#4CAF50",
+            "free": true,
+            "holding": null
+          }
+        },
+        {
+          "id": "right",
+          "type": "gripper",
+          "label": "RIGHT",
+          "position": [
+            540.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": "ball2"
+          }
+        },
+        {
+          "id": "ball1",
+          "type": "ball",
+          "label": "BALL1",
+          "position": [
+            380,
+            350
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#FF6B6B",
+            "status": "in roomb"
+          }
+        },
+        {
+          "id": "ball2",
+          "type": "ball",
+          "label": "BALL2",
+          "position": [
+            540.0,
+            230.0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#4ECDC4",
+            "status": "held by right"
+          }
+        },
+        {
+          "id": "room",
+          "type": "ball",
+          "label": "ROOM",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#9E9E9E",
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-robby",
+          "source": "robot",
+          "target": "roomb",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "at",
+          "source": "ball1",
+          "target": "roomb",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "carry",
+          "source": "right",
+          "target": "ball2",
+          "properties": {
+            "relationship": "holding"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 4,
+        "action": "(drop ball1 roomb left)"
+      }
+    },
+    {
+      "domain": "gripper",
+      "objects": [
+        {
+          "id": "rooma",
+          "type": "room",
+          "label": "ROOMA",
+          "position": [
+            50,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E8F5E9",
+            "has_robot": false
+          }
+        },
+        {
+          "id": "roomb",
+          "type": "room",
+          "label": "ROOMB",
+          "position": [
+            350,
+            100
+          ],
+          "properties": {
+            "width": 200,
+            "height": 300,
+            "color": "#E3F2FD",
+            "has_robot": true
+          }
+        },
+        {
+          "id": "robot",
+          "type": "robot",
+          "label": "Robot",
+          "position": [
+            450.0,
+            250.0
+          ],
+          "properties": {
+            "width": 60,
+            "height": 80,
+            "color": "#607D8B",
+            "location": "roomb"
+          }
+        },
+        {
+          "id": "ball",
+          "type": "gripper",
+          "label": "BALL",
+          "position": [
+            420.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#FF5722",
+            "free": false,
+            "holding": null
+          }
+        },
+        {
+          "id": "left",
+          "type": "gripper",
+          "label": "LEFT",
+          "position": [
+            480.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#4CAF50",
+            "free": true,
+            "holding": null
+          }
+        },
+        {
+          "id": "right",
+          "type": "gripper",
+          "label": "RIGHT",
+          "position": [
+            540.0,
+            200.0
+          ],
+          "properties": {
+            "size": 40,
+            "color": "#4CAF50",
+            "free": true,
+            "holding": null
+          }
+        },
+        {
+          "id": "ball1",
+          "type": "ball",
+          "label": "BALL1",
+          "position": [
+            380,
+            350
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#FF6B6B",
+            "status": "in roomb"
+          }
+        },
+        {
+          "id": "ball2",
+          "type": "ball",
+          "label": "BALL2",
+          "position": [
+            420,
+            350
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#4ECDC4",
+            "status": "in roomb"
+          }
+        },
+        {
+          "id": "room",
+          "type": "ball",
+          "label": "ROOM",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "size": 30,
+            "color": "#9E9E9E",
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-robby",
+          "source": "robot",
+          "target": "roomb",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "at",
+          "source": "ball2",
+          "target": "roomb",
+          "properties": {
+            "relationship": "located_in"
+          }
+        },
+        {
+          "type": "at",
+          "source": "ball1",
+          "target": "roomb",
+          "properties": {
+            "relationship": "located_in"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 5,
+        "action": "(drop ball2 roomb right)"
+      }
+    }
+  ]
+}

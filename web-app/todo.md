@@ -1,0 +1,61 @@
+# Planning Visualizer Web - TODO
+
+## Backend Integration
+- [x] Create API endpoint to run planner and generate states
+- [x] Integrate with existing Python modules (planner_runner, state_generator, state_renderer)
+- [x] Handle PDDL file uploads
+- [x] Return rendered states JSON
+
+## Canvas Rendering
+- [x] Create base Canvas renderer component
+- [x] Implement Blocks World canvas renderer
+- [x] Implement Gripper domain canvas renderer
+- [x] Support for rendering VisualObjects with positions
+- [x] Support for rendering VisualRelations
+
+## Frontend UI
+- [x] Create main visualizer page
+- [x] Timeline component with state navigation
+- [x] Play/pause animation controls
+- [x] Step forward/backward buttons
+- [x] Display current action and step number
+- [x] Domain selector
+- [x] PDDL file upload interface
+
+## Visual Styling
+- [x] Color scheme for different domains
+- [x] Smooth transitions between states
+- [x] Responsive canvas sizing
+- [x] Loading states
+- [x] Error handling UI
+
+## Testing
+- [x] Test with blocks_world domain
+- [x] Test with gripper domain
+- [x] Test timeline navigation
+- [x] Test animation playback
+- [x] End-to-end integration test
+
+## Bug Fixes
+- [x] Fix blocks appearing under the table in canvas rendering (Y-coordinate issue)
+
+## New Features
+- [x] Add PDDL file upload UI (domain and problem files)
+- [x] Backend API to handle file uploads (uploadAndGenerate mutation)
+- [x] Integrate uploaded files with Python planning pipeline
+- [x] Validate uploaded PDDL files
+- [x] Display uploaded file names in UI
+
+## Future Enhancements
+- [ ] Integrate actual Fast Downward planner for uploaded files (currently uses predefined plans)
+- [ ] Add support for remaining 5 domains from roadmap
+- [ ] Export visualization as GIF/video
+- [ ] Share visualizations via public links
+- [ ] Real-time planner execution progress
+
+## Fast Downward Integration
+- [x] Update UI: domain selection + problem file upload only
+- [x] Create Python script to run Fast Downward planner
+- [x] Integrate planner execution with backend API
+- [x] Handle planner output and errors
+- [x] Test with custom uploaded problems
