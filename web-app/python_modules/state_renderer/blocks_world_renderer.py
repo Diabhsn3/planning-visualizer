@@ -35,7 +35,7 @@ class BlocksWorldRenderer(BaseStateRenderer):
         super().__init__("blocks-world")
         self.block_size = 60  # Size of each block in pixels
         self.spacing = 80     # Horizontal spacing between stacks
-        self.table_y = 400    # Y position of the table
+        self.table_y = 500    # Y position of the table (increased for more vertical space)
     
     def render(self, state: Set, objects: Dict[str, str], metadata: Optional[Dict] = None) -> RenderedState:
         """
