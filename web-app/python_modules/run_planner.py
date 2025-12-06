@@ -11,6 +11,11 @@ from pathlib import Path
 # Path to Fast Downward (adjust if needed)
 FD_PATH = Path(__file__).resolve().parents[2] / "planning-visualizer" / "planning-tools" / "downward" / "fast-downward.py"
 
+# Check if we're in the Manus web app directory, adjust path accordingly
+if not FD_PATH.exists():
+    # Try alternative path for Manus web app
+    FD_PATH = Path("/home/ubuntu/planning-visualizer/planning-tools/downward/fast-downward.py")
+
 
 def run_fast_downward(domain_path: str, problem_path: str) -> list[str]:
     """

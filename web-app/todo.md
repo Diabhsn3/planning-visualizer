@@ -78,6 +78,15 @@
 - [x] Clear PYTHONPATH to prevent Python 3.13 imports in Python 3.11
 
 ## JSON Parsing Fix
-- [ ] Suppress Python warnings that are breaking JSON output
-- [ ] Redirect warnings to stderr instead of stdout
-- [ ] Test end-to-end with pasted PDDL content
+- [x] Suppress Python warnings that are breaking JSON output
+- [x] Redirect warnings to stderr instead of stdout
+- [x] Test end-to-end with pasted PDDL content
+
+## Fast Downward Dynamic Integration
+- [x] Check Fast Downward submodule status and build
+- [x] Build Fast Downward planner if not already built
+- [x] Update run_planner.py to use actual Fast Downward instead of fallback plans
+- [x] Test dynamic planning with Blocks World problems
+- [x] Test dynamic planning with Gripper problems
+- [x] Handle planner errors and timeouts gracefully
+- [ ] Update documentation with Fast Downward setup instructions
