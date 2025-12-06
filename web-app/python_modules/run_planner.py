@@ -8,13 +8,31 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-# Path to Fast Downward (adjust if needed)
-FD_PATH = Path(__file__).resolve().parents[2] / "planning-visualizer" / "planning-tools" / "downward" / "fast-downward.py"
+# Path to Fast Downward - try multiple possible locations
+# This handles both local development and Manus environment
+SCRIPT_DIR = Path(__file__).resolve().parent  # python_modules/
+WEB_APP_DIR = SCRIPT_DIR.parent  # web-app/
 
-# Check if we're in the Manus web app directory, adjust path accordingly
-if not FD_PATH.exists():
-    # Try alternative path for Manus web app
-    FD_PATH = Path("/home/ubuntu/planning-visualizer/planning-tools/downward/fast-downward.py")
+# Try multiple possible locations for Fast Downward
+POSSIBLE_FD_PATHS = [
+    # Location 1: Sibling to web-app directory (local development)
+    WEB_APP_DIR.parent / "planning-tools" / "downward" / "fast-downward.py",
+    # Location 2: In parent's planning-visualizer directory (Manus environment)
+    WEB_APP_DIR.parent.parent / "planning-visualizer" / "planning-tools" / "downward" / "fast-downward.py",
+    # Location 3: Absolute path in Manus environment
+    Path("/home/ubuntu/planning-visualizer/planning-tools/downward/fast-downward.py"),
+]
+
+# Find the first path that exists
+FD_PATH = None
+for path in POSSIBLE_FD_PATHS:
+    if path.exists():
+        FD_PATH = path
+        break
+
+# If no path found, use the first one (will fail later with clear error)
+if FD_PATH is None:
+    FD_PATH = POSSIBLE_FD_PATHS[0]
 
 
 def run_fast_downward(domain_path: str, problem_path: str) -> list[str]:
@@ -40,8 +58,9 @@ def run_fast_downward(domain_path: str, problem_path: str) -> list[str]:
     
     try:
         # Run Fast Downward with A* and LM-cut heuristic
+        # Use the same Python interpreter that's running this script
         cmd = [
-            "/usr/bin/python3.11",
+            sys.executable,
             str(FD_PATH),
             "--plan-file", str(plan_file),
             domain_path,
