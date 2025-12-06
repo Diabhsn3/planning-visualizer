@@ -16,31 +16,44 @@ const DATA_DIR = path.join(__dirname, "data");
 function getPythonCommand(): string {
   // Check environment variable first
   if (process.env.PYTHON_CMD) {
+    console.log('[Python Detection] Using PYTHON_CMD from environment:', process.env.PYTHON_CMD);
     return process.env.PYTHON_CMD;
   }
   
-  // Try common Python 3.11 paths
+  // Try common Python paths (prioritize python3 over python3.11 for broader compatibility)
   const pythonCandidates = [
-    '/usr/bin/python3.11',
-    '/usr/local/bin/python3.11',
-    'python3.11',
     'python3',
     'python',
+    'python3.11',
+    'python3.12',
+    '/usr/bin/python3',
+    '/usr/local/bin/python3',
+    '/usr/bin/python3.11',
+    '/usr/local/bin/python3.11',
   ];
   
-  // For now, return the first candidate and let the system resolve it
-  // In production, you might want to check which one exists
-  return pythonCandidates.find(cmd => {
+  console.log('[Python Detection] Searching for Python executable...');
+  
+  for (const cmd of pythonCandidates) {
     try {
-      require('child_process').execSync(`${cmd} --version`, { stdio: 'ignore' });
-      return true;
-    } catch {
-      return false;
+      const { execSync } = require('child_process');
+      const version = execSync(`${cmd} --version 2>&1`, { 
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe']
+      }).trim();
+      console.log(`[Python Detection] Found: ${cmd} (${version})`);
+      return cmd;
+    } catch (error) {
+      // Command not found, try next
     }
-  }) || 'python3';
+  }
+  
+  console.warn('[Python Detection] No Python found, defaulting to "python3"');
+  return 'python3';
 }
 
 const PYTHON_CMD = getPythonCommand();
+console.log('[Python Detection] Using Python command:', PYTHON_CMD);
 
 // Domain configurations
 const DOMAIN_CONFIGS = {

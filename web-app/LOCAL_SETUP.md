@@ -67,24 +67,29 @@ pnpm install
 
 If Python 3.11 is not in your system PATH or has a different name, you need to configure it:
 
-#### Option A: Set Environment Variable
+#### Option A: Set Environment Variable (Recommended)
 
 Create a `.env` file in the `web-app` directory:
 
 ```bash
-# macOS/Linux
-echo "PYTHON_CMD=python3.11" > .env
+# Most common: Use python3 (works for Python 3.11, 3.12, 3.13, etc.)
+echo "PYTHON_CMD=python3" > .env
+
+# Or if you have a specific version:
+echo "PYTHON_CMD=python3.12" > .env
 
 # Or specify full path if needed:
 # macOS (Homebrew)
-echo "PYTHON_CMD=/usr/local/bin/python3.11" > .env
+echo "PYTHON_CMD=/usr/local/bin/python3" > .env
 
 # macOS (Python.org)
-echo "PYTHON_CMD=/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11" > .env
+echo "PYTHON_CMD=/Library/Frameworks/Python.framework/Versions/3.12/bin/python3" > .env
 
 # Linux
-echo "PYTHON_CMD=/usr/bin/python3.11" > .env
+echo "PYTHON_CMD=/usr/bin/python3" > .env
 ```
+
+**Important:** The system will auto-detect Python, but if you see errors like "python3.11: command not found", create this `.env` file with the correct command for your system.
 
 #### Option B: Check Python Version
 
@@ -110,14 +115,21 @@ The application will be available at `http://localhost:3000`
 
 ## Troubleshooting
 
-### Issue: "python3.11: command not found"
+### Issue: "python3.11: command not found" or "python3.12: command not found"
 
 **Solution**: 
-1. Check which Python command works: `python3 --version` or `python --version`
-2. If you have Python 3.11+ but with a different command name, create a `.env` file:
+1. Check which Python command works on your system:
+   ```bash
+   python3 --version    # Try this first
+   python --version     # Or this
+   python3.12 --version # Or specific version
    ```
-   PYTHON_CMD=python3
+2. Create a `.env` file in the `web-app` directory with the working command:
+   ```bash
+   # In web-app directory:
+   echo "PYTHON_CMD=python3" > .env
    ```
+3. Restart the dev server: `pnpm dev`
 
 ### Issue: "Fast Downward not found"
 
