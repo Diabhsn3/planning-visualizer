@@ -1,17 +1,6 @@
 {
   "domain": "gripper",
-  "problem": "gripper-p1",
-  "objects": {
-    "roomb": "room",
-    "rooma": "room",
-    "ball2": "ball",
-    "ball1": "ball",
-    "room": "ball",
-    "right": "gripper",
-    "left": "gripper",
-    "ball": "gripper",
-    "gripper": "object"
-  },
+  "problem": "gripper-1",
   "plan": [
     "(pick ball1 rooma left)",
     "(pick ball2 rooma right)",
@@ -19,7 +8,6 @@
     "(drop ball1 roomb left)",
     "(drop ball2 roomb right)"
   ],
-  "num_states": 6,
   "states": [
     {
       "at-robby": [
@@ -27,22 +15,22 @@
           "rooma"
         ]
       ],
+      "at": [
+        [
+          "ball2",
+          "rooma"
+        ],
+        [
+          "ball1",
+          "rooma"
+        ]
+      ],
       "free": [
         [
           "left"
         ],
         [
           "right"
-        ]
-      ],
-      "at": [
-        [
-          "ball1",
-          "rooma"
-        ],
-        [
-          "ball2",
-          "rooma"
         ]
       ]
     },
@@ -78,12 +66,12 @@
       ],
       "carry": [
         [
-          "ball2",
-          "right"
-        ],
-        [
           "ball1",
           "left"
+        ],
+        [
+          "ball2",
+          "right"
         ]
       ]
     },
@@ -95,12 +83,12 @@
       ],
       "carry": [
         [
-          "ball2",
-          "right"
-        ],
-        [
           "ball1",
           "left"
+        ],
+        [
+          "ball2",
+          "right"
         ]
       ]
     },
@@ -115,41 +103,41 @@
           "left"
         ]
       ],
-      "carry": [
-        [
-          "ball2",
-          "right"
-        ]
-      ],
       "at": [
         [
           "ball1",
           "roomb"
         ]
+      ],
+      "carry": [
+        [
+          "ball2",
+          "right"
+        ]
       ]
     },
     {
+      "at-robby": [
+        [
+          "roomb"
+        ]
+      ],
+      "at": [
+        [
+          "ball2",
+          "roomb"
+        ],
+        [
+          "ball1",
+          "roomb"
+        ]
+      ],
       "free": [
         [
           "left"
         ],
         [
           "right"
-        ]
-      ],
-      "at": [
-        [
-          "ball2",
-          "roomb"
-        ],
-        [
-          "ball1",
-          "roomb"
-        ]
-      ],
-      "at-robby": [
-        [
-          "roomb"
         ]
       ]
     }
