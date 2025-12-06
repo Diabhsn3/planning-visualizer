@@ -82,7 +82,8 @@ class BlocksWorldRenderer(BaseStateRenderer):
         # Position each stack
         x_offset = 50
         for stack in stacks:
-            y_pos = self.table_y
+            # Start from table position minus block height (blocks sit ON the table)
+            y_pos = self.table_y - self.block_size
             
             for i, block in enumerate(stack):
                 # Calculate position
