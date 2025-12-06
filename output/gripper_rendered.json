@@ -149,7 +149,7 @@
         },
         {
           "type": "at",
-          "source": "ball2",
+          "source": "ball1",
           "target": "rooma",
           "properties": {
             "relationship": "located_in"
@@ -157,7 +157,7 @@
         },
         {
           "type": "at",
-          "source": "ball1",
+          "source": "ball2",
           "target": "rooma",
           "properties": {
             "relationship": "located_in"

@@ -84,7 +84,7 @@
       "relations": [
         {
           "type": "ontable",
-          "source": "a",
+          "source": "c",
           "target": "table",
           "properties": {
             "relationship": "supported"
@@ -92,7 +92,7 @@
         },
         {
           "type": "ontable",
-          "source": "c",
+          "source": "a",
           "target": "table",
           "properties": {
             "relationship": "supported"
