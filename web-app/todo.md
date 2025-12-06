@@ -59,3 +59,25 @@
 - [x] Integrate planner execution with backend API
 - [x] Handle planner output and errors
 - [x] Test with custom uploaded problems
+
+## UI Improvements
+- [x] Add text input option for PDDL content (alongside file upload)
+- [x] Add tabs to switch between file upload and text input modes
+- [x] Fix file upload issues
+- [ ] Validate PDDL syntax before submission
+
+## Bug Fixes (Current)
+- [x] Fix text input not working when users paste PDDL content
+- [x] Debug tab switching between Upload File and Paste Text (replaced tabs with button toggle)
+- [x] Ensure Solve Problem button works with pasted text
+
+## Critical Bug
+- [x] Fix text input still not working - test end-to-end flow (UI works, Python backend fails)
+- [x] Debug why Solve Problem button doesn't work with pasted text (Python version mismatch)
+- [x] Fix Python 3.11/3.13 module mismatch error (SRE module) - cleared PYTHONPATH
+- [x] Clear PYTHONPATH to prevent Python 3.13 imports in Python 3.11
+
+## JSON Parsing Fix
+- [ ] Suppress Python warnings that are breaking JSON output
+- [ ] Redirect warnings to stderr instead of stdout
+- [ ] Test end-to-end with pasted PDDL content

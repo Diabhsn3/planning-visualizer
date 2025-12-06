@@ -5,6 +5,13 @@ Integrates planner_runner, state_generator, and state_renderer.
 """
 
 import sys
+import os
+
+# Suppress all warnings to prevent them from polluting JSON output
+import warnings
+warnings.filterwarnings('ignore')
+os.environ['PYTHONWARNINGS'] = 'ignore'
+
 import json
 from pathlib import Path
 

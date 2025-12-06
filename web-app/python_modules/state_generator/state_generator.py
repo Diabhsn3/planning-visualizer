@@ -5,6 +5,7 @@ State Generator - generates intermediate states by applying actions.
 from typing import List, Set, Dict, Tuple
 from .pddl_parser import PDDLParser, Predicate, Action
 import re
+import sys
 
 
 class StateGenerator:
@@ -146,12 +147,12 @@ class StateGenerator:
         try:
             action = self.parser.get_action_by_name(action_name)
         except ValueError as e:
-            print(f"Error: {e}")
+            print(f"Error: {e}", file=sys.stderr)
             return False
         
         # Create variable binding
         if len(params) != len(action.parameters):
-            print(f"Error: Parameter count mismatch for action {action_name}")
+            print(f"Error: Parameter count mismatch for action {action_name}", file=sys.stderr)
             return False
         
         binding = {}
@@ -160,7 +161,7 @@ class StateGenerator:
         
         # Check preconditions
         if not self.check_preconditions(action, binding):
-            print(f"Warning: Preconditions not satisfied for action {grounded_action}")
+            print(f"Warning: Preconditions not satisfied for action {grounded_action}", file=sys.stderr)
             return False
         
         # Apply effects
@@ -186,7 +187,7 @@ class StateGenerator:
         for i, action in enumerate(plan):
             success = self.apply_action(action)
             if not success:
-                print(f"Failed to apply action {i}: {action}")
+                print(f"Failed to apply action {i}: {action}", file=sys.stderr)
                 break
         
         return self.get_state_history()

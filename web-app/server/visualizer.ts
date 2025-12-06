@@ -83,6 +83,8 @@ export const visualizerRouter = router({
       })
     )
     .mutation(async ({ input }) => {
+      console.log('[uploadAndGenerate] Starting with domain:', input.domainName);
+      console.log('[uploadAndGenerate] Problem content length:', input.problemContent.length);
       try {
         // Create uploads directory
         const uploadsDir = path.join(__dirname, "uploads");
@@ -116,20 +118,31 @@ export const visualizerRouter = router({
           "../python_modules/visualizer_api.py"
         );
 
+        console.log('[uploadAndGenerate] Running Python script...');
         const { stdout, stderr } = await execAsync(
           `/usr/bin/python3.11 "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}"`,
           {
             maxBuffer: 10 * 1024 * 1024,
             timeout: 120000, // 2 minute timeout for planner
+            env: {
+              ...process.env,
+              PYTHONPATH: '', // Clear PYTHONPATH to prevent Python 3.13 imports
+              PYTHONHOME: '', // Clear PYTHONHOME as well
+            },
           }
         );
+        console.log('[uploadAndGenerate] Python script completed');
+        console.log('[uploadAndGenerate] stdout length:', stdout.length);
+        console.log('[uploadAndGenerate] stderr:', stderr || 'none');
 
         if (stderr && !stdout) {
           throw new Error(`Python error: ${stderr}`);
         }
 
         // Parse JSON output
+        console.log('[uploadAndGenerate] Parsing JSON output...');
         const data = JSON.parse(stdout);
+        console.log('[uploadAndGenerate] JSON parsed successfully, success:', data.success);
 
         if (!data.success) {
           throw new Error(data.error || "Failed to solve problem");
@@ -146,7 +159,8 @@ export const visualizerRouter = router({
           planner_info: data.planner_info,
         };
       } catch (error) {
-        console.error("Error processing uploaded files:", error);
+        console.error('[uploadAndGenerate] Error:', error);
+        console.error('[uploadAndGenerate] Error stack:', error instanceof Error ? error.stack : 'No stack');
         throw new Error(
           error instanceof Error
             ? error.message
