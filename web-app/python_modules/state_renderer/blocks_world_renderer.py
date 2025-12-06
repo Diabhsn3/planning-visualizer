@@ -75,18 +75,29 @@ class BlocksWorldRenderer(BaseStateRenderer):
         # Build stacks from bottom to top
         stacks = self._build_stacks(blocks, on_relations, ontable_blocks)
         
+        # Assign fixed X positions to all blocks based on alphabetical order
+        # This ensures blocks maintain their horizontal position throughout the animation
+        sorted_blocks = sorted(blocks)
+        block_x_positions = {}
+        x_offset = 50
+        for block in sorted_blocks:
+            block_x_positions[block] = x_offset
+            x_offset += self.spacing
+        
         # Position blocks
         visual_objects = []
         visual_relations = []
         
-        # Position each stack
-        x_offset = 50
+        # Position each stack using fixed X coordinates
         for stack in stacks:
+            # Get the X position from the bottom block of the stack
+            bottom_block = stack[0]
+            stack_x = block_x_positions[bottom_block]
             y_pos = self.table_y
             
             for i, block in enumerate(stack):
-                # Calculate position
-                position = [x_offset, y_pos]
+                # Use fixed X position for this block
+                position = [stack_x, y_pos]
                 
                 # Create visual object
                 color = self.BLOCK_COLORS.get(block, '#95A5A6')
@@ -109,16 +120,16 @@ class BlocksWorldRenderer(BaseStateRenderer):
                 
                 # Move up for next block
                 y_pos -= self.block_size
-            
-            x_offset += self.spacing
         
         # Add block being held (if any)
         if holding_block:
+            # Use the block's fixed X position even when held
+            held_x = block_x_positions.get(holding_block, x_offset)
             visual_obj = VisualObject(
                 id=holding_block,
                 type='block',
                 label=holding_block.upper(),
-                position=[x_offset, self.table_y - 150],  # Above table
+                position=[held_x, self.table_y - 150],  # Above table, at block's fixed X
                 properties={
                     'color': self.BLOCK_COLORS.get(holding_block, '#95A5A6'),
                     'width': self.block_size,
@@ -144,11 +155,13 @@ class BlocksWorldRenderer(BaseStateRenderer):
         visual_objects.append(table)
         
         # Add gripper/hand
+        # Position gripper above the held block, or at the rightmost position
+        gripper_x = block_x_positions.get(holding_block, x_offset) if holding_block else x_offset
         gripper = VisualObject(
             id='gripper',
             type='gripper',
             label='Hand',
-            position=[x_offset, self.table_y - 200],
+            position=[gripper_x, self.table_y - 200],
             properties={
                 'empty': hand_empty,
                 'holding': holding_block
