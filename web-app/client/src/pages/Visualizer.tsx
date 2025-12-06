@@ -28,6 +28,53 @@ export default function Visualizer() {
     { id: "gripper", name: "Gripper", description: "Robot gripper moving balls between rooms" },
   ];
 
+  const getDefaultProblem = (domain: string): string => {
+    if (domain === "blocks-world") {
+      return `(define (problem bw-default)
+  (:domain blocks-world)
+  (:objects a b c - block)
+  (:init
+    (ontable a)
+    (ontable b)
+    (ontable c)
+    (clear a)
+    (clear b)
+    (clear c)
+    (handempty)
+  )
+  (:goal
+    (and
+      (on c b)
+      (on b a)
+    )
+  )
+)`;
+    } else if (domain === "gripper") {
+      return `(define (problem gripper-default)
+  (:domain gripper)
+  (:objects
+    rooma roomb - room
+    ball1 ball2 - ball
+    left right - gripper
+  )
+  (:init
+    (at-robby rooma)
+    (free left)
+    (free right)
+    (at ball1 rooma)
+    (at ball2 rooma)
+  )
+  (:goal
+    (and
+      (at ball1 roomb)
+      (at ball2 roomb)
+    )
+  )
+)`;
+    }
+    return "";
+  };
+
   const prebuiltStates = null;
 
   const uploadMutation = trpc.visualizer.uploadAndGenerate.useMutation({
@@ -75,9 +122,14 @@ export default function Visualizer() {
         processContent(problemText);
       }
     } else {
-      // Load prebuilt states from backend
-      alert("Please use custom problem mode for now");
-    }  };
+      // Use default problem for the selected domain
+      uploadMutation.mutate({
+        domainContent: "",
+        problemContent: getDefaultProblem(selectedDomain),
+        domainName: selectedDomain,
+      });
+    }
+  };
 
   const loadExample = () => {
     const examplePDDL = `(define (problem bw-example-1)
