@@ -11,7 +11,7 @@
           "label": "A",
           "position": [
             50,
-            400
+            340
           ],
           "properties": {
             "color": "#FF6B6B",
@@ -27,7 +27,7 @@
           "label": "B",
           "position": [
             130,
-            400
+            340
           ],
           "properties": {
             "color": "#4ECDC4",
@@ -43,7 +43,7 @@
           "label": "C",
           "position": [
             210,
-            400
+            340
           ],
           "properties": {
             "color": "#45B7D1",
@@ -84,7 +84,7 @@
       "relations": [
         {
           "type": "ontable",
-          "source": "c",
+          "source": "a",
           "target": "table",
           "properties": {
             "relationship": "supported"
@@ -92,7 +92,7 @@
         },
         {
           "type": "ontable",
-          "source": "a",
+          "source": "c",
           "target": "table",
           "properties": {
             "relationship": "supported"
@@ -120,7 +120,7 @@
           "label": "A",
           "position": [
             50,
-            400
+            340
           ],
           "properties": {
             "color": "#FF6B6B",
@@ -136,7 +136,7 @@
           "label": "C",
           "position": [
             130,
-            400
+            340
           ],
           "properties": {
             "color": "#45B7D1",
@@ -230,7 +230,7 @@
           "label": "A",
           "position": [
             50,
-            400
+            340
           ],
           "properties": {
             "color": "#FF6B6B",
@@ -246,7 +246,7 @@
           "label": "C",
           "position": [
             130,
-            400
+            340
           ],
           "properties": {
             "color": "#45B7D1",
@@ -262,7 +262,7 @@
           "label": "B",
           "position": [
             130,
-            340
+            280
           ],
           "properties": {
             "color": "#4ECDC4",
@@ -340,7 +340,7 @@
           "label": "C",
           "position": [
             50,
-            400
+            340
           ],
           "properties": {
             "color": "#45B7D1",
@@ -356,7 +356,7 @@
           "label": "B",
           "position": [
             50,
-            340
+            280
           ],
           "properties": {
             "color": "#4ECDC4",
@@ -450,7 +450,7 @@
           "label": "C",
           "position": [
             50,
-            400
+            340
           ],
           "properties": {
             "color": "#45B7D1",
@@ -466,7 +466,7 @@
           "label": "B",
           "position": [
             50,
-            340
+            280
           ],
           "properties": {
             "color": "#4ECDC4",
@@ -482,7 +482,7 @@
           "label": "A",
           "position": [
             50,
-            280
+            220
           ],
           "properties": {
             "color": "#FF6B6B",
@@ -523,16 +523,16 @@
       "relations": [
         {
           "type": "on",
-          "source": "a",
-          "target": "b",
+          "source": "b",
+          "target": "c",
           "properties": {
             "relationship": "stacked"
           }
         },
         {
           "type": "on",
-          "source": "b",
-          "target": "c",
+          "source": "a",
+          "target": "b",
           "properties": {
             "relationship": "stacked"
           }

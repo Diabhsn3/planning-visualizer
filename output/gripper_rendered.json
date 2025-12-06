@@ -482,16 +482,16 @@
         },
         {
           "type": "carry",
-          "source": "right",
-          "target": "ball2",
+          "source": "left",
+          "target": "ball1",
           "properties": {
             "relationship": "holding"
           }
         },
         {
           "type": "carry",
-          "source": "left",
-          "target": "ball1",
+          "source": "right",
+          "target": "ball2",
           "properties": {
             "relationship": "holding"
           }
@@ -649,16 +649,16 @@
         },
         {
           "type": "carry",
-          "source": "right",
-          "target": "ball2",
+          "source": "left",
+          "target": "ball1",
           "properties": {
             "relationship": "holding"
           }
         },
         {
           "type": "carry",
-          "source": "left",
-          "target": "ball1",
+          "source": "right",
+          "target": "ball2",
           "properties": {
             "relationship": "holding"
           }
