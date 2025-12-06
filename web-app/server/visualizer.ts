@@ -12,6 +12,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, "data");
 
+// Detect Python executable
+function getPythonCommand(): string {
+  // Check environment variable first
+  if (process.env.PYTHON_CMD) {
+    return process.env.PYTHON_CMD;
+  }
+  
+  // Try common Python 3.11 paths
+  const pythonCandidates = [
+    '/usr/bin/python3.11',
+    '/usr/local/bin/python3.11',
+    'python3.11',
+    'python3',
+    'python',
+  ];
+  
+  // For now, return the first candidate and let the system resolve it
+  // In production, you might want to check which one exists
+  return pythonCandidates.find(cmd => {
+    try {
+      require('child_process').execSync(`${cmd} --version`, { stdio: 'ignore' });
+      return true;
+    } catch {
+      return false;
+    }
+  }) || 'python3';
+}
+
+const PYTHON_CMD = getPythonCommand();
+
 // Domain configurations
 const DOMAIN_CONFIGS = {
   "blocks-world": {
@@ -119,8 +149,9 @@ export const visualizerRouter = router({
         );
 
         console.log('[uploadAndGenerate] Running Python script...');
+        console.log('[uploadAndGenerate] Using Python command:', PYTHON_CMD);
         const { stdout, stderr } = await execAsync(
-          `/usr/bin/python3.11 "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}"`,
+          `"${PYTHON_CMD}" "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}"`,
           {
             maxBuffer: 10 * 1024 * 1024,
             timeout: 120000, // 2 minute timeout for planner
