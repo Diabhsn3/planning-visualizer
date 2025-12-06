@@ -16,6 +16,12 @@ export default function Visualizer() {
   const [currentStateIndex, setCurrentStateIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1000);
+  const [plannerInfo, setPlannerInfo] = useState<{used_planner: boolean, info: string} | null>(null);
+  const [showStatus, setShowStatus] = useState(false);
+
+  const statusQuery = trpc.visualizer.checkStatus.useQuery(undefined, {
+    enabled: showStatus,
+  });
 
   const domains = [
     { id: "blocks-world", name: "Blocks World", description: "Classic block stacking problem" },
@@ -29,6 +35,10 @@ export default function Visualizer() {
       setRenderedStates(data.states);
       setPlan(data.plan);
       setCurrentStateIndex(0);
+      setPlannerInfo({
+        used_planner: data.used_planner || false,
+        info: data.planner_info || "Unknown"
+      });
     },
     onError: (error) => {
       alert(`Error: ${error.message}`);
@@ -133,7 +143,92 @@ export default function Visualizer() {
           <p className="text-gray-600">
             Visualize classical planning algorithms with domain-specific renderers
           </p>
+          <button
+            onClick={() => setShowStatus(!showStatus)}
+            className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
+          >
+            {showStatus ? "Hide" : "Show"} System Status
+          </button>
         </div>
+
+        {/* System Status Panel */}
+        {showStatus && (
+          <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">System Status</h2>
+            {statusQuery.isLoading ? (
+              <p className="text-gray-600">Checking system status...</p>
+            ) : statusQuery.data ? (
+              <div className="space-y-4">
+                {/* Python Status */}
+                <div className="flex items-start gap-3">
+                  <div className={`mt-1 w-3 h-3 rounded-full ${
+                    statusQuery.data.python.available ? "bg-green-500" : "bg-red-500"
+                  }`} />
+                  <div className="flex-1">
+                    <div className="font-medium">
+                      Python {statusQuery.data.python.available ? "Available" : "Not Found"}
+                    </div>
+                    {statusQuery.data.python.available && (
+                      <div className="text-sm text-gray-600">
+                        Version: {statusQuery.data.python.version}<br />
+                        Command: {statusQuery.data.python.command}
+                      </div>
+                    )}
+                    {!statusQuery.data.python.available && (
+                      <div className="text-sm text-red-600">
+                        Python 3.11+ not found. Please install Python and configure PYTHON_CMD in .env
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Fast Downward Status */}
+                <div className="flex items-start gap-3">
+                  <div className={`mt-1 w-3 h-3 rounded-full ${
+                    statusQuery.data.fastDownward.available ? "bg-green-500" : "bg-red-500"
+                  }`} />
+                  <div className="flex-1">
+                    <div className="font-medium">
+                      Fast Downward {statusQuery.data.fastDownward.available ? "Available" : "Not Found"}
+                    </div>
+                    {statusQuery.data.fastDownward.available && (
+                      <div className="text-sm text-gray-600">
+                        Path: {statusQuery.data.fastDownward.path}
+                      </div>
+                    )}
+                    {!statusQuery.data.fastDownward.available && (
+                      <div className="text-sm text-red-600">
+                        Fast Downward not built. Please run:<br />
+                        <code className="bg-gray-100 px-2 py-1 rounded mt-1 inline-block">
+                          cd planning-tools/downward && ./build.py
+                        </code>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Overall Status */}
+                {statusQuery.data.python.available && statusQuery.data.fastDownward.available && (
+                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-sm text-green-800">
+                      ✓ All systems ready! You can solve custom PDDL problems with Fast Downward.
+                    </p>
+                  </div>
+                )}
+                {(!statusQuery.data.python.available || !statusQuery.data.fastDownward.available) && (
+                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <p className="text-sm text-yellow-800">
+                      ⚠ Some components are missing. The visualizer will use fallback plans that may not match your problems.
+                      See <strong>LOCAL_SETUP.md</strong> for setup instructions.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-red-600">Failed to check system status</p>
+            )}
+          </div>
+        )}
 
         {/* Configuration Panel */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -291,7 +386,26 @@ export default function Visualizer() {
         {/* Visualization Panel */}
         {renderedStates.length > 0 ? (
           <div className="bg-white rounded-lg shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">Visualization</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold">Visualization</h2>
+              {plannerInfo && (
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  plannerInfo.used_planner 
+                    ? "bg-green-100 text-green-800" 
+                    : "bg-yellow-100 text-yellow-800"
+                }`}>
+                  {plannerInfo.used_planner ? "✓" : "⚠"} {plannerInfo.info}
+                </div>
+              )}
+            </div>
+            {!plannerInfo?.used_planner && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  <strong>Warning:</strong> Fast Downward planner not available. Using fallback plan that may not match your problem.
+                  Please build Fast Downward locally (see LOCAL_SETUP.md).
+                </p>
+              </div>
+            )}
 
             {/* Canvas */}
             <div className="mb-6">

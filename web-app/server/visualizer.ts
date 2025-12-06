@@ -210,4 +210,47 @@ export const visualizerRouter = router({
       description: config.description,
     }));
   }),
+
+  /**
+   * Check system status (Python, Fast Downward availability)
+   */
+  checkStatus: publicProcedure.query(async () => {
+    const status = {
+      python: { available: false, version: "", command: PYTHON_CMD },
+      fastDownward: { available: false, path: "" },
+    };
+
+    try {
+      // Check Python
+      const { stdout: pythonVersion } = await execAsync(`"${PYTHON_CMD}" --version`);
+      status.python.available = true;
+      status.python.version = pythonVersion.trim();
+    } catch (error) {
+      status.python.available = false;
+    }
+
+    try {
+      // Check Fast Downward
+      const fdPath = path.join(__dirname, "../planning-tools/downward/fast-downward.py");
+      const { stdout } = await execAsync(`"${PYTHON_CMD}" "${fdPath}" --help`, { timeout: 5000 });
+      if (stdout.includes("Fast Downward")) {
+        status.fastDownward.available = true;
+        status.fastDownward.path = fdPath;
+      }
+    } catch (error) {
+      // Try alternative path (repository root)
+      try {
+        const altFdPath = path.join(__dirname, "../../planning-tools/downward/fast-downward.py");
+        const { stdout } = await execAsync(`"${PYTHON_CMD}" "${altFdPath}" --help`, { timeout: 5000 });
+        if (stdout.includes("Fast Downward")) {
+          status.fastDownward.available = true;
+          status.fastDownward.path = altFdPath;
+        }
+      } catch {
+        status.fastDownward.available = false;
+      }
+    }
+
+    return status;
+  }),
 });
