@@ -11,21 +11,26 @@ from pathlib import Path
 # Add current directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from visualizer_api import visualize_plan_fallback
+from visualizer_api import visualize_plan
+from run_planner import get_fallback_plan
+
+# Get paths to built-in domain files
+DOMAINS_DIR = Path(__file__).parent / "domains"
+DOMAIN_PATH = str(DOMAINS_DIR / "blocks_world" / "domain.pddl")
+PROBLEM_PATH = str(DOMAINS_DIR / "blocks_world" / "p1.pddl")
 
 print("=" * 70)
 print("BLOCKS WORLD DOMAIN TEST")
 print("=" * 70)
 print("\nRunning visualizer for Blocks World domain...")
-print("This uses the built-in example problem.\n")
+print("Using built-in example problem.\n")
 
 try:
-    result = visualize_plan_fallback("blocksworld")
+    result = visualize_plan(DOMAIN_PATH, PROBLEM_PATH, "blocksworld")
     
     if result["success"]:
         print("✅ SUCCESS!\n")
-        print(f"Domain: {result['metadata']['domain']}")
-        print(f"Planner used: {result['metadata']['planner_used']}")
+        print(f"Domain: blocksworld")
         print(f"Plan length: {len(result['metadata']['plan'])} actions")
         print(f"Number of states: {len(result['states'])}")
         

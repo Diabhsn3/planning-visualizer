@@ -11,9 +11,25 @@ from pathlib import Path
 # Add current directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from visualizer_api import visualize_plan_fallback
+from visualizer_api import visualize_plan
 
-def test_domain(domain_name):
+# Get paths to built-in domain files
+DOMAINS_DIR = Path(__file__).parent / "domains"
+
+# Define available domains with their paths
+DOMAINS = {
+    "blocksworld": {
+        "domain": str(DOMAINS_DIR / "blocks_world" / "domain.pddl"),
+        "problem": str(DOMAINS_DIR / "blocks_world" / "p1.pddl"),
+    },
+    "gripper": {
+        "domain": str(DOMAINS_DIR / "gripper" / "domain.pddl"),
+        "problem": str(DOMAINS_DIR / "gripper" / "p1.pddl"),
+    },
+}
+
+
+def test_domain(domain_name, domain_path, problem_path):
     """Test a single domain"""
     print("=" * 70)
     print(f"{domain_name.upper()} DOMAIN TEST")
@@ -21,12 +37,11 @@ def test_domain(domain_name):
     print(f"\nRunning visualizer for {domain_name} domain...\n")
     
     try:
-        result = visualize_plan_fallback(domain_name)
+        result = visualize_plan(domain_path, problem_path, domain_name)
         
         if result["success"]:
             print("✅ SUCCESS!\n")
-            print(f"Domain: {result['metadata']['domain']}")
-            print(f"Planner used: {result['metadata']['planner_used']}")
+            print(f"Domain: {domain_name}")
             print(f"Plan length: {len(result['metadata']['plan'])} actions")
             print(f"Number of states: {len(result['states'])}")
             
@@ -55,11 +70,14 @@ def main():
     print("=" * 70)
     print("\nTesting all available domains with example problems...\n")
     
-    domains = ["blocksworld", "gripper"]
     results = {}
     
-    for domain in domains:
-        results[domain] = test_domain(domain)
+    for domain_name, paths in DOMAINS.items():
+        results[domain_name] = test_domain(
+            domain_name,
+            paths["domain"],
+            paths["problem"]
+        )
         print()
     
     # Summary
