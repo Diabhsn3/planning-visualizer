@@ -138,7 +138,7 @@ if exist "%DOWNWARD_PATH%\fast-downward.py" (
     )
 ) else (
     echo [INFO] Fast Downward not found. The app will use fallback mode.
-    echo To enable Fast Downward, run: git submodule update --init --recursive
+    echo To enable Fast Downward, run git submodule update --init --recursive
 )
 
 REM Step 6: Start the application
