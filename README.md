@@ -43,8 +43,10 @@ The script will automatically:
 - ✅ Check Python and Node.js installation
 - ✅ Install all dependencies
 - ✅ Configure environment variables
-- ✅ Build Fast Downward planner
+- ✅ Build Fast Downward planner (optional - app works in fallback mode if build fails)
 - ✅ Start the web application at `http://localhost:3000`
+
+**Note**: If Fast Downward build fails (common on newer macOS), the app will run in **fallback mode** with pre-defined example problems. See troubleshooting guides for details.
 
 ### Platform-Specific Setup Guides
 
@@ -57,13 +59,14 @@ For detailed setup instructions and troubleshooting:
 ## Features
 
 - ✅ PDDL domain and problem parsing
-- ✅ Fast Downward planner integration (A* + LM-cut)
+- ✅ Fast Downward planner integration (A* + LM-cut) - *optional*
+- ✅ **Fallback mode** - works without Fast Downward for pre-defined problems
 - ✅ State-by-state plan execution
 - ✅ Domain-specific visual rendering
 - ✅ Interactive web interface with HTML5 Canvas
 - ✅ Timeline controls and animation playback
-- ✅ Custom problem file upload
-- ✅ Support for 7 planning domains
+- ✅ Custom problem file upload (requires Fast Downward)
+- ✅ Support for Blocks World and Gripper domains
 
 ---
 
