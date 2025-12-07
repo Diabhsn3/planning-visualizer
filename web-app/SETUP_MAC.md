@@ -226,6 +226,35 @@ rm -rf node_modules
 pnpm install
 ```
 
+### Problem: Fast Downward C++ compilation errors (namespace std, size_t, nothrow_t)
+
+**This is a known compatibility issue** between Fast Downward and newer macOS Command Line Tools (Xcode 15+).
+
+**Workaround - Use Fallback Mode**:
+
+The app works perfectly without Fast Downward! Just skip the build and use fallback mode:
+
+1. Run the app normally: `pnpm dev`
+2. You'll see a yellow "⚠ Fallback" badge instead of green
+3. The visualizer still works with pre-defined example problems
+
+**What you can do in fallback mode**:
+- ✅ Visualize Blocks World with default 4-block problem
+- ✅ Visualize Gripper domain with default problem
+- ✅ Use all animation controls (play, pause, timeline)
+- ✅ See step-by-step state transitions
+- ❌ Cannot solve custom PDDL problems (requires Fast Downward)
+
+**Alternative - Downgrade Command Line Tools** (Advanced):
+
+If you really need Fast Downward for custom problems:
+
+1. Download Xcode Command Line Tools 14.x from [Apple Developer Downloads](https://developer.apple.com/download/all/)
+2. Install the older version
+3. Rebuild Fast Downward: `cd planning-tools/downward && ./build.py`
+
+Note: This may affect other development tools on your system.
+
 ---
 
 ## System Status Check
