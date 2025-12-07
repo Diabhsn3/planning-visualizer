@@ -18,19 +18,19 @@ NC='\033[0m' # No Color
 
 # Check for spaces in directory path
 CURRENT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# if [[ "$CURRENT_DIR" == *" "* ]]; then
-#     echo -e "${RED}✗ ERROR: Directory path contains spaces${NC}"
-#     echo ""
-#     echo "Current path: $CURRENT_DIR"
-#     echo ""
-#     echo "Fast Downward cannot be built in directories with spaces in the path."
-#     echo "Please move the project to a path without spaces, for example:"
-#     echo "  ~/planning-visualizer"
-#     echo "  ~/projects/planning-visualizer"
-#     echo "  ~/Documents/planning-visualizer (no spaces in any parent folder)"
-#     echo ""
-#     exit 1
-# fi
+if [[ "$CURRENT_DIR" == *" "* ]]; then
+    echo -e "${RED}✗ ERROR: Directory path contains spaces${NC}"
+    echo ""
+    echo "Current path: $CURRENT_DIR"
+    echo ""
+    echo "Fast Downward cannot be built in directories with spaces in the path."
+    echo "Please move the project to a path without spaces, for example:"
+    echo "  ~/planning-visualizer"
+    echo "  ~/projects/planning-visualizer"
+    echo "  ~/Documents/planning-visualizer (no spaces in any parent folder)"
+    echo ""
+    exit 1
+fi
 
 # Change to web-app directory
 cd "$(dirname "$0")/web-app"
@@ -104,17 +104,9 @@ if [ -f "$DOWNWARD_PATH/fast-downward.py" ]; then
         echo -e "${YELLOW}!${NC} Fast Downward not built. Building now..."
         echo "This may take a few minutes..."
         cd "$DOWNWARD_PATH"
-        if ./build.py; then
-            echo -e "${GREEN}✓${NC} Fast Downward built successfully"
-        else
-            echo -e "${YELLOW}!${NC} Fast Downward build failed"
-            echo ""
-            echo "This is a known issue with newer macOS versions."
-            echo "The app will run in fallback mode (limited functionality)."
-            echo ""
-            echo "See SETUP_MAC.md troubleshooting section for solutions."
-        fi
+        ./build.py
         cd - > /dev/null
+        echo -e "${GREEN}✓${NC} Fast Downward built successfully"
     fi
 else
     echo -e "${YELLOW}!${NC} Fast Downward not found. The app will use fallback mode."
