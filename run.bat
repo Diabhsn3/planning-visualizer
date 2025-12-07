@@ -119,7 +119,7 @@ if exist "%DOWNWARD_PATH%\fast-downward.py" (
             echo 3. Restart your computer after installation
             echo 4. Run this script again
             echo.
-            echo The app will start in fallback mode (limited functionality).
+            echo The app will start in fallback mode ^(limited functionality^).
             echo.
             pause
         ) else (
