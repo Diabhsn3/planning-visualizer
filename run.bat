@@ -103,12 +103,38 @@ if exist "%DOWNWARD_PATH%\fast-downward.py" (
     if exist "%DOWNWARD_PATH%\builds\release\bin\downward.exe" (
         echo [OK] Fast Downward is built and ready
     ) else (
-        echo [INFO] Fast Downward not built. Building now...
-        echo This may take a few minutes...
-        cd /d "%DOWNWARD_PATH%"
-        python build.py
-        cd /d "%~dp0web-app"
-        echo [OK] Fast Downward built successfully
+        echo [INFO] Fast Downward not built. Checking build tools...
+        
+        REM Check for Visual Studio Build Tools (nmake)
+        where nmake >nul 2>nul
+        if %ERRORLEVEL% NEQ 0 (
+            echo.
+            echo [ERROR] Visual Studio Build Tools not found!
+            echo.
+            echo Fast Downward requires C++ build tools to compile.
+            echo Please install Visual Studio Build Tools:
+            echo.
+            echo 1. Download from: https://visualstudio.microsoft.com/downloads/
+            echo 2. Select "Desktop development with C++"
+            echo 3. Restart your computer after installation
+            echo 4. Run this script again
+            echo.
+            echo The app will start in fallback mode (limited functionality).
+            echo.
+            pause
+        ) else (
+            echo Building Fast Downward...
+            echo This may take a few minutes...
+            cd /d "%DOWNWARD_PATH%"
+            python build.py
+            if %ERRORLEVEL% EQU 0 (
+                echo [OK] Fast Downward built successfully
+            ) else (
+                echo [ERROR] Fast Downward build failed
+                echo Check the error messages above for details
+            )
+            cd /d "%~dp0web-app"
+        )
     )
 ) else (
     echo [INFO] Fast Downward not found. The app will use fallback mode.

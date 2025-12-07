@@ -69,11 +69,20 @@ Fast Downward requires C++ compilation tools.
 2. Run installer
 3. Select "Desktop development with C++"
 4. Click Install (this may take 30+ minutes)
+5. **Restart your computer** after installation
 
 **Option B: Build Tools Only (Smaller download)**
-1. Download "Build Tools for Visual Studio 2022"
-2. Select "C++ build tools"
-3. Install
+1. Download "Build Tools for Visual Studio 2022" from: https://visualstudio.microsoft.com/downloads/
+2. Run installer
+3. Select "C++ build tools"
+4. Install
+5. **Restart your computer** after installation
+
+**Verify Installation** (open a NEW Command Prompt after restart):
+```cmd
+nmake /?
+```
+You should see nmake help text. If you get "nmake is not recognized", the build tools weren't installed correctly.
 
 ### Install CMake
 
@@ -235,11 +244,17 @@ cd planning-tools\downward
 python build.py
 ```
 
-### Problem: Fast Downward build fails with "compiler not found"
+### Problem: Fast Downward build fails with "compiler not found" or "nmake not found"
 
 **Solution**: Install Visual Studio Build Tools (see Step 1).
 
-Make sure you selected "Desktop development with C++" during installation.
+1. Make sure you selected "Desktop development with C++" during installation
+2. **Restart your computer** after installation (critical!)
+3. Open a NEW Command Prompt and verify:
+   ```cmd
+   nmake /?
+   ```
+4. If nmake is still not found, reinstall Build Tools and ensure you check "C++ build tools"
 
 ### Problem: CMake not found during build
 
