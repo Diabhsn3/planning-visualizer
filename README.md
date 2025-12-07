@@ -190,13 +190,24 @@ See [web-app/README.md](web-app/README.md) for detailed documentation.
 
 ## Troubleshooting
 
-### Fast Downward Not Building
+### Fast Downward Build Fails
+
+**Most Common Issue**: Directory path contains spaces
+
+Fast Downward cannot be built in directories with spaces in the path. If your path contains spaces (e.g., "final project", "My Documents"), move the project:
 
 ```bash
+# Move to a path without spaces
+mv "~/Documents/final project/planning-visualizer" ~/planning-visualizer
+cd ~/planning-visualizer
+
+# Then rebuild
 git submodule update --init --recursive
 cd planning-tools/downward
 ./build.py
 ```
+
+The run scripts (run.sh / run.bat) will automatically detect and warn you about this issue.
 
 ### Python Not Found
 

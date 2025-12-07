@@ -90,13 +90,21 @@ cmake --version
 
 ## Step 2: Clone the Repository
 
+**⚠️ IMPORTANT**: Choose a directory path WITHOUT spaces. Fast Downward cannot be built in paths with spaces.
+
 Open Command Prompt or PowerShell:
 
 ```cmd
-cd %USERPROFILE%\Desktop
+# Good locations (no spaces):
+cd C:\
+REM or cd %USERPROFILE%\Desktop
+REM or cd C:\projects
+
 git clone https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
 ```
+
+**Avoid paths like**: `C:\My Documents\`, `C:\Program Files\`, or any folder with spaces in the name.
 
 ---
 
@@ -203,6 +211,29 @@ npm install -g pnpm
 ```
 
 If that fails, restart your computer and try again.
+
+### Problem: Fast Downward build fails with C++ errors
+
+**Most Common Cause**: Directory path contains spaces (e.g., "My Documents", "Program Files")
+
+**Solution**: Fast Downward cannot be built in directories with spaces. Move the project:
+```cmd
+REM Bad paths (contain spaces):
+REM C:\My Documents\planning-visualizer ❌
+REM C:\Program Files\planning-visualizer ❌
+
+REM Good paths (no spaces):
+REM C:\planning-visualizer ✓
+REM C:\projects\planning-visualizer ✓
+REM C:\Users\YourName\Desktop\planning-visualizer ✓
+
+REM Example: Move the project
+move "C:\My Documents\planning-visualizer" C:\planning-visualizer
+cd C:\planning-visualizer
+git submodule update --init --recursive
+cd planning-tools\downward
+python build.py
+```
 
 ### Problem: Fast Downward build fails with "compiler not found"
 

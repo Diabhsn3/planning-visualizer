@@ -63,11 +63,20 @@ brew install cmake
 
 ## Step 3: Clone the Repository
 
+**⚠️ IMPORTANT**: Choose a directory path WITHOUT spaces. Fast Downward cannot be built in paths with spaces.
+
 ```bash
-cd ~/Desktop  # Or any directory you prefer
+# Good locations (no spaces):
+cd ~                    # Home directory
+# cd ~/projects         # Projects folder
+# cd ~/Desktop          # Desktop
+
+# Clone the repository
 git clone https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
 ```
+
+**Avoid paths like**: `~/Documents/final project/`, `~/My Documents/`, or any folder with spaces in the name.
 
 ---
 
@@ -167,9 +176,30 @@ echo "PYTHON_CMD=python" > .env  # Or python3.12
 npm install -g pnpm
 ```
 
-### Problem: Fast Downward build fails
+### Problem: Fast Downward build fails with C++ errors
 
-**Solution**: Make sure CMake is installed:
+**Most Common Cause**: Directory path contains spaces (e.g., "final project", "My Documents")
+
+**Solution**: Fast Downward cannot be built in directories with spaces. Move the project:
+```bash
+# Bad paths (contain spaces):
+# ~/Documents/final project/planning-visualizer ❌
+# ~/My Documents/planning-visualizer ❌
+
+# Good paths (no spaces):
+# ~/planning-visualizer ✓
+# ~/projects/planning-visualizer ✓
+# ~/Desktop/planning-visualizer ✓
+
+# Example: Move the project
+mv "~/Documents/final project/planning-visualizer" ~/planning-visualizer
+cd ~/planning-visualizer
+git submodule update --init --recursive
+cd planning-tools/downward
+./build.py
+```
+
+**Other causes**: Make sure CMake is installed:
 ```bash
 brew install cmake
 cd planning-tools/downward
