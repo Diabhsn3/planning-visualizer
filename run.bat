@@ -10,20 +10,20 @@ echo.
 REM Check for spaces in directory path
 set "CURRENT_DIR=%~dp0"
 echo %CURRENT_DIR% | findstr /C:" " >nul
-if %ERRORLEVEL% EQU 0 (
-    echo [ERROR] Directory path contains spaces
-    echo.
-    echo Current path: %CURRENT_DIR%
-    echo.
-    echo Fast Downward cannot be built in directories with spaces in the path.
-    echo Please move the project to a path without spaces, for example:
-    echo   C:\planning-visualizer
-    echo   C:\projects\planning-visualizer
-    echo   C:\Users\YourName\planning-visualizer (no spaces in any parent folder)
-    echo.
-    pause
-    exit /b 1
-)
+@REM if %ERRORLEVEL% EQU 0 (
+@REM     echo [ERROR] Directory path contains spaces
+@REM     echo.
+@REM     echo Current path: %CURRENT_DIR%
+@REM     echo.
+@REM     echo Fast Downward cannot be built in directories with spaces in the path.
+@REM     echo Please move the project to a path without spaces, for example:
+@REM     echo   C:\planning-visualizer
+@REM     echo   C:\projects\planning-visualizer
+@REM     echo   C:\Users\YourName\planning-visualizer (no spaces in any parent folder)
+@REM     echo.
+@REM     pause
+@REM     exit /b 1
+@REM )
 
 REM Change to web-app directory
 cd /d "%~dp0web-app"
