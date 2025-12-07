@@ -10,18 +10,13 @@
   ],
   "states": [
     {
-      "at-robby": [
-        [
-          "rooma"
-        ]
-      ],
       "at": [
         [
-          "ball2",
+          "ball1",
           "rooma"
         ],
         [
-          "ball1",
+          "ball2",
           "rooma"
         ]
       ],
@@ -32,12 +27,17 @@
         [
           "right"
         ]
-      ]
-    },
-    {
+      ],
       "at-robby": [
         [
           "rooma"
+        ]
+      ]
+    },
+    {
+      "free": [
+        [
+          "right"
         ]
       ],
       "carry": [
@@ -46,9 +46,9 @@
           "left"
         ]
       ],
-      "free": [
+      "at-robby": [
         [
-          "right"
+          "rooma"
         ]
       ],
       "at": [
@@ -59,11 +59,23 @@
       ]
     },
     {
+      "carry": [
+        [
+          "ball1",
+          "left"
+        ],
+        [
+          "ball2",
+          "right"
+        ]
+      ],
       "at-robby": [
         [
           "rooma"
         ]
-      ],
+      ]
+    },
+    {
       "carry": [
         [
           "ball1",
@@ -73,71 +85,59 @@
           "ball2",
           "right"
         ]
-      ]
-    },
-    {
+      ],
       "at-robby": [
         [
           "roomb"
         ]
-      ],
-      "carry": [
-        [
-          "ball1",
-          "left"
-        ],
-        [
-          "ball2",
-          "right"
-        ]
       ]
     },
     {
-      "at-robby": [
-        [
-          "roomb"
-        ]
-      ],
-      "free": [
-        [
-          "left"
-        ]
-      ],
       "at": [
         [
           "ball1",
           "roomb"
         ]
       ],
-      "carry": [
-        [
-          "ball2",
-          "right"
-        ]
-      ]
-    },
-    {
       "at-robby": [
         [
           "roomb"
         ]
       ],
-      "at": [
+      "carry": [
         [
           "ball2",
-          "roomb"
-        ],
-        [
-          "ball1",
-          "roomb"
+          "right"
         ]
       ],
+      "free": [
+        [
+          "left"
+        ]
+      ]
+    },
+    {
       "free": [
         [
           "left"
         ],
         [
           "right"
+        ]
+      ],
+      "at": [
+        [
+          "ball1",
+          "roomb"
+        ],
+        [
+          "ball2",
+          "roomb"
+        ]
+      ],
+      "at-robby": [
+        [
+          "roomb"
         ]
       ]
     }

@@ -320,4 +320,4 @@ function renderDefault(ctx: CanvasRenderingContext2D, state: RenderedState) {
   if (state.objects.length > 10) {
     ctx.fillText(`... and ${state.objects.length - 10} more`, 40, y);
   }
-}
+} 

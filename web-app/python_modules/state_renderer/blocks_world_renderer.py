@@ -93,7 +93,7 @@ class BlocksWorldRenderer(BaseStateRenderer):
             # Get the X position from the bottom block of the stack
             bottom_block = stack[0]
             stack_x = block_x_positions[bottom_block]
-            y_pos = self.table_y
+            y_pos = self.table_y - self.block_size  # Start above the table
             
             for i, block in enumerate(stack):
                 # Use fixed X position for this block
@@ -129,7 +129,7 @@ class BlocksWorldRenderer(BaseStateRenderer):
                 id=holding_block,
                 type='block',
                 label=holding_block.upper(),
-                position=[held_x, self.table_y - 150],  # Above table, at block's fixed X
+                position=[held_x, self.table_y - 290],  # Above table, at block's fixed X
                 properties={
                     'color': self.BLOCK_COLORS.get(holding_block, '#95A5A6'),
                     'width': self.block_size,
@@ -161,7 +161,7 @@ class BlocksWorldRenderer(BaseStateRenderer):
             id='gripper',
             type='gripper',
             label='Hand',
-            position=[gripper_x, self.table_y - 200],
+            position=[gripper_x, self.table_y - 300],
             properties={
                 'empty': hand_empty,
                 'holding': holding_block
