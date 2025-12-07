@@ -1,5 +1,7 @@
 (define (domain blocks-world)
   (:requirements :strips :typing)
+
+  
   (:types block)
 
   (:predicates
