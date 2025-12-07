@@ -14,7 +14,12 @@ from pathlib import Path
 # Add parent directory to path so we can import modules
 sys.path.insert(0, str(Path(__file__).parent))
 
-from state_generator import generate_states
+from state_generator import StateGenerator
+
+
+# Get paths to domain and problem files
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DOMAINS_DIR = PROJECT_ROOT / "planning-tools" / "downward" / "benchmarks"
 
 
 def test_generator_blocks_world():
@@ -23,8 +28,9 @@ def test_generator_blocks_world():
     print("TEST 1: State Generator - Blocks World Domain")
     print("=" * 60)
     
-    domain = "blocksworld"
-    problem = None  # Use default problem
+    domain_path = str(DOMAINS_DIR / "blocksworld" / "domain.pddl")
+    problem_path = str(DOMAINS_DIR / "blocksworld" / "probBLOCKS-4-0.pddl")
+    
     plan = [
         "unstack d c",
         "put-down d",
@@ -36,22 +42,25 @@ def test_generator_blocks_world():
         "stack a b"
     ]
     
-    print(f"\nGenerating states for domain: {domain}")
+    print(f"\nGenerating states for Blocks World")
+    print(f"Domain: {domain_path}")
+    print(f"Problem: {problem_path}")
     print(f"Plan length: {len(plan)} actions")
     print("Plan:")
     for i, action in enumerate(plan, 1):
         print(f"   {i}. {action}")
     
     try:
-        result = generate_states(domain, problem, plan)
+        sg = StateGenerator(domain_path, problem_path)
+        states = sg.generate_states(plan)
         
-        if result["success"]:
+        if states:
             print("\n✅ SUCCESS: States generated successfully!")
-            print(f"   Number of states: {len(result['states'])}")
-            print(f"   Initial state: {json.dumps(result['states'][0], indent=2)[:200]}...")
-            print(f"   Final state: {json.dumps(result['states'][-1], indent=2)[:200]}...")
+            print(f"   Number of states: {len(states)}")
+            print(f"   Initial state preview: {str(states[0])[:150]}...")
+            print(f"   Final state preview: {str(states[-1])[:150]}...")
         else:
-            print(f"\n❌ FAILED: {result['error']}")
+            print(f"\n❌ FAILED: No states generated")
             return False
             
     except Exception as e:
@@ -69,8 +78,9 @@ def test_generator_gripper():
     print("TEST 2: State Generator - Gripper Domain")
     print("=" * 60)
     
-    domain = "gripper"
-    problem = None  # Use default problem
+    domain_path = str(DOMAINS_DIR / "gripper" / "domain.pddl")
+    problem_path = str(DOMAINS_DIR / "gripper" / "prob01.pddl")
+    
     plan = [
         "pick ball1 rooma left",
         "pick ball2 rooma right",
@@ -79,22 +89,25 @@ def test_generator_gripper():
         "drop ball2 roomb right"
     ]
     
-    print(f"\nGenerating states for domain: {domain}")
+    print(f"\nGenerating states for Gripper")
+    print(f"Domain: {domain_path}")
+    print(f"Problem: {problem_path}")
     print(f"Plan length: {len(plan)} actions")
     print("Plan:")
     for i, action in enumerate(plan, 1):
         print(f"   {i}. {action}")
     
     try:
-        result = generate_states(domain, problem, plan)
+        sg = StateGenerator(domain_path, problem_path)
+        states = sg.generate_states(plan)
         
-        if result["success"]:
+        if states:
             print("\n✅ SUCCESS: States generated successfully!")
-            print(f"   Number of states: {len(result['states'])}")
-            print(f"   Initial state: {json.dumps(result['states'][0], indent=2)[:200]}...")
-            print(f"   Final state: {json.dumps(result['states'][-1], indent=2)[:200]}...")
+            print(f"   Number of states: {len(states)}")
+            print(f"   Initial state preview: {str(states[0])[:150]}...")
+            print(f"   Final state preview: {str(states[-1])[:150]}...")
         else:
-            print(f"\n❌ FAILED: {result['error']}")
+            print(f"\n❌ FAILED: No states generated")
             return False
             
     except Exception as e:
@@ -112,25 +125,29 @@ def test_generator_empty_plan():
     print("TEST 3: State Generator - Empty Plan")
     print("=" * 60)
     
-    domain = "blocksworld"
-    problem = None
+    domain_path = str(DOMAINS_DIR / "blocksworld" / "domain.pddl")
+    problem_path = str(DOMAINS_DIR / "blocksworld" / "probBLOCKS-4-0.pddl")
+    
     plan = []
     
-    print(f"\nGenerating states for domain: {domain}")
+    print(f"\nGenerating states for Blocks World")
+    print(f"Domain: {domain_path}")
+    print(f"Problem: {problem_path}")
     print("Plan: (empty)")
     
     try:
-        result = generate_states(domain, problem, plan)
+        sg = StateGenerator(domain_path, problem_path)
+        states = sg.generate_states(plan)
         
-        if result["success"]:
+        if states:
             print("\n✅ SUCCESS: States generated successfully!")
-            print(f"   Number of states: {len(result['states'])}")
-            if len(result['states']) == 1:
+            print(f"   Number of states: {len(states)}")
+            if len(states) == 1:
                 print("   ✓ Correctly returned only initial state")
             else:
-                print(f"   ⚠️  Expected 1 state, got {len(result['states'])}")
+                print(f"   ⚠️  Expected 1 state, got {len(states)}")
         else:
-            print(f"\n❌ FAILED: {result['error']}")
+            print(f"\n❌ FAILED: No states generated")
             return False
             
     except Exception as e:

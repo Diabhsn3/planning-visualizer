@@ -14,9 +14,14 @@ from pathlib import Path
 # Add parent directory to path so we can import modules
 sys.path.insert(0, str(Path(__file__).parent))
 
-from planner_runner import run_planner
-from state_generator import generate_states
-from state_renderer import render_state
+from run_planner import solve_problem
+from state_generator import StateGenerator
+from state_renderer import RendererFactory
+
+
+# Get paths to domain and problem files
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DOMAINS_DIR = PROJECT_ROOT / "planning-tools" / "downward" / "benchmarks"
 
 
 def test_full_pipeline_blocks_world():
@@ -25,22 +30,24 @@ def test_full_pipeline_blocks_world():
     print("FULL PIPELINE TEST: Blocks World")
     print("=" * 60)
     
-    domain = "blocksworld"
-    problem = None
+    domain_path = str(DOMAINS_DIR / "blocksworld" / "domain.pddl")
+    problem_path = str(DOMAINS_DIR / "blocksworld" / "probBLOCKS-4-0.pddl")
+    domain_name = "blocksworld"
     
-    print(f"\nDomain: {domain}")
-    print("Testing complete pipeline: Planner → Generator → Renderer\n")
+    print(f"\nDomain: {domain_name}")
+    print(f"Domain file: {domain_path}")
+    print(f"Problem file: {problem_path}")
+    print("\nTesting complete pipeline: Planner → Generator → Renderer\n")
     
     # Step 1: Run planner
     print("Step 1: Running planner...")
     try:
-        planner_result = run_planner(domain, problem)
-        if not planner_result["success"]:
-            print(f"❌ Planner failed: {planner_result['error']}")
+        plan, planner_used = solve_problem(domain_path, problem_path, domain_name)
+        if not plan:
+            print("❌ Planner failed: No plan found")
             return False
-        print(f"✅ Planner succeeded")
-        print(f"   Plan length: {len(planner_result['plan'])} actions")
-        plan = planner_result['plan']
+        print(f"✅ Planner succeeded ({planner_used})")
+        print(f"   Plan length: {len(plan)} actions")
     except Exception as e:
         print(f"❌ Planner crashed: {e}")
         return False
@@ -48,13 +55,13 @@ def test_full_pipeline_blocks_world():
     # Step 2: Generate states
     print("\nStep 2: Generating states...")
     try:
-        generator_result = generate_states(domain, problem, plan)
-        if not generator_result["success"]:
-            print(f"❌ Generator failed: {generator_result['error']}")
+        sg = StateGenerator(domain_path, problem_path)
+        states = sg.generate_states(plan)
+        if not states:
+            print("❌ Generator failed: No states generated")
             return False
         print(f"✅ Generator succeeded")
-        print(f"   Generated {len(generator_result['states'])} states")
-        states = generator_result['states']
+        print(f"   Generated {len(states)} states")
     except Exception as e:
         print(f"❌ Generator crashed: {e}")
         return False
@@ -62,13 +69,19 @@ def test_full_pipeline_blocks_world():
     # Step 3: Render states
     print("\nStep 3: Rendering states...")
     try:
+        renderer = RendererFactory.get_renderer(domain_name)
+        if not renderer:
+            print("❌ Renderer failed: No renderer for domain")
+            return False
+        
         rendered_count = 0
         for i, state in enumerate(states):
-            render_result = render_state(domain, state)
-            if not render_result["success"]:
-                print(f"❌ Renderer failed on state {i}: {render_result['error']}")
+            render_data = renderer.render(state)
+            if not render_data:
+                print(f"❌ Renderer failed on state {i}")
                 return False
             rendered_count += 1
+        
         print(f"✅ Renderer succeeded")
         print(f"   Rendered {rendered_count} states")
     except Exception as e:
@@ -85,22 +98,24 @@ def test_full_pipeline_gripper():
     print("FULL PIPELINE TEST: Gripper")
     print("=" * 60)
     
-    domain = "gripper"
-    problem = None
+    domain_path = str(DOMAINS_DIR / "gripper" / "domain.pddl")
+    problem_path = str(DOMAINS_DIR / "gripper" / "prob01.pddl")
+    domain_name = "gripper"
     
-    print(f"\nDomain: {domain}")
-    print("Testing complete pipeline: Planner → Generator → Renderer\n")
+    print(f"\nDomain: {domain_name}")
+    print(f"Domain file: {domain_path}")
+    print(f"Problem file: {problem_path}")
+    print("\nTesting complete pipeline: Planner → Generator → Renderer\n")
     
     # Step 1: Run planner
     print("Step 1: Running planner...")
     try:
-        planner_result = run_planner(domain, problem)
-        if not planner_result["success"]:
-            print(f"❌ Planner failed: {planner_result['error']}")
+        plan, planner_used = solve_problem(domain_path, problem_path, domain_name)
+        if not plan:
+            print("❌ Planner failed: No plan found")
             return False
-        print(f"✅ Planner succeeded")
-        print(f"   Plan length: {len(planner_result['plan'])} actions")
-        plan = planner_result['plan']
+        print(f"✅ Planner succeeded ({planner_used})")
+        print(f"   Plan length: {len(plan)} actions")
     except Exception as e:
         print(f"❌ Planner crashed: {e}")
         return False
@@ -108,13 +123,13 @@ def test_full_pipeline_gripper():
     # Step 2: Generate states
     print("\nStep 2: Generating states...")
     try:
-        generator_result = generate_states(domain, problem, plan)
-        if not generator_result["success"]:
-            print(f"❌ Generator failed: {generator_result['error']}")
+        sg = StateGenerator(domain_path, problem_path)
+        states = sg.generate_states(plan)
+        if not states:
+            print("❌ Generator failed: No states generated")
             return False
         print(f"✅ Generator succeeded")
-        print(f"   Generated {len(generator_result['states'])} states")
-        states = generator_result['states']
+        print(f"   Generated {len(states)} states")
     except Exception as e:
         print(f"❌ Generator crashed: {e}")
         return False
@@ -122,13 +137,19 @@ def test_full_pipeline_gripper():
     # Step 3: Render states
     print("\nStep 3: Rendering states...")
     try:
+        renderer = RendererFactory.get_renderer(domain_name)
+        if not renderer:
+            print("❌ Renderer failed: No renderer for domain")
+            return False
+        
         rendered_count = 0
         for i, state in enumerate(states):
-            render_result = render_state(domain, state)
-            if not render_result["success"]:
-                print(f"❌ Renderer failed on state {i}: {render_result['error']}")
+            render_data = renderer.render(state)
+            if not render_data:
+                print(f"❌ Renderer failed on state {i}")
                 return False
             rendered_count += 1
+        
         print(f"✅ Renderer succeeded")
         print(f"   Rendered {rendered_count} states")
     except Exception as e:
@@ -145,24 +166,26 @@ def test_integration_with_sample_data():
     print("INTEGRATION TEST: Manual Sample Data")
     print("=" * 60)
     
-    domain = "blocksworld"
+    domain_path = str(DOMAINS_DIR / "blocksworld" / "domain.pddl")
+    problem_path = str(DOMAINS_DIR / "blocksworld" / "probBLOCKS-4-0.pddl")
+    domain_name = "blocksworld"
     
     # Manually provide plan and verify state generation + rendering
     plan = ["unstack d c", "put-down d", "pick-up c", "stack c d"]
     
-    print(f"\nDomain: {domain}")
+    print(f"\nDomain: {domain_name}")
     print(f"Plan: {plan}\n")
     
     # Generate states
     print("Step 1: Generating states from manual plan...")
     try:
-        generator_result = generate_states(domain, None, plan)
-        if not generator_result["success"]:
-            print(f"❌ Generator failed: {generator_result['error']}")
+        sg = StateGenerator(domain_path, problem_path)
+        states = sg.generate_states(plan)
+        if not states:
+            print("❌ Generator failed: No states generated")
             return False
         print(f"✅ Generator succeeded")
-        print(f"   Generated {len(generator_result['states'])} states")
-        states = generator_result['states']
+        print(f"   Generated {len(states)} states")
     except Exception as e:
         print(f"❌ Generator crashed: {e}")
         return False
@@ -170,21 +193,26 @@ def test_integration_with_sample_data():
     # Render first and last states
     print("\nStep 2: Rendering initial and final states...")
     try:
+        renderer = RendererFactory.get_renderer(domain_name)
+        if not renderer:
+            print("❌ Renderer failed: No renderer for domain")
+            return False
+        
         # Initial state
-        initial_render = render_state(domain, states[0])
-        if not initial_render["success"]:
-            print(f"❌ Renderer failed on initial state: {initial_render['error']}")
+        initial_render = renderer.render(states[0])
+        if not initial_render:
+            print("❌ Renderer failed on initial state")
             return False
         
         # Final state
-        final_render = render_state(domain, states[-1])
-        if not final_render["success"]:
-            print(f"❌ Renderer failed on final state: {final_render['error']}")
+        final_render = renderer.render(states[-1])
+        if not final_render:
+            print("❌ Renderer failed on final state")
             return False
         
         print(f"✅ Renderer succeeded")
-        print(f"   Initial state rendered: {json.dumps(initial_render['renderData'], indent=2)[:150]}...")
-        print(f"   Final state rendered: {json.dumps(final_render['renderData'], indent=2)[:150]}...")
+        print(f"   Initial state rendered: {str(initial_render)[:100]}...")
+        print(f"   Final state rendered: {str(final_render)[:100]}...")
     except Exception as e:
         print(f"❌ Renderer crashed: {e}")
         return False
@@ -199,9 +227,9 @@ def main():
     print("COMPREHENSIVE TEST SUITE - ALL MODULES")
     print("=" * 60)
     print("\nThis will test the complete pipeline:")
-    print("  1. Planner (run_planner)")
-    print("  2. State Generator (generate_states)")
-    print("  3. State Renderer (render_state)")
+    print("  1. Planner (solve_problem)")
+    print("  2. State Generator (StateGenerator)")
+    print("  3. State Renderer (RendererFactory)")
     print("\nEach test validates that data flows correctly between modules.\n")
     
     tests = [

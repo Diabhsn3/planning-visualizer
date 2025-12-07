@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test file for planner_runner module
+Test file for planner module
 Run this file directly in VS Code to test if the planner works correctly.
 
 Usage:
@@ -14,7 +14,12 @@ from pathlib import Path
 # Add parent directory to path so we can import modules
 sys.path.insert(0, str(Path(__file__).parent))
 
-from planner_runner import run_planner
+from run_planner import solve_problem
+
+
+# Get paths to domain and problem files
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DOMAINS_DIR = PROJECT_ROOT / "planning-tools" / "downward" / "benchmarks"
 
 
 def test_planner_blocks_world():
@@ -23,24 +28,26 @@ def test_planner_blocks_world():
     print("TEST 1: Planner - Blocks World Domain")
     print("=" * 60)
     
-    domain = "blocksworld"
-    problem = None  # Use default problem
+    domain_path = str(DOMAINS_DIR / "blocksworld" / "domain.pddl")
+    problem_path = str(DOMAINS_DIR / "blocksworld" / "probBLOCKS-4-0.pddl")
+    domain_name = "blocksworld"
     
-    print(f"\nRunning planner for domain: {domain}")
-    print("Using default problem...")
+    print(f"\nRunning planner for domain: {domain_name}")
+    print(f"Domain file: {domain_path}")
+    print(f"Problem file: {problem_path}")
     
     try:
-        result = run_planner(domain, problem)
+        plan, planner_used = solve_problem(domain_path, problem_path, domain_name)
         
-        if result["success"]:
+        if plan:
             print("\n✅ SUCCESS: Planner executed successfully!")
-            print(f"   Planner used: {result['planner']}")
-            print(f"   Plan length: {len(result['plan'])} actions")
+            print(f"   Planner used: {planner_used}")
+            print(f"   Plan length: {len(plan)} actions")
             print(f"\n   Plan actions:")
-            for i, action in enumerate(result['plan'], 1):
+            for i, action in enumerate(plan, 1):
                 print(f"      {i}. {action}")
         else:
-            print(f"\n❌ FAILED: {result['error']}")
+            print(f"\n❌ FAILED: No plan found")
             return False
             
     except Exception as e:
@@ -58,24 +65,26 @@ def test_planner_gripper():
     print("TEST 2: Planner - Gripper Domain")
     print("=" * 60)
     
-    domain = "gripper"
-    problem = None  # Use default problem
+    domain_path = str(DOMAINS_DIR / "gripper" / "domain.pddl")
+    problem_path = str(DOMAINS_DIR / "gripper" / "prob01.pddl")
+    domain_name = "gripper"
     
-    print(f"\nRunning planner for domain: {domain}")
-    print("Using default problem...")
+    print(f"\nRunning planner for domain: {domain_name}")
+    print(f"Domain file: {domain_path}")
+    print(f"Problem file: {problem_path}")
     
     try:
-        result = run_planner(domain, problem)
+        plan, planner_used = solve_problem(domain_path, problem_path, domain_name)
         
-        if result["success"]:
+        if plan:
             print("\n✅ SUCCESS: Planner executed successfully!")
-            print(f"   Planner used: {result['planner']}")
-            print(f"   Plan length: {len(result['plan'])} actions")
+            print(f"   Planner used: {planner_used}")
+            print(f"   Plan length: {len(plan)} actions")
             print(f"\n   Plan actions:")
-            for i, action in enumerate(result['plan'], 1):
+            for i, action in enumerate(plan, 1):
                 print(f"      {i}. {action}")
         else:
-            print(f"\n❌ FAILED: {result['error']}")
+            print(f"\n❌ FAILED: No plan found")
             return False
             
     except Exception as e:
@@ -92,7 +101,7 @@ def main():
     print("\n" + "=" * 60)
     print("PLANNER MODULE TEST SUITE")
     print("=" * 60)
-    print("\nThis will test if the planner_runner module works correctly.")
+    print("\nThis will test if the planner works correctly.")
     print("It will attempt to solve planning problems using Fast Downward")
     print("or fallback to pre-computed plans if Fast Downward is not available.\n")
     
