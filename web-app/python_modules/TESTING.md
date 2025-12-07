@@ -1,215 +1,294 @@
 # Python Modules Testing Guide
 
-This directory contains test files for each Python module in the Planning Visualizer. You can run these tests independently in Visual Studio Code to verify that each component works correctly.
+Simple test files to verify that the Planning Visualizer works correctly for each domain.
+
+## Quick Start
+
+Run tests from the `web-app/python_modules` directory:
+
+```bash
+cd web-app/python_modules
+
+# Test individual domains
+python test_blocksworld.py
+python test_gripper.py
+
+# Test all domains at once
+python test_domains.py
+```
+
+---
 
 ## Test Files
 
-### 1. `test_planner.py` - Test Planner Module
-Tests the `planner_runner` module which handles plan generation using Fast Downward or fallback mode.
+### `test_blocksworld.py` - Blocks World Domain Test
+Tests the complete visualizer pipeline for the Blocks World domain using the built-in example problem.
 
-**What it tests:**
-- Blocks World domain planning
-- Gripper domain planning
-- Fast Downward integration or fallback mode
-- Plan format and structure
+**What it does:**
+- Runs the planner (or uses fallback plan)
+- Generates intermediate states
+- Renders states for visualization
+- Shows the complete plan and output
 
-**Run in VS Code:**
+**Run:**
 ```bash
-cd web-app/python_modules
-python test_planner.py
+python test_blocksworld.py
 ```
 
 **Expected output:**
-- ✅ Success messages for each domain
-- Plan length and actions list
-- Planner type used (Fast Downward or Fallback)
+```
+======================================================================
+BLOCKS WORLD DOMAIN TEST
+======================================================================
+
+Running visualizer for Blocks World domain...
+This uses the built-in example problem.
+
+✅ SUCCESS!
+
+Domain: blocksworld
+Planner used: fallback
+Plan length: 8 actions
+Number of states: 9
+
+📋 Plan:
+   1. unstack d c
+   2. put-down d
+   3. unstack c b
+   4. stack c d
+   5. pick-up b
+   6. stack b c
+   7. pick-up a
+   8. stack a b
+
+🎨 Rendered states:
+   Initial state: {...}
+   Final state: {...}
+
+✅ All steps completed successfully!
+The visualizer is working correctly for Blocks World domain.
+```
 
 ---
 
-### 2. `test_generator.py` - Test State Generator Module
-Tests the `state_generator` module which generates intermediate states from plans.
+### `test_gripper.py` - Gripper Domain Test
+Tests the complete visualizer pipeline for the Gripper domain using the built-in example problem.
 
-**What it tests:**
-- Blocks World state generation
-- Gripper state generation
-- Empty plan handling
-- State structure and format
+**What it does:**
+- Runs the planner (or uses fallback plan)
+- Generates intermediate states
+- Renders states for visualization
+- Shows the complete plan and output
 
-**Run in VS Code:**
+**Run:**
 ```bash
-cd web-app/python_modules
-python test_generator.py
+python test_gripper.py
 ```
 
 **Expected output:**
-- ✅ Success messages for each test
-- Number of states generated
-- Initial and final state previews
+```
+======================================================================
+GRIPPER DOMAIN TEST
+======================================================================
+
+Running visualizer for Gripper domain...
+This uses the built-in example problem.
+
+✅ SUCCESS!
+
+Domain: gripper
+Planner used: fallback
+Plan length: 5 actions
+Number of states: 6
+
+📋 Plan:
+   1. (pick ball1 rooma left)
+   2. (pick ball2 rooma right)
+   3. (move rooma roomb)
+   4. (drop ball1 roomb left)
+   5. (drop ball2 roomb right)
+
+🎨 Rendered states:
+   Initial state: {...}
+   Final state: {...}
+
+✅ All steps completed successfully!
+The visualizer is working correctly for Gripper domain.
+```
 
 ---
 
-### 3. `test_renderer.py` - Test State Renderer Module
-Tests the `state_renderer` module which converts planning states to renderable data structures.
+### `test_domains.py` - All Domains Test
+Runs tests for all available domains and provides a summary.
 
-**What it tests:**
-- Blocks World state rendering
-- Gripper state rendering
-- Invalid domain handling
-- Complex state structures
+**What it does:**
+- Tests Blocks World domain
+- Tests Gripper domain
+- Shows summary of results
 
-**Run in VS Code:**
+**Run:**
 ```bash
-cd web-app/python_modules
-python test_renderer.py
+python test_domains.py
 ```
 
 **Expected output:**
-- ✅ Success messages for each test
-- Render data structure keys
-- Preview of rendered data
-
----
-
-### 4. `test_all.py` - Comprehensive Integration Tests
-Tests the complete pipeline: Planner → Generator → Renderer
-
-**What it tests:**
-- Full pipeline for Blocks World
-- Full pipeline for Gripper
-- Integration with manual sample data
-- Data flow between modules
-
-**Run in VS Code:**
-```bash
-cd web-app/python_modules
-python test_all.py
 ```
+======================================================================
+PLANNING VISUALIZER - DOMAIN TESTS
+======================================================================
 
-**Expected output:**
-- ✅ Success messages for each pipeline stage
-- Confirmation that data flows correctly between modules
-- Final summary of all tests
+Testing all available domains with example problems...
+
+======================================================================
+BLOCKSWORLD DOMAIN TEST
+======================================================================
+...
+✅ blocksworld test passed!
+
+======================================================================
+GRIPPER DOMAIN TEST
+======================================================================
+...
+✅ gripper test passed!
+
+======================================================================
+TEST SUMMARY
+======================================================================
+blocksworld     ✅ PASSED
+gripper         ✅ PASSED
+
+Total: 2 domains
+✅ Passed: 2
+❌ Failed: 0
+
+🎉 All domain tests passed!
+The Planning Visualizer is working correctly!
+```
 
 ---
 
 ## Running Tests in Visual Studio Code
 
-### Method 1: Using Terminal
+### Method 1: Terminal
 1. Open VS Code
 2. Open Terminal (View → Terminal or Ctrl+`)
-3. Navigate to the python_modules directory:
+3. Navigate to python_modules:
    ```bash
    cd web-app/python_modules
    ```
-4. Run any test file:
+4. Run any test:
    ```bash
-   python test_planner.py
-   python test_generator.py
-   python test_renderer.py
-   python test_all.py
+   python test_blocksworld.py
+   python test_gripper.py
+   python test_domains.py
    ```
 
-### Method 2: Using Run Button
+### Method 2: Run Button
 1. Open any test file in VS Code
 2. Click the "Run" button (▶️) in the top-right corner
 3. Or press `Ctrl+F5` (Run Without Debugging)
 
-### Method 3: Using Python Extension
-1. Install the Python extension for VS Code (if not already installed)
-2. Open any test file
-3. Right-click in the editor → "Run Python File in Terminal"
+### Method 3: Right-click Menu
+1. Open any test file in VS Code
+2. Right-click in the editor
+3. Select "Run Python File in Terminal"
 
 ---
 
-## Interpreting Test Results
+## Understanding the Output
 
 ### Success Indicators
-- ✅ Green checkmarks indicate passed tests
-- Test summary shows `Passed: X, Failed: 0`
-- Exit code 0 (success)
+- ✅ Green checkmarks indicate success
+- Shows domain name, plan length, and number of states
+- Displays the complete plan
+- Shows preview of initial and final states
 
 ### Failure Indicators
-- ❌ Red X marks indicate failed tests
-- Error messages explain what went wrong
-- Stack traces help identify the issue
-- Exit code 1 (failure)
+- ❌ Red X marks indicate failure
+- Error message explains what went wrong
+- Stack trace helps identify the issue
 
-### Common Issues
+### What Each Test Validates
+Each test verifies the complete pipeline:
+1. **Planner** - Generates a plan (or uses fallback)
+2. **State Generator** - Creates intermediate states from the plan
+3. **State Renderer** - Converts states to renderable format
 
-**Issue: "Fast Downward not found"**
-- Expected behavior in fallback mode
-- Tests should still pass using pre-computed plans
-- Not an error if fallback mode is working
-
-**Issue: "Module not found"**
-- Make sure you're in the `web-app/python_modules` directory
-- Check that all required Python files exist
-
-**Issue: "Python command not found"**
-- Make sure Python 3 is installed
-- Try using `python3` instead of `python`
+If all tests pass, the entire Planning Visualizer is working correctly!
 
 ---
 
-## Test Coverage
+## Troubleshooting
 
-Each test file focuses on a specific module:
+### "No module named 'visualizer_api'"
+**Solution:** Make sure you're running the test from the `web-app/python_modules` directory:
+```bash
+cd web-app/python_modules
+python test_domains.py
+```
 
-| Test File | Module Tested | Test Count | Coverage |
-|-----------|---------------|------------|----------|
-| test_planner.py | planner_runner | 2 tests | Planner execution, fallback mode |
-| test_generator.py | state_generator | 3 tests | State generation, edge cases |
-| test_renderer.py | state_renderer | 4 tests | Rendering, error handling |
-| test_all.py | Full pipeline | 3 tests | Integration, data flow |
+### "Python command not found"
+**Solution:** Make sure Python 3 is installed. Try using `python3` instead:
+```bash
+python3 test_domains.py
+```
 
-**Total:** 12 individual tests covering the complete planning visualization pipeline.
-
----
-
-## Debugging Tips
-
-1. **Run tests individually** - Start with `test_planner.py`, then `test_generator.py`, then `test_renderer.py`
-2. **Check error messages** - Read the full error output, not just the summary
-3. **Use VS Code debugger** - Set breakpoints in test files and step through execution
-4. **Check module imports** - Make sure all Python modules are in the correct location
-5. **Verify Python version** - Use Python 3.7 or higher
+### Tests pass but web app doesn't work
+**Solution:** The tests verify the Python backend. If tests pass but the web app fails, check:
+1. Is the web server running? (`pnpm dev` in `web-app` directory)
+2. Check browser console for JavaScript errors
+3. Check server logs for API errors
 
 ---
 
-## Adding New Tests
+## Adding Tests for New Domains
 
-To add tests for new domains or features:
+When you add a new domain to the visualizer, create a test file:
 
-1. **Add to existing test files** - Add new test functions following the naming pattern `test_<feature>()`
-2. **Update test lists** - Add your test function to the `tests` list in `main()`
-3. **Follow the pattern** - Use the same structure as existing tests:
+1. Copy an existing test file:
+   ```bash
+   cp test_gripper.py test_newdomain.py
+   ```
+
+2. Edit the file and change the domain name:
    ```python
-   def test_new_feature():
-       print("=" * 60)
-       print("TEST: New Feature")
-       print("=" * 60)
-       
-       # Test logic here
-       
-       if success:
-           print("✅ SUCCESS")
-           return True
-       else:
-           print("❌ FAILED")
-           return False
+   result = visualize_plan_fallback("newdomain")
+   ```
+
+3. Add the new domain to `test_domains.py`:
+   ```python
+   domains = ["blocksworld", "gripper", "newdomain"]
+   ```
+
+4. Run the test:
+   ```bash
+   python test_newdomain.py
    ```
 
 ---
 
-## Continuous Integration
+## What These Tests Don't Cover
 
-These test files can be integrated into CI/CD pipelines:
+These simple tests verify the core functionality but don't test:
+- Custom PDDL file uploads
+- Error handling for invalid inputs
+- Performance with large problems
+- UI/frontend components
 
+For comprehensive testing, use the web application and try different scenarios manually.
+
+---
+
+## Summary
+
+**Three simple test files:**
+- `test_blocksworld.py` - Test Blocks World domain
+- `test_gripper.py` - Test Gripper domain  
+- `test_domains.py` - Test all domains at once
+
+**One command to test everything:**
 ```bash
-# Run all tests and exit with error code if any fail
-python test_all.py && echo "All tests passed!" || echo "Tests failed!"
+cd web-app/python_modules && python test_domains.py
 ```
 
-Use exit codes to determine pass/fail:
-- Exit code 0 = All tests passed
-- Exit code 1 = One or more tests failed
+If this passes, your Planning Visualizer is working correctly! 🎉
