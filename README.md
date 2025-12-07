@@ -19,43 +19,38 @@ This project implements a four-stage pipeline:
 
 ## Quick Start
 
-### Python Modules
+### Easy Setup (Recommended)
 
+The easiest way to run the Planning Visualizer:
+
+**Mac/Linux:**
 ```bash
-# Clone and setup
 git clone https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
 git submodule update --init --recursive
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Build Fast Downward
-cd planning-tools/downward
-./build.py release
-cd ../..
-
-# Run tests
-python tests/test1.py
-python tests/test_state_generator_standalone.py
-python tests/test_state_renderer.py
+./run.sh
 ```
 
-### Web Application
-
-```bash
-cd web-app
-
-# Install dependencies
-pnpm install
-
-# Start development server
-pnpm dev
+**Windows:**
+```cmd
+git clone https://github.com/Diabhsn3/planning-visualizer.git
+cd planning-visualizer
+git submodule update --init --recursive
+run.bat
 ```
 
-Visit `http://localhost:3000` to use the interactive visualizer.
+The script will automatically:
+- ✅ Check Python and Node.js installation
+- ✅ Install all dependencies
+- ✅ Configure environment variables
+- ✅ Build Fast Downward planner
+- ✅ Start the web application at `http://localhost:3000`
+
+### Platform-Specific Setup Guides
+
+For detailed setup instructions and troubleshooting:
+- **Mac users**: See [web-app/SETUP_MAC.md](web-app/SETUP_MAC.md)
+- **Windows users**: See [web-app/SETUP_WINDOWS.md](web-app/SETUP_WINDOWS.md)
 
 ---
 
@@ -76,26 +71,24 @@ Visit `http://localhost:3000` to use the interactive visualizer.
 
 ```
 planning-visualizer/
-├── src/                          # Python modules
-│   ├── planner_runner/          # Step 1: Planner integration
-│   ├── state_generator/         # Step 2: State generation
-│   └── state_renderer/          # Step 3: Visual rendering
-├── domains/                      # PDDL domain and problem files
-│   ├── blocks_world/
-│   ├── logistics/
-│   ├── depot/
-│   ├── gripper/
-│   ├── hanoi/
-│   ├── rovers/
-│   └── satellite/
-├── tests/                        # Unit tests
-├── output/                       # Generated visualization data
-├── web-app/                      # Step 4: Web application
+├── web-app/                      # Main web application
 │   ├── client/                  # React frontend
-│   ├── server/                  # Node.js backend
-│   └── python_modules/          # Python integration
-└── planning-tools/              # Fast Downward planner (submodule)
-    └── downward/
+│   │   ├── src/
+│   │   │   ├── components/      # UI components (Canvas, Timeline, etc.)
+│   │   │   └── pages/           # Page components
+│   ├── server/                  # Node.js backend (tRPC API)
+│   ├── python_modules/          # Python planning integration
+│   │   ├── run_planner.py      # Fast Downward integration
+│   │   ├── state_generator.py  # PDDL parsing & state generation
+│   │   └── state_renderer.py   # Domain-specific renderers
+│   ├── README.md               # Web app documentation
+│   ├── SETUP_MAC.md            # Mac setup guide
+│   └── SETUP_WINDOWS.md        # Windows setup guide
+├── planning-tools/              # Fast Downward planner (submodule)
+│   └── downward/
+├── run.sh                        # Easy run script (Mac/Linux)
+├── run.bat                       # Easy run script (Windows)
+└── requirements.txt              # Python dependencies (none required)
 ```
 
 ---
@@ -105,24 +98,21 @@ planning-visualizer/
 ### Command Line (Python)
 
 ```python
-from src.planner_runner.runner import run_planner
+import sys
+sys.path.append('web-app/python_modules')
 
-# Run planner
-actions = run_planner(
-    "domains/blocks_world/domain.pddl",
-    "domains/blocks_world/p1.pddl",
+from run_planner import solve_problem
+from state_generator import StateGenerator
+from state_renderer import RendererFactory
+
+# Run planner and generate states
+result = solve_problem(
+    domain="blocks-world",
+    problem_content="(define (problem blocks-4)...)"
 )
 
-# Generate and render states
-from src.state_generator import StateGenerator
-from src.state_renderer import RendererFactory
-
-sg = StateGenerator("domains/blocks_world/domain.pddl", 
-                    "domains/blocks_world/p1.pddl")
-states = sg.apply_plan(actions)
-
-renderer = RendererFactory.get_renderer(sg.parser.domain_name)
-rendered_states = renderer.render_sequence(states, sg.parser.objects, actions)
+print(f"Success: {result['success']}")
+print(f"States: {len(result['states'])}")
 ```
 
 ### Web Interface
@@ -183,58 +173,46 @@ See [web-app/README.md](web-app/README.md) for detailed documentation.
 
 ### Adding a New Domain
 
-1. Create PDDL files in `domains/your_domain/`
-2. Implement renderer in `src/state_renderer/your_domain_renderer.py`
-3. Register in `src/state_renderer/__init__.py`
-4. Add to web app in `web-app/server/visualizer.ts`
-5. Test with example problems
-
-### Running Tests
-
-```bash
-# Python tests
-python tests/test_state_generator_standalone.py
-python tests/test_state_renderer.py
-
-# Web app tests
-cd web-app
-pnpm test
-```
+1. Add domain renderer to `web-app/python_modules/state_renderer.py`
+2. Register domain in `web-app/server/routers/visualizer.ts`
+3. Add domain-specific rendering logic in `web-app/client/src/components/StateCanvas.tsx`
+4. Test with example PDDL problems
 
 ---
 
 ## Documentation
 
-- [STEP1_README.md](STEP1_README.md) - Planner Runner
-- [STEP2_README.md](STEP2_README.md) - State Generator  
-- [STEP3_README.md](STEP3_README.md) - State Renderer
-- [web-app/README.md](web-app/README.md) - Web Application
+- [web-app/README.md](web-app/README.md) - Web Application Documentation
+- [web-app/SETUP_MAC.md](web-app/SETUP_MAC.md) - Mac Setup Guide
+- [web-app/SETUP_WINDOWS.md](web-app/SETUP_WINDOWS.md) - Windows Setup Guide
 
 ---
 
 ## Troubleshooting
 
-### ModuleNotFoundError
-
-Run Python from repository root:
-
-```bash
-cd planning-visualizer
-source venv/bin/activate
-python tests/test1.py
-```
-
-### Submodule Missing
+### Fast Downward Not Building
 
 ```bash
 git submodule update --init --recursive
 cd planning-tools/downward
-./build.py release
+./build.py
 ```
 
-### Web App Issues
+### Python Not Found
 
-See [web-app/README.md](web-app/README.md) for web-specific troubleshooting.
+Make sure Python 3.11+ is installed:
+```bash
+python3 --version  # Should show 3.11 or higher
+```
+
+### Node.js Issues
+
+Install Node.js 18 or higher from [nodejs.org](https://nodejs.org)
+
+### Platform-Specific Issues
+
+- **Mac**: See [web-app/SETUP_MAC.md](web-app/SETUP_MAC.md)
+- **Windows**: See [web-app/SETUP_WINDOWS.md](web-app/SETUP_WINDOWS.md)
 
 ---
 
