@@ -87,19 +87,41 @@ fi
 echo ""
 echo "Step 4: Checking Fast Downward planner..."
 if [ -f "planning-tools/downward/fast-downward.py" ]; then
-    if [ -d "planning-tools/downward/builds/release" ]; then
+    # Check if binary exists (more reliable than just checking directory)
+    if [ -f "planning-tools/downward/builds/release/bin/downward" ]; then
         echo "[OK] Fast Downward already built"
     else
         echo "[INFO] Fast Downward not built. Building now..."
         echo "This may take a few minutes..."
         cd planning-tools/downward
-        if ./build.py 2>&1; then
+        
+        # Capture build output to check for specific errors
+        BUILD_OUTPUT=$(./build.py 2>&1)
+        BUILD_EXIT_CODE=$?
+        
+        if [ $BUILD_EXIT_CODE -eq 0 ]; then
             echo "[OK] Fast Downward built successfully"
             cd ../..
         else
             echo "[WARNING] Fast Downward build failed"
-            echo "The app will start in fallback mode (limited functionality)"
-            echo "See SETUP_MAC.md for troubleshooting"
+            
+            # Check for macOS Xcode 15+ compatibility error
+            if echo "$BUILD_OUTPUT" | grep -q "no type named 'size_t' in namespace 'std'"; then
+                echo ""
+                echo "⚠️  Detected macOS Xcode 15+ compatibility issue"
+                echo ""
+                echo "This is a known issue with Fast Downward on newer Macs."
+                echo "The app will work perfectly in fallback mode!"
+                echo ""
+                echo "To try fixing the build:"
+                echo "  1. Run: ./fix_macos_build.sh"
+                echo "  2. Or see: MACOS_BUILD_ISSUES.md"
+                echo ""
+                echo "Otherwise, the app will use pre-computed plans (recommended)."
+            else
+                echo "The app will start in fallback mode (limited functionality)"
+                echo "See MACOS_BUILD_ISSUES.md for troubleshooting"
+            fi
             cd ../..
         fi
     fi
@@ -108,12 +130,33 @@ else
     git submodule update --init --recursive
     echo "[INFO] Building Fast Downward..."
     cd planning-tools/downward
-    if ./build.py 2>&1; then
+    
+    # Capture build output to check for specific errors
+    BUILD_OUTPUT=$(./build.py 2>&1)
+    BUILD_EXIT_CODE=$?
+    
+    if [ $BUILD_EXIT_CODE -eq 0 ]; then
         echo "[OK] Fast Downward built successfully"
         cd ../..
     else
         echo "[WARNING] Fast Downward build failed"
-        echo "The app will start in fallback mode"
+        
+        # Check for macOS Xcode 15+ compatibility error
+        if echo "$BUILD_OUTPUT" | grep -q "no type named 'size_t' in namespace 'std'"; then
+            echo ""
+            echo "⚠️  Detected macOS Xcode 15+ compatibility issue"
+            echo ""
+            echo "This is a known issue with Fast Downward on newer Macs."
+            echo "The app will work perfectly in fallback mode!"
+            echo ""
+            echo "To try fixing the build:"
+            echo "  1. Run: ./fix_macos_build.sh"
+            echo "  2. Or see: MACOS_BUILD_ISSUES.md"
+            echo ""
+            echo "Otherwise, the app will use pre-computed plans (recommended)."
+        else
+            echo "The app will start in fallback mode"
+        fi
         cd ../..
     fi
 fi
