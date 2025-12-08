@@ -1,8 +1,8 @@
-# Planning Visualizer
+# Planning Visualizer - Monorepo
 
 An interactive web application for visualizing classical planning problems and solutions with domain-specific renderers and real-time animations.
 
-![Planning Visualizer](https://img.shields.io/badge/React-19-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue) ![Python](https://img.shields.io/badge/Python-3.11+-green)
+![Planning Visualizer](https://img.shields.io/badge/React-19-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue) ![Python](https://img.shields.io/badge/Python-3.11+-green) ![Monorepo](https://img.shields.io/badge/Monorepo-pnpm-orange)
 
 **Supported Domains:** Blocks World • Gripper
 
@@ -16,42 +16,13 @@ An interactive web application for visualizing classical planning problems and s
 - 🎯 **Domain-Specific Rendering** - Tailored visualizations for each planning domain
 - 🔄 **Fallback Mode** - Works without Fast Downward using pre-computed examples
 - 🚀 **Modern Stack** - React 19, TypeScript, Tailwind CSS, Node.js, Python
+- 📦 **Monorepo Structure** - Organized packages with shared types for type safety
 
 ---
 
 ## 🚀 Quick Start
 
-### One-Command Setup
-
-#### Mac / Linux
-```bash
-git clone https://github.com/Diabhsn3/planning-visualizer.git
-cd planning-visualizer
-git checkout front_back
-./run_new.sh
-```
-
-#### Windows
-```cmd
-git clone https://github.com/Diabhsn3/planning-visualizer.git
-cd planning-visualizer
-git checkout front_back
-run_new.bat
-```
-
-The script automatically:
-1. ✅ Checks for Python 3.11+, Node.js 18+, and pnpm
-2. ✅ Installs all dependencies (frontend + backend)
-3. ✅ Builds Fast Downward planner (optional)
-4. ✅ Starts both servers
-
-**🌐 Access the app at:** http://localhost:3000
-
-> **Note:** If Fast Downward build fails (common on macOS with Xcode 15+), the app runs in **fallback mode** with pre-defined example problems. Full functionality is maintained.
-
----
-
-## 📋 Prerequisites
+### Prerequisites
 
 Before running the application, ensure you have:
 
@@ -62,100 +33,128 @@ Before running the application, ensure you have:
 | **pnpm** | Latest | `npm install -g pnpm` |
 | **Git** | Latest | [git-scm.com](https://git-scm.com/) |
 
-**Optional:**
-- **C++ Compiler** - For building Fast Downward (GCC on Linux, Xcode on Mac, Visual Studio Build Tools on Windows)
+### Installation
 
----
-
-## 🛠️ Manual Setup
-
-If you prefer to run each step manually:
-
-### 1. Clone Repository
 ```bash
+# Clone the repository
 git clone https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
-git checkout front_back
-```
+git checkout Monorepo-separation
 
-### 2. Initialize Fast Downward (Optional)
-```bash
+# Install all dependencies (frontend, backend, types)
+pnpm install
+
+# Initialize Fast Downward (optional)
 git submodule update --init --recursive
 ```
 
-### 3. Install Dependencies
+### Running the Application
 
-**Backend:**
 ```bash
-cd backend/api
-pnpm install
-```
-
-**Frontend:**
-```bash
-cd ../../frontend
-pnpm install
-```
-
-### 4. Start Servers
-
-**Terminal 1 - Backend API:**
-```bash
-cd backend/api
+# Run both frontend and backend simultaneously
 pnpm dev
-```
-Backend runs on **http://localhost:4000**
 
-**Terminal 2 - Frontend:**
-```bash
-cd frontend
-pnpm dev
+# Or run individually:
+pnpm dev:frontend  # Frontend only (http://localhost:3000)
+pnpm dev:backend   # Backend only (http://localhost:4000)
 ```
-Frontend runs on **http://localhost:3000**
 
-### 5. Open Application
-Navigate to **http://localhost:3000** in your browser.
+**🌐 Access the app at:** http://localhost:3000
+
+> **Note:** If Fast Downward build fails (common on macOS with Xcode 15+), the app runs in **fallback mode** with pre-defined example problems.
 
 ---
 
-## 📁 Project Structure
+## 📁 Monorepo Structure
 
 ```
 planning-visualizer/
 │
-├── frontend/                      # React Frontend (Port 3000)
-│   ├── src/
-│   │   ├── pages/                # Page components
-│   │   │   └── Visualizer.tsx    # Main visualizer interface
-│   │   ├── components/           # Reusable UI components
-│   │   ├── lib/                  # tRPC client & utilities
-│   │   └── main.tsx              # Application entry point
-│   ├── public/                   # Static assets
-│   ├── vite.config.ts            # Vite configuration
-│   └── package.json
-│
-├── backend/
-│   ├── api/                      # Node.js/Express API (Port 4000)
-│   │   ├── _core/                # Core server setup
-│   │   ├── visualizer.ts         # Main API endpoints
-│   │   ├── routers.ts            # tRPC route definitions
+├── 📁 packages/
+│   ├── 📁 frontend/                  # React Frontend (Port 3000)
+│   │   ├── src/
+│   │   │   ├── pages/               # Page components
+│   │   │   ├── components/          # Reusable UI components
+│   │   │   ├── lib/                 # tRPC client & utilities
+│   │   │   └── main.tsx             # Application entry point
+│   │   ├── vite.config.ts
 │   │   └── package.json
 │   │
-│   └── planner/                  # Python Planning Engine
-│       ├── visualizer_api.py     # Main Python API
-│       ├── run_planner.py        # Fast Downward integration
-│       ├── domains/              # PDDL domain definitions
-│       │   ├── blocks_world/     # Blocks World domain
-│       │   └── gripper/          # Gripper domain
-│       ├── state_generator/      # State generation logic
-│       └── state_renderer/       # Domain-specific renderers
+│   ├── 📁 backend/                   # Backend Services
+│   │   ├── api/                     # Node.js/Express API (Port 4000)
+│   │   │   ├── _core/               # Core server setup
+│   │   │   ├── visualizer.ts        # Main API endpoints
+│   │   │   ├── routers.ts           # tRPC route definitions
+│   │   │   └── package.json
+│   │   └── planner/                 # Python Planning Engine
+│   │       ├── visualizer_api.py    # Main Python API
+│   │       ├── domains/             # PDDL domain definitions
+│   │       ├── state_generator/     # State generation logic
+│   │       └── state_renderer/      # Domain-specific renderers
+│   │
+│   └── 📁 types/                     # Shared TypeScript Types
+│       ├── src/
+│       │   └── index.ts             # Re-exports AppRouter type
+│       ├── package.json
+│       └── tsconfig.json
 │
-├── planning-tools/               # Fast Downward Planner (Submodule)
+├── 📁 planning-tools/                # Fast Downward Planner (Submodule)
 │   └── downward/
 │
-├── run_new.sh                    # Quick start script (Mac/Linux)
-├── run_new.bat                   # Quick start script (Windows)
-└── README.md                     # This file
+├── pnpm-workspace.yaml               # Workspace configuration
+├── package.json                      # Root package.json with scripts
+└── README.md                         # This file
+```
+
+---
+
+## 📦 Package Overview
+
+### Frontend Package (`packages/frontend`)
+
+React-based web interface with TypeScript and Tailwind CSS.
+
+**Key Dependencies:**
+- React 19
+- tRPC Client
+- Vite
+- Tailwind CSS 4
+- Framer Motion
+
+**Scripts:**
+```bash
+pnpm dev:frontend   # Start development server
+pnpm build:frontend # Build for production
+```
+
+### Backend Package (`packages/backend`)
+
+Node.js API server with Python planning engine.
+
+**Key Dependencies:**
+- Express
+- tRPC Server
+- Python 3.11+
+- Fast Downward (optional)
+
+**Scripts:**
+```bash
+pnpm dev:backend    # Start development server
+pnpm build:backend  # Build for production
+```
+
+### Types Package (`packages/types`)
+
+Shared TypeScript types for type-safe communication between frontend and backend.
+
+**Purpose:**
+- Exports `AppRouter` type from backend
+- Ensures type safety across API boundaries
+- Automatically linked via pnpm workspace
+
+**Scripts:**
+```bash
+pnpm build:types    # Build type definitions
 ```
 
 ---
@@ -186,6 +185,49 @@ Click **"Generate States"** to:
 
 ---
 
+## 🛠️ Development
+
+### Adding Dependencies
+
+**Frontend:**
+```bash
+pnpm --filter frontend add <package-name>
+```
+
+**Backend:**
+```bash
+pnpm --filter backend add <package-name>
+```
+
+**Types:**
+```bash
+pnpm --filter types add -D <package-name>
+```
+
+### Building
+
+```bash
+# Build all packages
+pnpm build
+
+# Build specific package
+pnpm build:types
+pnpm build:frontend
+pnpm build:backend
+```
+
+### Type Safety
+
+The monorepo ensures type safety between frontend and backend:
+
+1. Backend exports `AppRouter` type in `packages/backend/api/routers.ts`
+2. Types package re-exports it in `packages/types/src/index.ts`
+3. Frontend imports it from `@planning-visualizer/types`
+
+Any API changes in the backend automatically propagate to the frontend via TypeScript!
+
+---
+
 ## 🔧 Troubleshooting
 
 ### ⚠️ Fast Downward Build Fails
@@ -199,10 +241,9 @@ Fast Downward C++ build fails if the project path contains spaces (e.g., `"final
 # Move to a path without spaces
 mv "~/Documents/final project/planning-visualizer" ~/planning-visualizer
 cd ~/planning-visualizer
-./run_new.sh
+pnpm install
+pnpm dev
 ```
-
-The run scripts automatically detect this issue and warn you.
 
 ---
 
@@ -230,60 +271,30 @@ taskkill /PID <PID> /F
 
 ---
 
-### ⚠️ Python Not Found
+### ⚠️ Type Errors After API Changes
 
-If the backend can't find Python, create a `.env` file:
+If you see TypeScript errors after changing the backend API:
 
 ```bash
-cd backend/api
-echo "PYTHON_CMD=python3.12" > .env
+# Rebuild types package
+pnpm build:types
+
+# Restart frontend dev server
+pnpm dev:frontend
 ```
 
-Replace `python3.12` with your Python command (`python3`, `python`, etc.).
-
 ---
 
-### ⚠️ Frontend Can't Connect to Backend
+### ⚠️ Workspace Dependencies Not Found
 
-1. Verify backend is running: http://localhost:4000
-2. Check frontend proxy in `frontend/vite.config.ts`
-3. Ensure no firewall is blocking local connections
-
----
-
-### ⚠️ Windows-Specific Issues
-
-**Fast Downward requires Visual Studio Build Tools:**
-
-1. Download: https://visualstudio.microsoft.com/downloads/
-2. Install "Desktop development with C++"
-3. Restart your terminal
-4. Run `run_new.bat` again
-
-**Alternatively:** Use fallback mode (works without Fast Downward)
-
----
-
-## 🧪 Testing
-
-### Test Python Modules
+If you see errors about `@planning-visualizer/types` not found:
 
 ```bash
-cd backend/planner
+# Reinstall all dependencies
+pnpm install
 
-# Test individual domains
-python test_blocksworld.py
-python test_gripper.py
-
-# Test all domains
-python test_domains.py
-```
-
-### Test Backend API
-
-```bash
-cd backend/api
-pnpm test
+# Build types package
+pnpm build:types
 ```
 
 ---
@@ -310,17 +321,20 @@ pnpm test
 - **Custom PDDL Parsers** - Problem parsing
 - **Domain Renderers** - Visualization logic
 
+### Monorepo
+- **pnpm Workspaces** - Package management
+- **Shared Types** - Type safety across packages
+
 ---
 
 ## 🤝 Contributing
 
 Contributions are welcome! To add a new planning domain:
 
-1. Add PDDL files to `backend/planner/domains/new_domain/`
-2. Create renderer in `backend/planner/state_renderer/new_domain_renderer.py`
-3. Register renderer in `backend/planner/state_renderer/renderer_factory.py`
-4. Add domain config in `backend/api/visualizer.ts`
-5. Create test file `backend/planner/test_newdomain.py`
+1. Add PDDL files to `packages/backend/planner/domains/new_domain/`
+2. Create renderer in `packages/backend/planner/state_renderer/new_domain_renderer.py`
+3. Add domain config in `packages/backend/api/visualizer.ts`
+4. Update types if needed in `packages/types/src/index.ts`
 
 ---
 

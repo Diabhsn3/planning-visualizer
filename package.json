@@ -1,0 +1,28 @@
+{
+  "name": "planning-visualizer-monorepo",
+  "version": "1.0.0",
+  "description": "Planning Visualizer - Monorepo with Frontend, Backend, and Shared Types",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter './packages/{frontend,backend}' dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "build": "pnpm --recursive build",
+    "build:types": "pnpm --filter types build",
+    "build:frontend": "pnpm --filter frontend build",
+    "build:backend": "pnpm --filter backend build",
+    "install:all": "pnpm install"
+  },
+  "keywords": [
+    "planning",
+    "visualizer",
+    "pddl",
+    "monorepo"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "pnpm": "^10.15.1"
+  },
+  "packageManager": "pnpm@10.4.1"
+}
