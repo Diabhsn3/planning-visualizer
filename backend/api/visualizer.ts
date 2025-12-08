@@ -55,17 +55,23 @@ function getPythonCommand(): string {
 const PYTHON_CMD = getPythonCommand();
 console.log('[Python Detection] Using Python command:', PYTHON_CMD);
 
-// Domain configurations
+// Domain configurations - use absolute paths based on file location
+const PLANNER_DIR = path.join(__dirname, "../planner");
+const PLANNING_TOOLS_DIR = path.join(__dirname, "../planning-tools");
+
+console.log('[Path Resolution] __dirname:', __dirname);
+console.log('[Path Resolution] PLANNER_DIR:', PLANNER_DIR);
+console.log('[Path Resolution] PLANNING_TOOLS_DIR:', PLANNING_TOOLS_DIR);
 const DOMAIN_CONFIGS = {
   "blocks-world": {
     name: "Blocks World",
     description: "Classic block stacking problem",
-    domainFile: "../planner/domains/blocks_world/domain.pddl",
+    domainFile: path.join(PLANNER_DIR, "domains/blocks_world/domain.pddl"),
   },
   "gripper": {
     name: "Gripper",
     description: "Robot with grippers moving balls between rooms",
-    domainFile: "../planner/domains/gripper/domain.pddl",
+    domainFile: path.join(PLANNER_DIR, "domains/gripper/domain.pddl"),
   },
 };
 
@@ -144,7 +150,7 @@ export const visualizerRouter = router({
           if (!domainConfig) {
             throw new Error(`Unknown domain: ${input.domainName}`);
           }
-          domainPath = path.join(__dirname, "..", domainConfig.domainFile);
+          domainPath = domainConfig.domainFile; // Already absolute path
         } else {
           // Save uploaded domain file
           domainPath = path.join(uploadsDir, `domain_${timestamp}.pddl`);
@@ -156,10 +162,7 @@ export const visualizerRouter = router({
         await writeFile(problemPath, input.problemContent, "utf-8");
 
         // Run Python pipeline with planner
-        const pythonScript = path.join(
-          __dirname,
-          "../planner/visualizer_api.py"
-        );
+        const pythonScript = path.join(PLANNER_DIR, "visualizer_api.py");
 
         console.log('[uploadAndGenerate] Running Python script...');
         console.log('[uploadAndGenerate] Using Python command:', PYTHON_CMD);
@@ -244,7 +247,7 @@ export const visualizerRouter = router({
 
     try {
       // Check Fast Downward
-      const fdPath = path.join(__dirname, "../planning-tools/downward/fast-downward.py");
+      const fdPath = path.join(PLANNING_TOOLS_DIR, "downward/fast-downward.py");
       const { stdout } = await execAsync(`"${PYTHON_CMD}" "${fdPath}" --help`, { timeout: 5000 });
       if (stdout.includes("Fast Downward")) {
         status.fastDownward.available = true;
