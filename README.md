@@ -28,7 +28,7 @@ Before running the application, ensure you have:
 
 | Requirement | Version | Installation |
 |------------|---------|--------------|
-| **Python** | 3.11+ | [python.org](https://www.python.org/downloads/) |
+| **Python** |  3.11+ | [python.org](https://www.python.org/downloads/) |
 | **Node.js** | 18+ | [nodejs.org](https://nodejs.org/) |
 | **pnpm** | Latest | `npm install -g pnpm` |
 | **Git** | Latest | [git-scm.com](https://git-scm.com/) |
