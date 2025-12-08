@@ -277,6 +277,12 @@ fi
 echo ""
 echo "Step 5: Checking Fast Downward planner..."
 
+# Clean up any stale CMake cache (happens when repository is moved)
+if [ -f "planning-tools/downward/builds/release/CMakeCache.txt" ]; then
+    echo "[INFO] Cleaning stale CMake cache..."
+    rm -rf planning-tools/downward/builds
+fi
+
 # Skip build if Xcode 15+ detected on macOS
 if [ "$SKIP_FD_BUILD" -eq 1 ]; then
     echo "[INFO] Skipping Fast Downward build due to Xcode 15+ compatibility issues"
