@@ -2,13 +2,16 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Planner directory (where domains are located)
+PLANNER_DIR = Path(__file__).resolve().parent.parent
+# Project root (where planning-tools is located)
+PROJECT_ROOT = PLANNER_DIR.parent.parent
 
 FD_PY = PROJECT_ROOT / "planning-tools" / "downward" / "fast-downward.py"
 
 def run_planner(domain_rel, problem_rel):
-    domain = PROJECT_ROOT / domain_rel
-    problem = PROJECT_ROOT / problem_rel
+    domain = PLANNER_DIR / domain_rel
+    problem = PLANNER_DIR / problem_rel
 
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         plan_file = Path(tmp.name)

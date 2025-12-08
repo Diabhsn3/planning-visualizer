@@ -1,0 +1,144 @@
+{
+  "domain": "blocks-world",
+  "problem": "bw-1",
+  "objects": {
+    "c": "block",
+    "b": "block",
+    "a": "block",
+    "block": "object"
+  },
+  "plan": [
+    "(pick-up b)",
+    "(stack b c)",
+    "(pick-up a)",
+    "(stack a b)"
+  ],
+  "num_states": 5,
+  "states": [
+    {
+      "ontable": [
+        [
+          "c"
+        ],
+        [
+          "b"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "clear": [
+        [
+          "b"
+        ],
+        [
+          "c"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "handempty": [
+        []
+      ]
+    },
+    {
+      "ontable": [
+        [
+          "c"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "holding": [
+        [
+          "b"
+        ]
+      ],
+      "clear": [
+        [
+          "c"
+        ],
+        [
+          "a"
+        ]
+      ]
+    },
+    {
+      "ontable": [
+        [
+          "c"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "clear": [
+        [
+          "b"
+        ],
+        [
+          "a"
+        ]
+      ],
+      "handempty": [
+        []
+      ],
+      "on": [
+        [
+          "b",
+          "c"
+        ]
+      ]
+    },
+    {
+      "holding": [
+        [
+          "a"
+        ]
+      ],
+      "on": [
+        [
+          "b",
+          "c"
+        ]
+      ],
+      "ontable": [
+        [
+          "c"
+        ]
+      ],
+      "clear": [
+        [
+          "b"
+        ]
+      ]
+    },
+    {
+      "on": [
+        [
+          "a",
+          "b"
+        ],
+        [
+          "b",
+          "c"
+        ]
+      ],
+      "ontable": [
+        [
+          "c"
+        ]
+      ],
+      "handempty": [
+        []
+      ],
+      "clear": [
+        [
+          "a"
+        ]
+      ]
+    }
+  ]
+}

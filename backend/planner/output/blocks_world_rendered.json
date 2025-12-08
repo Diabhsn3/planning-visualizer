@@ -1,0 +1,555 @@
+{
+  "domain": "blocks-world",
+  "num_states": 5,
+  "states": [
+    {
+      "domain": "blocks-world",
+      "objects": [
+        {
+          "id": "a",
+          "type": "block",
+          "label": "A",
+          "position": [
+            50,
+            440
+          ],
+          "properties": {
+            "color": "#FF6B6B",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "b",
+          "type": "block",
+          "label": "B",
+          "position": [
+            130,
+            440
+          ],
+          "properties": {
+            "color": "#4ECDC4",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "c",
+          "type": "block",
+          "label": "C",
+          "position": [
+            210,
+            440
+          ],
+          "properties": {
+            "color": "#45B7D1",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "table",
+          "type": "surface",
+          "label": "Table",
+          "position": [
+            0,
+            500
+          ],
+          "properties": {
+            "width": 340,
+            "height": 20,
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "gripper",
+          "type": "gripper",
+          "label": "Hand",
+          "position": [
+            290,
+            200
+          ],
+          "properties": {
+            "empty": true,
+            "holding": null
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "ontable",
+          "source": "b",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        },
+        {
+          "type": "ontable",
+          "source": "a",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        },
+        {
+          "type": "ontable",
+          "source": "c",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 0
+      }
+    },
+    {
+      "domain": "blocks-world",
+      "objects": [
+        {
+          "id": "a",
+          "type": "block",
+          "label": "A",
+          "position": [
+            50,
+            440
+          ],
+          "properties": {
+            "color": "#FF6B6B",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "c",
+          "type": "block",
+          "label": "C",
+          "position": [
+            210,
+            440
+          ],
+          "properties": {
+            "color": "#45B7D1",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "b",
+          "type": "block",
+          "label": "B",
+          "position": [
+            130,
+            210
+          ],
+          "properties": {
+            "color": "#4ECDC4",
+            "width": 60,
+            "height": 60,
+            "held": true,
+            "z_index": 100
+          }
+        },
+        {
+          "id": "table",
+          "type": "surface",
+          "label": "Table",
+          "position": [
+            0,
+            500
+          ],
+          "properties": {
+            "width": 340,
+            "height": 20,
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "gripper",
+          "type": "gripper",
+          "label": "Hand",
+          "position": [
+            130,
+            200
+          ],
+          "properties": {
+            "empty": false,
+            "holding": "b"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "ontable",
+          "source": "a",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        },
+        {
+          "type": "ontable",
+          "source": "c",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        },
+        {
+          "type": "holding",
+          "source": "gripper",
+          "target": "b",
+          "properties": {
+            "relationship": "grasped"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 1,
+        "action": "(pick-up b)"
+      }
+    },
+    {
+      "domain": "blocks-world",
+      "objects": [
+        {
+          "id": "a",
+          "type": "block",
+          "label": "A",
+          "position": [
+            50,
+            440
+          ],
+          "properties": {
+            "color": "#FF6B6B",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "c",
+          "type": "block",
+          "label": "C",
+          "position": [
+            210,
+            440
+          ],
+          "properties": {
+            "color": "#45B7D1",
+            "width": 60,
+            "height": 60,
+            "clear": false,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "b",
+          "type": "block",
+          "label": "B",
+          "position": [
+            210,
+            380
+          ],
+          "properties": {
+            "color": "#4ECDC4",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 1
+          }
+        },
+        {
+          "id": "table",
+          "type": "surface",
+          "label": "Table",
+          "position": [
+            0,
+            500
+          ],
+          "properties": {
+            "width": 340,
+            "height": 20,
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "gripper",
+          "type": "gripper",
+          "label": "Hand",
+          "position": [
+            290,
+            200
+          ],
+          "properties": {
+            "empty": true,
+            "holding": null
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "on",
+          "source": "b",
+          "target": "c",
+          "properties": {
+            "relationship": "stacked"
+          }
+        },
+        {
+          "type": "ontable",
+          "source": "a",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        },
+        {
+          "type": "ontable",
+          "source": "c",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 2,
+        "action": "(stack b c)"
+      }
+    },
+    {
+      "domain": "blocks-world",
+      "objects": [
+        {
+          "id": "c",
+          "type": "block",
+          "label": "C",
+          "position": [
+            210,
+            440
+          ],
+          "properties": {
+            "color": "#45B7D1",
+            "width": 60,
+            "height": 60,
+            "clear": false,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "b",
+          "type": "block",
+          "label": "B",
+          "position": [
+            210,
+            380
+          ],
+          "properties": {
+            "color": "#4ECDC4",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 1
+          }
+        },
+        {
+          "id": "a",
+          "type": "block",
+          "label": "A",
+          "position": [
+            50,
+            210
+          ],
+          "properties": {
+            "color": "#FF6B6B",
+            "width": 60,
+            "height": 60,
+            "held": true,
+            "z_index": 100
+          }
+        },
+        {
+          "id": "table",
+          "type": "surface",
+          "label": "Table",
+          "position": [
+            0,
+            500
+          ],
+          "properties": {
+            "width": 340,
+            "height": 20,
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "gripper",
+          "type": "gripper",
+          "label": "Hand",
+          "position": [
+            50,
+            200
+          ],
+          "properties": {
+            "empty": false,
+            "holding": "a"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "on",
+          "source": "b",
+          "target": "c",
+          "properties": {
+            "relationship": "stacked"
+          }
+        },
+        {
+          "type": "ontable",
+          "source": "c",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        },
+        {
+          "type": "holding",
+          "source": "gripper",
+          "target": "a",
+          "properties": {
+            "relationship": "grasped"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 3,
+        "action": "(pick-up a)"
+      }
+    },
+    {
+      "domain": "blocks-world",
+      "objects": [
+        {
+          "id": "c",
+          "type": "block",
+          "label": "C",
+          "position": [
+            210,
+            440
+          ],
+          "properties": {
+            "color": "#45B7D1",
+            "width": 60,
+            "height": 60,
+            "clear": false,
+            "z_index": 0
+          }
+        },
+        {
+          "id": "b",
+          "type": "block",
+          "label": "B",
+          "position": [
+            210,
+            380
+          ],
+          "properties": {
+            "color": "#4ECDC4",
+            "width": 60,
+            "height": 60,
+            "clear": false,
+            "z_index": 1
+          }
+        },
+        {
+          "id": "a",
+          "type": "block",
+          "label": "A",
+          "position": [
+            210,
+            320
+          ],
+          "properties": {
+            "color": "#FF6B6B",
+            "width": 60,
+            "height": 60,
+            "clear": true,
+            "z_index": 2
+          }
+        },
+        {
+          "id": "table",
+          "type": "surface",
+          "label": "Table",
+          "position": [
+            0,
+            500
+          ],
+          "properties": {
+            "width": 340,
+            "height": 20,
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "gripper",
+          "type": "gripper",
+          "label": "Hand",
+          "position": [
+            290,
+            200
+          ],
+          "properties": {
+            "empty": true,
+            "holding": null
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "on",
+          "source": "a",
+          "target": "b",
+          "properties": {
+            "relationship": "stacked"
+          }
+        },
+        {
+          "type": "on",
+          "source": "b",
+          "target": "c",
+          "properties": {
+            "relationship": "stacked"
+          }
+        },
+        {
+          "type": "ontable",
+          "source": "c",
+          "target": "table",
+          "properties": {
+            "relationship": "supported"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 4,
+        "action": "(stack a b)"
+      }
+    }
+  ]
+}
