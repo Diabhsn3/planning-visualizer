@@ -21,11 +21,12 @@ An interactive web application for visualizing classical planning problems and s
 
 ## 🚀 Quick Start
 
-### One-Command Setup
+### One-Command Setup (Recommended)
 
 #### Mac / Linux
 ```bash
-git clone https://github.com/Diabhsn3/planning-visualizer.git
+# Clone with submodules
+git clone --recursive https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
 git checkout front_back
 ./run_new.sh
@@ -33,7 +34,8 @@ git checkout front_back
 
 #### Windows
 ```cmd
-git clone https://github.com/Diabhsn3/planning-visualizer.git
+# Clone with submodules
+git clone --recursive https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
 git checkout front_back
 run_new.bat
@@ -48,6 +50,41 @@ The script automatically:
 **🌐 Access the app at:** http://localhost:3000
 
 > **Note:** If Fast Downward build fails (common on macOS with Xcode 15+), the app runs in **fallback mode** with pre-defined example problems. Full functionality is maintained.
+
+---
+
+## 🚨 First-Time Setup (Important!)
+
+### Already Cloned Without `--recursive`?
+
+If you already cloned the repository without the `--recursive` flag, you'll need to initialize the Fast Downward submodule:
+
+```bash
+cd planning-visualizer
+git submodule update --init --recursive
+./run_new.sh
+```
+
+Or use the dedicated setup script:
+
+```bash
+cd planning-visualizer
+./setup_fast_downward.sh
+./run_new.sh
+```
+
+> **Why is this necessary?** The Fast Downward planner is included as a Git submodule and is **not automatically downloaded** when you clone the repository. Without initializing the submodule, the `planning-tools/downward/` directory will be empty.
+
+### Running Without Fast Downward (Fallback Mode)
+
+The application **still works** even without Fast Downward:
+
+- ✅ All visualization features work normally
+- ✅ Pre-defined example problems work
+- ✅ Animation controls work
+- ⚠️ Custom PDDL problem solving uses pre-computed fallback plans
+
+To use fallback mode, just skip the submodule initialization and run `./run_new.sh` directly.
 
 ---
 
@@ -187,6 +224,37 @@ Click **"Generate States"** to:
 ---
 
 ## 🔧 Troubleshooting
+
+### ⚠️ Fast Downward Not Found / Empty Directory
+
+**Symptom:** Error message `Could not find 'downward' in build 'release'` or empty `planning-tools/downward/` directory.
+
+**Cause:** The Fast Downward submodule was not initialized when cloning the repository.
+
+**Solution:**
+
+```bash
+cd planning-visualizer
+git submodule update --init --recursive
+cd planning-tools/downward
+./build.py release
+```
+
+**Quick Fix Script:**
+
+```bash
+./setup_fast_downward.sh
+```
+
+This script will:
+1. Initialize the Fast Downward submodule
+2. Check for required build tools
+3. Build Fast Downward
+4. Verify the installation
+
+**Alternative:** Run in fallback mode (no build required) - the app will use pre-computed example plans.
+
+---
 
 ### ⚠️ Fast Downward Build Fails
 
