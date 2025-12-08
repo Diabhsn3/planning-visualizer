@@ -193,18 +193,59 @@ elif [[ "$OS" == "macos" ]]; then
         echo "[WARNING] make not found. Fast Downward build may fail."
     fi
     
-    # Skip Fast Downward build on macOS by default (too many compatibility issues)
-    SKIP_FD_BUILD=1
+    # Check for GCC (needed for Fast Downward on macOS due to AppleClang C++20 issues)
     echo ""
-    echo "⚠️  macOS detected: Skipping Fast Downward build"
-    echo ""
-    echo "Fast Downward has known compatibility issues on macOS (Xcode 14-16+)."
-    echo "The app works perfectly in fallback mode with pre-computed plans."
-    echo ""
-    echo "If you want to try building Fast Downward anyway:"
-    echo "  1. Run: cd planning-tools/downward && ./build.py release"
-    echo "  2. Or see: MACOS_BUILD_ISSUES.md for detailed solutions"
-    echo ""
+    echo "[INFO] Fast Downward requires GCC on macOS (AppleClang has C++20 compatibility issues)"
+    
+    GCC_VERSION=""
+    for ver in 14 13 12 11; do
+        if command -v gcc-$ver &> /dev/null; then
+            GCC_VERSION=$ver
+            break
+        fi
+    done
+    
+    if [ -z "$GCC_VERSION" ]; then
+        echo "[WARNING] GCC not found. Installing GCC via Homebrew..."
+        echo ""
+        
+        if command -v brew &> /dev/null; then
+            echo "[INFO] Installing GCC (this may take 5-10 minutes)..."
+            brew install gcc
+            
+            # Check again after installation
+            for ver in 14 13 12 11; do
+                if command -v gcc-$ver &> /dev/null; then
+                    GCC_VERSION=$ver
+                    break
+                fi
+            done
+        else
+            echo "[WARNING] Homebrew not found. Cannot install GCC automatically."
+            echo ""
+            echo "To build Fast Downward on macOS:"
+            echo "  1. Install Homebrew: https://brew.sh"
+            echo "  2. Install GCC: brew install gcc"
+            echo "  3. Run: ./build_fd_macos.sh"
+            echo ""
+            echo "The app will start in fallback mode for now."
+            echo ""
+            SKIP_FD_BUILD=1
+        fi
+    fi
+    
+    if [ -n "$GCC_VERSION" ]; then
+        GCC_PATH=$(which gcc-$GCC_VERSION)
+        GXX_PATH=$(which g++-$GCC_VERSION)
+        echo "[OK] Found GCC $GCC_VERSION"
+        echo "[INFO] Will use GCC for Fast Downward build"
+        echo ""
+        
+        # Export compiler paths for CMake
+        export CC=$GCC_PATH
+        export CXX=$GXX_PATH
+        SKIP_FD_BUILD=0
+    fi
 fi
 
 # Step 2: Check Python
