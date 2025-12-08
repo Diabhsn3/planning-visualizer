@@ -2,7 +2,7 @@
 
 Visualize classical planning algorithms with domain-specific renderers.
 
-**Supported domains**: Blocks World, Gripper
+**Supported domains**: Blocks World, Gripper...
 
 ---
 
