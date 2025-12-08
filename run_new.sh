@@ -189,28 +189,18 @@ elif [[ "$OS" == "macos" ]]; then
         echo "[WARNING] make not found. Fast Downward build may fail."
     fi
     
-    # Check Xcode version for compatibility warning
-    SKIP_FD_BUILD=0
-    if command -v xcodebuild &> /dev/null; then
-        XCODE_VERSION=$(xcodebuild -version 2>/dev/null | head -n1 | awk '{print $2}')
-        XCODE_MAJOR=$(echo "$XCODE_VERSION" | cut -d. -f1)
-        
-        if [ -n "$XCODE_MAJOR" ] && [ "$XCODE_MAJOR" -ge 15 ]; then
-            echo ""
-            echo "⚠️  WARNING: Xcode $XCODE_VERSION detected"
-            echo ""
-            echo "Fast Downward has known compatibility issues with Xcode 15+."
-            echo "The build will likely fail with C++ compilation errors."
-            echo ""
-            echo "Skipping Fast Downward build (app works perfectly in fallback mode)."
-            echo ""
-            echo "If you want to try building anyway:"
-            echo "  1. Run: ./fix_macos_build.sh"
-            echo "  2. Or see: MACOS_BUILD_ISSUES.md for solutions"
-            echo ""
-            SKIP_FD_BUILD=1
-        fi
-    fi
+    # Skip Fast Downward build on macOS by default (too many compatibility issues)
+    SKIP_FD_BUILD=1
+    echo ""
+    echo "⚠️  macOS detected: Skipping Fast Downward build"
+    echo ""
+    echo "Fast Downward has known compatibility issues on macOS (Xcode 14-16+)."
+    echo "The app works perfectly in fallback mode with pre-computed plans."
+    echo ""
+    echo "If you want to try building Fast Downward anyway:"
+    echo "  1. Run: cd planning-tools/downward && ./build.py release"
+    echo "  2. Or see: MACOS_BUILD_ISSUES.md for detailed solutions"
+    echo ""
 fi
 
 # Step 2: Check Python
