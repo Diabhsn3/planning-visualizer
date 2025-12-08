@@ -258,7 +258,27 @@ This script will:
 
 ### ⚠️ Fast Downward Build Fails
 
-**Most Common Issue:** Directory path contains spaces
+**Issue 1: macOS Xcode 15+ Compatibility (Most Common on Mac)**
+
+**Symptom:** C++ compilation errors mentioning `std::size_t`, `std::nothrow_t`, or namespace issues.
+
+**Quick Fix:**
+```bash
+./fix_macos_build.sh
+```
+
+This updates Fast Downward to a version compatible with newer Xcode.
+
+**Alternative:** Use fallback mode (recommended for most users):
+```bash
+./run_new.sh  # Works perfectly without Fast Downward
+```
+
+See [MACOS_BUILD_ISSUES.md](MACOS_BUILD_ISSUES.md) for detailed solutions.
+
+---
+
+**Issue 2: Directory Path Contains Spaces**
 
 Fast Downward C++ build fails if the project path contains spaces (e.g., `"final project"`, `"My Documents"`).
 
