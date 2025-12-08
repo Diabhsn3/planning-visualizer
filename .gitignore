@@ -9,6 +9,11 @@ venv/
 .env
 *.env
 
+# Node.js
+node_modules/
+*.log
+pnpm-lock.yaml
+
 # macOS
 .DS_Store
 
