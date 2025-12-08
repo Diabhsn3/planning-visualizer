@@ -1,4 +1,4 @@
-# Planning Visualizer
+# Planning Visualizer.
 
 Visualize classical planning algorithms with domain-specific renderers.
 
