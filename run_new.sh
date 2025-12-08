@@ -190,6 +190,7 @@ elif [[ "$OS" == "macos" ]]; then
     fi
     
     # Check Xcode version for compatibility warning
+    SKIP_FD_BUILD=0
     if command -v xcodebuild &> /dev/null; then
         XCODE_VERSION=$(xcodebuild -version 2>/dev/null | head -n1 | awk '{print $2}')
         XCODE_MAJOR=$(echo "$XCODE_VERSION" | cut -d. -f1)
@@ -199,15 +200,15 @@ elif [[ "$OS" == "macos" ]]; then
             echo "⚠️  WARNING: Xcode $XCODE_VERSION detected"
             echo ""
             echo "Fast Downward has known compatibility issues with Xcode 15+."
-            echo "The build may fail with C++ compilation errors."
+            echo "The build will likely fail with C++ compilation errors."
             echo ""
-            echo "Recommended solutions:"
-            echo "  1. Use fallback mode (app works perfectly without Fast Downward)"
-            echo "  2. Run ./fix_macos_build.sh to attempt a fix"
-            echo "  3. See MACOS_BUILD_ISSUES.md for detailed solutions"
+            echo "Skipping Fast Downward build (app works perfectly in fallback mode)."
             echo ""
-            echo "Press Enter to continue..."
-            read -r
+            echo "If you want to try building anyway:"
+            echo "  1. Run: ./fix_macos_build.sh"
+            echo "  2. Or see: MACOS_BUILD_ISSUES.md for solutions"
+            echo ""
+            SKIP_FD_BUILD=1
         fi
     fi
 fi
@@ -275,78 +276,150 @@ fi
 # Step 5: Check Fast Downward
 echo ""
 echo "Step 5: Checking Fast Downward planner..."
-if [ -f "planning-tools/downward/fast-downward.py" ]; then
+
+# Skip build if Xcode 15+ detected on macOS
+if [ "$SKIP_FD_BUILD" -eq 1 ]; then
+    echo "[INFO] Skipping Fast Downward build due to Xcode 15+ compatibility issues"
+    echo "[INFO] App will run in fallback mode (fully functional)"
+    if [ ! -f "planning-tools/downward/fast-downward.py" ]; then
+        echo "[INFO] Initializing Fast Downward submodule for completeness..."
+        git submodule update --init --recursive
+    fi
+elif [ -f "planning-tools/downward/fast-downward.py" ]; then
     # Check if binary exists (more reliable than just checking directory)
     if [ -f "planning-tools/downward/builds/release/bin/downward" ]; then
         echo "[OK] Fast Downward already built"
     else
         echo "[INFO] Fast Downward not built. Building now..."
-        echo "This may take a few minutes..."
+        echo "This may take 5-10 minutes. Progress will be shown below..."
+        echo ""
         cd planning-tools/downward
         
-        # Capture build output to check for specific errors
-        BUILD_OUTPUT=$(./build.py release 2>&1)
-        BUILD_EXIT_CODE=$?
+        # Build with timeout and real-time output
+        if command -v timeout &> /dev/null; then
+            # Use timeout command if available (Linux)
+            timeout 600 ./build.py release
+            BUILD_EXIT_CODE=$?
+            
+            if [ $BUILD_EXIT_CODE -eq 124 ]; then
+                echo ""
+                echo "[WARNING] Build timed out after 10 minutes"
+                echo "The app will start in fallback mode"
+                BUILD_EXIT_CODE=1
+            fi
+        elif [[ "$OS" == "macos" ]]; then
+            # macOS: Use gtimeout if available, otherwise plain build with monitoring
+            if command -v gtimeout &> /dev/null; then
+                gtimeout 600 ./build.py release
+                BUILD_EXIT_CODE=$?
+            else
+                # No timeout available, but show output
+                ./build.py release &
+                BUILD_PID=$!
+                
+                # Monitor the build process
+                COUNTER=0
+                while kill -0 $BUILD_PID 2>/dev/null; do
+                    sleep 30
+                    COUNTER=$((COUNTER + 30))
+                    if [ $COUNTER -ge 600 ]; then
+                        echo ""
+                        echo "[WARNING] Build taking too long (>10 minutes), stopping..."
+                        kill $BUILD_PID 2>/dev/null
+                        BUILD_EXIT_CODE=1
+                        break
+                    fi
+                done
+                
+                if [ $COUNTER -lt 600 ]; then
+                    wait $BUILD_PID
+                    BUILD_EXIT_CODE=$?
+                fi
+            fi
+        else
+            # Fallback: plain build
+            ./build.py release
+            BUILD_EXIT_CODE=$?
+        fi
         
+        echo ""
         if [ $BUILD_EXIT_CODE -eq 0 ]; then
             echo "[OK] Fast Downward built successfully"
             cd ../..
         else
             echo "[WARNING] Fast Downward build failed"
-            
-            # Check for macOS Xcode 15+ compatibility error
-            if echo "$BUILD_OUTPUT" | grep -q "no type named 'size_t' in namespace 'std'"; then
-                echo ""
-                echo "⚠️  Detected macOS Xcode 15+ compatibility issue"
-                echo ""
-                echo "This is a known issue with Fast Downward on newer Macs."
-                echo "The app will work perfectly in fallback mode!"
-                echo ""
-                echo "To try fixing the build:"
-                echo "  1. Run: ./fix_macos_build.sh"
-                echo "  2. Or see: MACOS_BUILD_ISSUES.md"
-                echo ""
-                echo "Otherwise, the app will use pre-computed plans (recommended)."
-            else
-                echo "The app will start in fallback mode (limited functionality)"
-                echo "See MACOS_BUILD_ISSUES.md for troubleshooting"
-            fi
+            echo "The app will start in fallback mode"
+            echo ""
+            echo "For troubleshooting, see: MACOS_BUILD_ISSUES.md"
             cd ../..
         fi
     fi
 else
     echo "[INFO] Fast Downward not found. Initializing submodule..."
     git submodule update --init --recursive
-    echo "[INFO] Building Fast Downward..."
-    cd planning-tools/downward
     
-    # Capture build output to check for specific errors
-    BUILD_OUTPUT=$(./build.py release 2>&1)
-    BUILD_EXIT_CODE=$?
-    
-    if [ $BUILD_EXIT_CODE -eq 0 ]; then
-        echo "[OK] Fast Downward built successfully"
-        cd ../..
-    else
-        echo "[WARNING] Fast Downward build failed"
+    # Only build if not skipped
+    if [ "$SKIP_FD_BUILD" -eq 0 ]; then
+        echo "[INFO] Building Fast Downward..."
+        echo "This may take 5-10 minutes. Progress will be shown below..."
+        echo ""
+        cd planning-tools/downward
         
-        # Check for macOS Xcode 15+ compatibility error
-        if echo "$BUILD_OUTPUT" | grep -q "no type named 'size_t' in namespace 'std'"; then
-            echo ""
-            echo "⚠️  Detected macOS Xcode 15+ compatibility issue"
-            echo ""
-            echo "This is a known issue with Fast Downward on newer Macs."
-            echo "The app will work perfectly in fallback mode!"
-            echo ""
-            echo "To try fixing the build:"
-            echo "  1. Run: ./fix_macos_build.sh"
-            echo "  2. Or see: MACOS_BUILD_ISSUES.md"
-            echo ""
-            echo "Otherwise, the app will use pre-computed plans (recommended)."
+        # Build with timeout and real-time output
+        if command -v timeout &> /dev/null; then
+            timeout 600 ./build.py release
+            BUILD_EXIT_CODE=$?
+            
+            if [ $BUILD_EXIT_CODE -eq 124 ]; then
+                echo ""
+                echo "[WARNING] Build timed out after 10 minutes"
+                echo "The app will start in fallback mode"
+                BUILD_EXIT_CODE=1
+            fi
+        elif [[ "$OS" == "macos" ]]; then
+            if command -v gtimeout &> /dev/null; then
+                gtimeout 600 ./build.py release
+                BUILD_EXIT_CODE=$?
+            else
+                ./build.py release &
+                BUILD_PID=$!
+                
+                COUNTER=0
+                while kill -0 $BUILD_PID 2>/dev/null; do
+                    sleep 30
+                    COUNTER=$((COUNTER + 30))
+                    if [ $COUNTER -ge 600 ]; then
+                        echo ""
+                        echo "[WARNING] Build taking too long (>10 minutes), stopping..."
+                        kill $BUILD_PID 2>/dev/null
+                        BUILD_EXIT_CODE=1
+                        break
+                    fi
+                done
+                
+                if [ $COUNTER -lt 600 ]; then
+                    wait $BUILD_PID
+                    BUILD_EXIT_CODE=$?
+                fi
+            fi
         else
-            echo "The app will start in fallback mode"
+            ./build.py release
+            BUILD_EXIT_CODE=$?
         fi
-        cd ../..
+        
+        echo ""
+        if [ $BUILD_EXIT_CODE -eq 0 ]; then
+            echo "[OK] Fast Downward built successfully"
+            cd ../..
+        else
+            echo "[WARNING] Fast Downward build failed"
+            echo "The app will start in fallback mode"
+            echo ""
+            echo "For troubleshooting, see: MACOS_BUILD_ISSUES.md"
+            cd ../..
+        fi
+    else
+        echo "[INFO] Build skipped. App will run in fallback mode."
     fi
 fi
 
