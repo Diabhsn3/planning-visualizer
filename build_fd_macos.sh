@@ -87,7 +87,8 @@ echo ""
 export CC=$GCC_PATH
 export CXX=$GXX_PATH
 
-./build.py release
+# Pass compiler directly to build.py (it will pass to CMake)
+CMAKE_C_COMPILER=$GCC_PATH CMAKE_CXX_COMPILER=$GXX_PATH ./build.py release
 
 BUILD_EXIT_CODE=$?
 

@@ -244,6 +244,21 @@ elif [[ "$OS" == "macos" ]]; then
         # Export compiler paths for CMake
         export CC=$GCC_PATH
         export CXX=$GXX_PATH
+        
+        # Verify compiler is set
+        echo "[INFO] Compiler configuration:"
+        echo "  CC=$CC"
+        echo "  CXX=$CXX"
+        echo ""
+        
+        # Clean CMake cache to force GCC usage (CMake caches compiler choice)
+        if [ -d "planning-tools/downward/builds" ]; then
+            echo "[INFO] Cleaning CMake cache to use GCC..."
+            rm -rf planning-tools/downward/builds
+            echo "[OK] Cache cleaned"
+        fi
+        echo ""
+        
         SKIP_FD_BUILD=0
     fi
 fi
