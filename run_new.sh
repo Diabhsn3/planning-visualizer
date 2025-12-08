@@ -4,7 +4,7 @@
 # This script sets up and runs both frontend and backend
 # Now with automatic build dependency installation!
 
-set -e  # Exit on error
+# Note: We don't use 'set -e' to allow graceful fallback when Fast Downward build fails
 
 echo "======================================"
 echo "  Planning Visualizer - Quick Start   "
@@ -13,16 +13,15 @@ echo ""
 
 # Check if path contains spaces
 if [[ "$PWD" == *" "* ]]; then
-    echo "❌ ERROR: Directory path contains spaces!"
+    echo "⚠️  WARNING: Directory path contains spaces!"
     echo ""
     echo "Fast Downward cannot be built in paths with spaces."
-    echo "Please move the project to a path without spaces."
+    echo "The app will run in fallback mode (without Fast Downward)."
     echo ""
-    echo "Example:"
-    echo "  Current:  ~/Documents/final project/planning-visualizer"
-    echo "  Move to:  ~/planning-visualizer"
+    echo "To enable Fast Downward, move the project to a path without spaces:"
+    echo "  Example: ~/planning-visualizer"
     echo ""
-    exit 1
+    SKIP_FD_BUILD=1
 fi
 
 # Detect OS
@@ -37,6 +36,11 @@ fi
 
 echo "Detected OS: $OS"
 echo ""
+
+# Initialize skip flag
+if [ -z "$SKIP_FD_BUILD" ]; then
+    SKIP_FD_BUILD=0
+fi
 
 # Step 1: Check and Install Build Dependencies for Fast Downward
 echo "Step 1: Checking build dependencies for Fast Downward..."
