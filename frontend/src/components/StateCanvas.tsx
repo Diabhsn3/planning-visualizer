@@ -1,5 +1,13 @@
 import { useEffect, useRef } from "react";
 
+// Global robot image for gripper domain
+const robotImage = new Image();
+robotImage.src = "/rooboot.png"; // served from /public
+let robotImageLoaded = false;
+robotImage.onload = () => {
+  robotImageLoaded = true;
+};
+
 interface VisualObject {
   id: string;
   type: string;
@@ -220,80 +228,249 @@ function renderBlocksWorld(ctx: CanvasRenderingContext2D, state: RenderedState) 
 }
 
 /**
- * GRIPPER DOMAIN (unchanged)
+ * GRIPPER DOMAIN 
  */
 function renderGripper(ctx: CanvasRenderingContext2D, state: RenderedState) {
-  for (const obj of state.objects) {
-    if (!obj.position) continue;
+  // Split objects
+  const rooms = state.objects.filter((o) => o.type === "room");
+  const robot = state.objects.find((o) => o.type === "robot");
+  const balls = state.objects.filter((o) => o.type === "ball");
 
-    const [x, y] = obj.position;
-    const props = obj.properties || {};
+  const ballById = new Map<string, VisualObject>();
+  balls.forEach((b) => ballById.set(b.id, b));
 
-    if (obj.type === "room") {
-      const width = props.width || 200;
-      const height = props.height || 300;
-      const color = props.color || "#f0f0f0";
+  // Precompute robot geometry (so we can use it for claws + ball snapping)
+  let robotGeom:
+    | {
+        centerX: number;
+        centerY: number;
+        bodyX: number;
+        bodyY: number;
+        bodyWidth: number;
+        bodyHeight: number;
+        armOffsetX: number;
+        armBaseY: number;
+        armHeight: number;
+        clawLength: number;
+      }
+    | null = null;
 
-      ctx.fillStyle = color;
-      ctx.fillRect(x, y, width, height);
+  if (robot && robot.position) {
+    const [rx, ry] = robot.position;
+    const rProps = robot.properties || {};
 
-      ctx.strokeStyle = props.has_robot ? "#4CAF50" : "#999";
-      ctx.lineWidth = props.has_robot ? 4 : 2;
-      ctx.strokeRect(x, y, width, height);
+    const bodyWidth = rProps.width || 80;
+    const bodyHeight = rProps.height || 80;
 
-      ctx.fillStyle = "#333";
-      ctx.font = "16px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(obj.label, x + width / 2, y + 20);
-    } else if (obj.type === "robot") {
-      const width = props.width || 60;
-      const height = props.height || 80;
-      const color = props.color || "#607D8B";
+    // Raise robot up in the room a bit
+    const offsetY = rProps.offsetY ?? 70;
 
-      ctx.fillStyle = color;
-      ctx.fillRect(x - width / 2, y - height / 2, width, height);
+    const bodyX = rx - bodyWidth / 2;
+    const bodyY = ry - bodyHeight / 2 - offsetY;
 
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x - width / 2, y - height / 2, width, height);
+    const armOffsetX = rProps.armOffsetX ?? 25;
+    const armBaseY = bodyY + bodyHeight -10; // bottom edge of robot
+    const armHeight = rProps.armHeight ?? 40;
+    const clawLength = rProps.clawLength ?? 24;
 
-      ctx.fillStyle = "#fff";
-      ctx.font = "12px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("🤖", x, y);
-    } else if (obj.type === "gripper") {
-      const size = props.size || 30;
-      const color = props.color || "#4CAF50";
+    robotGeom = {
+      centerX: rx,
+      centerY: ry - offsetY,
+      bodyX,
+      bodyY,
+      bodyWidth,
+      bodyHeight,
+      armOffsetX,
+      armBaseY,
+      armHeight,
+      clawLength,
+    };
+  }
 
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-      ctx.fill();
+  // Map: ballId -> target arm X (left/right) when carried
+  const ballGripX = new Map<string, number>();
 
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    } else if (obj.type === "ball") {
-      const size = props.size || 30;
-      const color = props.color || "#FF6B6B";
+  if (robotGeom) {
+    const leftArmX = robotGeom.centerX - robotGeom.armOffsetX;
+    const rightArmX = robotGeom.centerX + robotGeom.armOffsetX;
 
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-      ctx.fill();
+    for (const rel of state.relations) {
+      if (!rel.target) continue;
 
-      ctx.strokeStyle = "#000";
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      // Try to detect "carrying" relations: carry/holding
+      if (rel.type === "carry" || rel.type === "holding") {
+        const ballId = rel.target;
+        const src = rel.source.toLowerCase();
 
-      ctx.fillStyle = "#fff";
-      ctx.font = "10px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(obj.label, x, y);
+        if (src.includes("right")) {
+          ballGripX.set(ballId, leftArmX);
+        } else if (src.includes("left")) {
+          ballGripX.set(ballId, rightArmX);
+        } else {
+          // If we don't know which side, default to left arm
+          ballGripX.set(ballId, leftArmX);
+        }
+      }
     }
   }
+
+  // Helper to draw a single claw hanging down from the robot bottom
+  const drawClaw = (
+  centerX: number,
+  baseY: number,
+  options: { armHeight?: number; gap?: number; clawLength?: number } = {},
+  label?: string
+) => {
+  const armHeight = options.armHeight ?? 40;
+  const gap = options.gap ?? 28;
+  const clawLength = options.clawLength ?? 30;
+
+  const armEndY = baseY + armHeight;
+  const barY = armEndY ;
+  const clawTopY = barY;
+  const clawBottomY = barY + clawLength;
+
+  ctx.strokeStyle = "#797878ff";
+  ctx.lineWidth = 10;
+  ctx.lineCap = "round";
+
+  // vertical arm
+  ctx.beginPath();
+  ctx.moveTo(centerX, baseY);
+  ctx.lineTo(centerX, armEndY-3);
+  ctx.stroke();
+
+
+  ctx.strokeStyle = "#797878ff";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+
+  // horizontal bar
+  ctx.beginPath();
+  ctx.moveTo(centerX - 18, barY);
+  ctx.lineTo(centerX + 18, barY);
+  ctx.stroke();
+
+  // left claw
+  ctx.beginPath();
+  ctx.moveTo(centerX - gap / 2, clawTopY);
+  ctx.lineTo(centerX - gap / 2, clawBottomY);
+  ctx.stroke();
+
+  // right claw
+  ctx.beginPath();
+  ctx.moveTo(centerX + gap / 2, clawTopY);
+  ctx.lineTo(centerX + gap / 2, clawBottomY);
+  ctx.stroke();
+
+  // label above the claw (optional)
+  if (label) {
+    ctx.fillStyle = "rgba(29, 230, 76, 1)";
+    ctx.font = "14px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(label, centerX, barY - 4); // a few px above the bar
+  }
+};
+
+  // 1) Draw rooms
+  for (const room of rooms) {
+    if (!room.position) continue;
+    const [x, y] = room.position;
+    const props = room.properties || {};
+
+    const width = props.width || 200;
+    const height = props.height || 300;
+    const color = props.color || "#f0f0f0";
+
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, width, height);
+
+    ctx.strokeStyle = props.has_robot ? "#4CAF50" : "#999";
+    ctx.lineWidth = props.has_robot ? 4 : 2;
+    ctx.strokeRect(x, y, width, height);
+
+    ctx.fillStyle = "#333";
+    ctx.font = "16px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(room.label, x + width / 2, y + 20);
+  }
+
+  // 2) Draw robot (image only) + arms
+  if (robot && robotGeom) {
+    const {
+      bodyX,
+      bodyY,
+      bodyWidth,
+      bodyHeight,
+      centerX,
+      armOffsetX,
+      armBaseY,
+      armHeight,
+      clawLength,
+    } = robotGeom;
+
+    // Draw PNG if loaded, otherwise minimal fallback
+    if (robotImageLoaded) {
+      ctx.drawImage(robotImage, bodyX, bodyY, bodyWidth, bodyHeight);
+    } else {
+      ctx.fillStyle = "#607D8B";
+      ctx.fillRect(bodyX, bodyY, bodyWidth, bodyHeight);
+    }
+
+    const openGap = robot.properties?.openGap ?? 28;
+
+    drawClaw(centerX - armOffsetX, armBaseY, {
+  armHeight,
+  gap: openGap,
+  clawLength,
+}, "R");
+
+drawClaw(centerX + armOffsetX, armBaseY, {
+  armHeight,
+  gap: openGap,
+  clawLength,
+}, "L");
+  }
+
+  // 3) Draw balls (snap carried ones into the claws)
+  for (const ball of balls) {
+    if (!ball.position) continue;
+    let [bx, by] = ball.position;
+    const props = ball.properties || {};
+    const size = props.size || 30;
+    const radius = size / 2;
+    const color = props.color || "#FF6B6B";
+
+    // If the ball is carried and we know the arm X, override position
+    if (robotGeom && ballGripX.has(ball.id)) {
+      const gripX = ballGripX.get(ball.id)!;
+      const baseY = robotGeom.armBaseY;
+      const armHeight = robotGeom.armHeight;
+      const clawLength = robotGeom.clawLength;
+
+      const barY = baseY + armHeight;
+      // Put ball center just below the claws
+      bx = gripX ;
+      by = barY + clawLength + radius - 10 ;
+    }
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(bx, by, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "10px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(ball.label, bx, by);
+  }
+
 }
 
 /**

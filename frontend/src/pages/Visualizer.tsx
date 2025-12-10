@@ -131,34 +131,34 @@ export default function Visualizer() {
     }
   };
 
-  const loadExample = () => {
-    const examplePDDL = `(define (problem bw-example-1)
-  (:domain blocks-world)
+//   const loadExample = () => {
+//     const examplePDDL = `(define (problem bw-example-1)
+//   (:domain blocks-world)
 
-  (:objects
-    a b c - block
-  )
+//   (:objects
+//     a b c - block
+//   )
 
-  (:init
-    (ontable a)
-    (ontable b)
-    (on c a)
-    (clear c)
-    (clear b)
-    (handempty)
-  )
+//   (:init
+//     (ontable a)
+//     (ontable b)
+//     (on c a)
+//     (clear c)
+//     (clear b)
+//     (handempty)
+//   )
 
-  (:goal
-    (and
-      (ontable a)
-      (on b a)
-      (on c b)
-      (clear c)
-    )
-  )
-)`;
-    setProblemText(examplePDDL);
-  };
+//   (:goal
+//     (and
+//       (ontable a)
+//       (on b a)
+//       (on c b)
+//       (clear c)
+//     )
+//   )
+// )`;
+//     setProblemText(examplePDDL);
+//   };
 
   // Playback controls
   const handlePlay = () => {
@@ -407,9 +407,9 @@ export default function Visualizer() {
                       <label className="block text-sm font-medium text-gray-700">
                         PDDL Problem Content
                       </label>
-                      <Button variant="outline" size="sm" onClick={loadExample} type="button">
+                      {/* <Button variant="outline" size="sm" onClick={loadExample} type="button">
                         Load Example
-                      </Button>
+                      </Button> */}
                     </div>
                     <Textarea
                       value={problemText}
@@ -454,7 +454,7 @@ export default function Visualizer() {
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                 <p className="text-sm text-yellow-800">
                   <strong>Warning:</strong> Fast Downward planner not available. Using fallback plan that may not match your problem.
-                  Please build Fast Downward locally (see LOCAL_SETUP.md).
+                  Please build Fast Downward locally .
                 </p>
               </div>
             )}
