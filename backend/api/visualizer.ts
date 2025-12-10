@@ -1,6 +1,6 @@
 import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
@@ -195,6 +195,22 @@ export const visualizerRouter = router({
           throw new Error(data.error || "Failed to solve problem");
         }
 
+        // Clean up uploaded files after successful processing
+        try {
+          console.log('[uploadAndGenerate] Cleaning up uploaded files...');
+          await unlink(problemPath);
+          console.log('[uploadAndGenerate] Deleted problem file:', problemPath);
+          
+          // Only delete domain file if it was uploaded (not using repository domain)
+          if (input.domainContent && input.domainContent.trim() !== "") {
+            await unlink(domainPath);
+            console.log('[uploadAndGenerate] Deleted domain file:', domainPath);
+          }
+        } catch (cleanupError) {
+          console.warn('[uploadAndGenerate] Failed to clean up files:', cleanupError);
+          // Don't throw error for cleanup failures - the main operation succeeded
+        }
+
         return {
           success: true,
           domain: data.domain,
@@ -206,6 +222,17 @@ export const visualizerRouter = router({
           planner_info: data.planner_info,
         };
       } catch (error) {
+        // Clean up files even on error
+        try {
+          if (problemPath) {
+            await unlink(problemPath).catch(() => {});
+          }
+          if (domainPath && input.domainContent && input.domainContent.trim() !== "") {
+            await unlink(domainPath).catch(() => {});
+          }
+        } catch {
+          // Ignore cleanup errors in error handler
+        }
         console.error('[uploadAndGenerate] Error:', error);
         console.error('[uploadAndGenerate] Error stack:', error instanceof Error ? error.stack : 'No stack');
         throw new Error(
