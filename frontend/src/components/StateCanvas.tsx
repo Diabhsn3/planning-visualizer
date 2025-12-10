@@ -465,7 +465,7 @@ drawClaw(centerX + armOffsetX, armBaseY, {
     ctx.stroke();
 
     ctx.fillStyle = "#fff";
-    ctx.font = "10px Arial";
+    ctx.font = "bold 18px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(ball.label, bx, by);

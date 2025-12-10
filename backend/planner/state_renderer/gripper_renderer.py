@@ -20,16 +20,21 @@ class GripperRenderer(BaseStateRenderer):
     """
     
     BALL_COLORS = {
-        'ball1': '#FF6B6B',  # Red
-        'ball2': '#4ECDC4',  # Teal
-        'ball3': '#45B7D1',  # Blue
-        'ball4': '#FFA07A',  # Salmon
+        'ball-1': '#FF6B6B',  # Red
+        'ball-2': '#4ECDC4',  # Teal
+        'ball-3': '#45B7D1',  # Blue
+        'ball-4': '#FFA07A',  # Salmon
+        'ball-5': '#FFD93D',  # Yellow
+        'ball-6': '#95E1D3',  # Mint
+        'ball-7': '#F38181',  # Pink
+        'ball-8': '#AA96DA',  # Purple
     }
     
     ROOM_COLORS = {
-        'rooma': '#E8F5E9',  # Light Green
-        'roomb': '#E3F2FD',  # Light Blue
-        'roomc': '#FFF3E0',  # Light Orange
+        'room-a': '#E8F5E9',  # Light Green
+        'room-b': '#E3F2FD',  # Light Blue
+        'room-c': '#FFF3E0',  # Light Orange
+        'room-d': '#F3E5F5',  # Light Purple
     }
     
     def __init__(self):
@@ -194,10 +199,13 @@ class GripperRenderer(BaseStateRenderer):
             
             color = self.BALL_COLORS.get(ball, '#9E9E9E')
             
+            # Extract just the number from ball name (e.g., "ball-1" -> "1")
+            ball_label = ball.split('-')[-1] if '-' in ball else ball.upper()
+            
             ball_obj = VisualObject(
                 id=ball,
                 type='ball',
-                label=ball.upper(),
+                label=ball_label,
                 position=ball_pos,
                 properties={
                     'size': self.ball_size,
