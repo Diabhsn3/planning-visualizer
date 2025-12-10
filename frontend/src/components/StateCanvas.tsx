@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Global robot image for gripper domain
 const robotImage = new Image();
@@ -38,6 +38,13 @@ interface StateCanvasProps {
 
 export function StateCanvas({ state, width = 800, height = 600 }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Zoom and pan state
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -53,6 +60,13 @@ export function StateCanvas({ state, width = 800, height = 600 }: StateCanvasPro
     ctx.fillStyle = "#f8f9fa";
     ctx.fillRect(0, 0, width, height);
 
+    // Save context state
+    ctx.save();
+
+    // Apply transformations for zoom and pan
+    ctx.translate(offset.x, offset.y);
+    ctx.scale(scale, scale);
+
     // Render based on domain
     if (state.domain === "blocks-world") {
       renderBlocksWorld(ctx, state);
@@ -61,15 +75,150 @@ export function StateCanvas({ state, width = 800, height = 600 }: StateCanvasPro
     } else {
       renderDefault(ctx, state);
     }
-  }, [state, width, height]);
+
+    // Restore context state
+    ctx.restore();
+  }, [state, width, height, scale, offset]);
+
+  // Handle mouse wheel for zoom
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Calculate zoom
+    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.min(Math.max(0.1, scale * zoomFactor), 5);
+
+    // Adjust offset to zoom towards mouse position
+    const scaleChange = newScale / scale;
+    const newOffsetX = mouseX - (mouseX - offset.x) * scaleChange;
+    const newOffsetY = mouseY - (mouseY - offset.y) * scaleChange;
+
+    setScale(newScale);
+    setOffset({ x: newOffsetX, y: newOffsetY });
+  };
+
+  // Handle mouse down for panning
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+  };
+
+  // Handle mouse move for panning
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging) return;
+
+    const newOffsetX = e.clientX - dragStart.x;
+    const newOffsetY = e.clientY - dragStart.y;
+    setOffset({ x: newOffsetX, y: newOffsetY });
+  };
+
+  // Handle mouse up
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Handle mouse leave
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  // Reset zoom and pan
+  const handleReset = () => {
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  };
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      className="border border-gray-300 rounded-lg shadow-sm"
-    />
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <canvas
+        ref={canvasRef}
+        width={width}
+        height={height}
+        className="border border-gray-300 rounded-lg shadow-sm"
+        style={{ cursor: isDragging ? "grabbing" : "grab" }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+      />
+      <div style={{
+        position: "absolute",
+        top: "10px",
+        right: "10px",
+        display: "flex",
+        gap: "8px",
+        background: "rgba(255, 255, 255, 0.9)",
+        padding: "8px",
+        borderRadius: "6px",
+        boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+      }}>
+        <button
+          onClick={() => setScale(s => Math.min(s * 1.2, 5))}
+          style={{
+            padding: "4px 12px",
+            background: "#4CAF50",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontSize: "16px",
+            fontWeight: "bold"
+          }}
+          title="Zoom In"
+        >
+          +
+        </button>
+        <button
+          onClick={() => setScale(s => Math.max(s * 0.8, 0.1))}
+          style={{
+            padding: "4px 12px",
+            background: "#4CAF50",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontSize: "16px",
+            fontWeight: "bold"
+          }}
+          title="Zoom Out"
+        >
+          −
+        </button>
+        <button
+          onClick={handleReset}
+          style={{
+            padding: "4px 12px",
+            background: "#2196F3",
+            color: "white",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            fontSize: "12px"
+          }}
+          title="Reset View"
+        >
+          Reset
+        </button>
+        <span style={{
+          padding: "4px 8px",
+          background: "#f0f0f0",
+          borderRadius: "4px",
+          fontSize: "12px",
+          display: "flex",
+          alignItems: "center"
+        }}>
+          {Math.round(scale * 100)}%
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -497,4 +646,4 @@ function renderDefault(ctx: CanvasRenderingContext2D, state: RenderedState) {
   if (state.objects.length > 10) {
     ctx.fillText(`... and ${state.objects.length - 10} more`, 40, y);
   }
-} 
+}
