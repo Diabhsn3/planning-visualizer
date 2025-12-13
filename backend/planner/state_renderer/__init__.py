@@ -14,6 +14,13 @@ from .base_renderer import (
 from .blocks_world_renderer import BlocksWorldRenderer
 from .gripper_renderer import GripperRenderer
 
+# TODO: Uncomment these imports when renderers are implemented
+# from .depot_renderer import DepotRenderer
+# from .hanoi_renderer import HanoiRenderer
+# from .logistics_renderer import LogisticsRenderer
+# from .rovers_renderer import RoversRenderer
+# from .satellite_renderer import SatelliteRenderer
+
 
 class RendererFactory:
     """
@@ -24,6 +31,12 @@ class RendererFactory:
     _renderers = {
         'blocks-world': BlocksWorldRenderer,
         'gripper': GripperRenderer,
+        # TODO: Add these renderers when implemented:
+        # 'depot': DepotRenderer,
+        # 'hanoi': HanoiRenderer,
+        # 'logistics': LogisticsRenderer,
+        # 'rovers': RoversRenderer,
+        # 'satellite': SatelliteRenderer,
     }
     
     @classmethod
