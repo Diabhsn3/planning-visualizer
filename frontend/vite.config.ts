@@ -13,7 +13,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:4002', // Backend API server
+        target: 'http://localhost:4000', // Backend API server
         changeOrigin: true,
       },
     },

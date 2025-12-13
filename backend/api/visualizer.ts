@@ -128,7 +128,7 @@ export const visualizerRouter = router({
       z.object({
         domainContent: z.string(),
         problemContent: z.string(),
-        domainName: z.string(),
+        domainName: z.enum(["blocks-world", "gripper"]),
       })
     )
     .mutation(async ({ input }) => {
