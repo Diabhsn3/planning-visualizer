@@ -10,87 +10,19 @@ An interactive web application for visualizing classical planning problems and s
 
 ## ✨ Features
 
-- 🎨 **Interactive Visualization** - Watch planning solutions unfold with smooth animations
+- 🎨 **Interactive Visualization** - Canvas-based rendering with domain-specific visualizations
+- 🔍 **Zoom & Pan Controls** - Mouse wheel zoom and click-drag panning for detailed inspection
 - 📝 **Custom Problems** - Upload PDDL files or paste problem definitions directly
 - ⚡ **Real-time Controls** - Play, pause, adjust speed, and navigate through plan steps
-- 🎯 **Domain-Specific Rendering** - Tailored visualizations for each planning domain
-- 🔄 **Fallback Mode** - Works without Fast Downward using pre-computed examples
-- 🚀 **Modern Stack** - React 19, TypeScript, Tailwind CSS, Node.js, Python
+- 🎯 **Domain-Specific Rendering** - Tailored visualizations for Blocks World and Gripper domains
+- 🔄 **Automatic File Cleanup** - Temporary uploaded files are automatically deleted after processing
+- 🚀 **Modern Stack** - React 19, TypeScript, Tailwind CSS 4, tRPC, Node.js, Python
 
 ---
 
 ## 🚀 Quick Start
 
-### One-Command Setup (Recommended)
-
-#### Mac / Linux
-```bash
-# Clone with submodules
-git clone --recursive https://github.com/Diabhsn3/planning-visualizer.git
-cd planning-visualizer
-git checkout front_back
-./run_new.sh
-```
-
-#### Windows
-```cmd
-# Clone with submodules
-git clone --recursive https://github.com/Diabhsn3/planning-visualizer.git
-cd planning-visualizer
-git checkout front_back
-run_new.bat
-```
-
-The script automatically:
-1. ✅ Checks for Python 3.11+, Node.js 18+, and pnpm
-2. ✅ Installs all dependencies (frontend + backend)
-3. ✅ Builds Fast Downward planner (optional)
-4. ✅ Starts both servers
-
-**🌐 Access the app at:** http://localhost:3000
-
-> **Note:** If Fast Downward build fails (common on macOS with Xcode 15+), the app runs in **fallback mode** with pre-defined example problems. Full functionality is maintained.
-
----
-
-## 🚨 First-Time Setup (Important!)
-
-### Already Cloned Without `--recursive`?
-
-If you already cloned the repository without the `--recursive` flag, you'll need to initialize the Fast Downward submodule:
-
-```bash
-cd planning-visualizer
-git submodule update --init --recursive
-./run_new.sh
-```
-
-Or use the dedicated setup script:
-
-```bash
-cd planning-visualizer
-./setup_fast_downward.sh
-./run_new.sh
-```
-
-> **Why is this necessary?** The Fast Downward planner is included as a Git submodule and is **not automatically downloaded** when you clone the repository. Without initializing the submodule, the `planning-tools/downward/` directory will be empty.
-
-### Running Without Fast Downward (Fallback Mode)
-
-The application **still works** even without Fast Downward:
-
-- ✅ All visualization features work normally
-- ✅ Pre-defined example problems work
-- ✅ Animation controls work
-- ⚠️ Custom PDDL problem solving uses pre-computed fallback plans
-
-To use fallback mode, just skip the submodule initialization and run `./run_new.sh` directly.
-
----
-
-## 📋 Prerequisites
-
-Before running the application, ensure you have:
+### Prerequisites
 
 | Requirement | Version | Installation |
 |------------|---------|--------------|
@@ -102,39 +34,26 @@ Before running the application, ensure you have:
 **Optional:**
 - **C++ Compiler** - For building Fast Downward (GCC on Linux, Xcode on Mac, Visual Studio Build Tools on Windows)
 
----
+### Installation
 
-## 🛠️ Manual Setup
-
-If you prefer to run each step manually:
-
-### 1. Clone Repository
 ```bash
+# Clone repository
 git clone https://github.com/Diabhsn3/planning-visualizer.git
 cd planning-visualizer
-git checkout front_back
-```
 
-### 2. Initialize Fast Downward (Optional)
-```bash
+# Initialize Fast Downward submodule (optional)
 git submodule update --init --recursive
-```
 
-### 3. Install Dependencies
-
-**Backend:**
-```bash
+# Install backend dependencies
 cd backend/api
 pnpm install
-```
 
-**Frontend:**
-```bash
+# Install frontend dependencies
 cd ../../frontend
 pnpm install
 ```
 
-### 4. Start Servers
+### Running the Application
 
 **Terminal 1 - Backend API:**
 ```bash
@@ -150,8 +69,9 @@ pnpm dev
 ```
 Frontend runs on **http://localhost:3000**
 
-### 5. Open Application
-Navigate to **http://localhost:3000** in your browser.
+**Access the application:** http://localhost:3000
+
+> **Note:** The application works without Fast Downward using pre-computed example data. Custom problem solving requires Fast Downward installation.
 
 ---
 
@@ -162,36 +82,84 @@ planning-visualizer/
 │
 ├── frontend/                      # React Frontend (Port 3000)
 │   ├── src/
-│   │   ├── pages/                # Page components
-│   │   │   └── Visualizer.tsx    # Main visualizer interface
-│   │   ├── components/           # Reusable UI components
-│   │   ├── lib/                  # tRPC client & utilities
+│   │   ├── pages/
+│   │   │   ├── Visualizer.tsx    # Main visualizer interface
+│   │   │   └── NotFound.tsx      # 404 page
+│   │   ├── components/
+│   │   │   ├── StateCanvas.tsx   # Canvas renderer with zoom/pan
+│   │   │   ├── ErrorBoundary.tsx # Error boundary component
+│   │   │   └── ui/               # Radix UI components
+│   │   ├── hooks/                # Custom React hooks
+│   │   │   ├── useComposition.ts # Input composition handling
+│   │   │   ├── useMobile.tsx     # Mobile detection
+│   │   │   └── usePersistFn.ts   # Function persistence
+│   │   ├── lib/
+│   │   │   ├── trpc.ts           # tRPC client setup
+│   │   │   └── utils.ts          # Utility functions
+│   │   ├── contexts/
+│   │   │   └── ThemeContext.tsx  # Theme provider
 │   │   └── main.tsx              # Application entry point
-│   ├── public/                   # Static assets
+│   ├── public/
+│   │   └── rooboot.png           # Robot image for gripper domain
 │   ├── vite.config.ts            # Vite configuration
 │   └── package.json
 │
 ├── backend/
 │   ├── api/                      # Node.js/Express API (Port 4000)
-│   │   ├── _core/                # Core server setup
+│   │   ├── _core/                # Core server infrastructure
+│   │   │   ├── index.ts          # Server entry point
+│   │   │   ├── trpc.ts           # tRPC setup
+│   │   │   ├── context.ts        # Request context
+│   │   │   ├── systemRouter.ts   # System health endpoints
+│   │   │   └── types/            # Shared types
+│   │   ├── data/                 # Pre-computed example data
+│   │   │   ├── blocks_world_rendered.json
+│   │   │   └── gripper_rendered.json
+│   │   ├── uploads/              # Temporary PDDL file uploads (auto-cleaned)
 │   │   ├── visualizer.ts         # Main API endpoints
 │   │   ├── routers.ts            # tRPC route definitions
 │   │   └── package.json
 │   │
 │   └── planner/                  # Python Planning Engine
-│       ├── visualizer_api.py     # Main Python API
+│       ├── visualizer_api.py     # Main Python API entry point
 │       ├── run_planner.py        # Fast Downward integration
 │       ├── domains/              # PDDL domain definitions
-│       │   ├── blocks_world/     # Blocks World domain
-│       │   └── gripper/          # Gripper domain
-│       ├── state_generator/      # State generation logic
-│       └── state_renderer/       # Domain-specific renderers
+│       │   ├── blocks_world/     # Blocks World (implemented)
+│       │   │   ├── domain.pddl
+│       │   │   └── p1.pddl
+│       │   ├── gripper/          # Gripper (implemented)
+│       │   │   ├── domain.pddl
+│       │   │   └── p1.pddl
+│       │   ├── depot/            # Depot (template only)
+│       │   ├── hanoi/            # Hanoi (template only)
+│       │   ├── logistics/        # Logistics (template only)
+│       │   ├── rovers/           # Rovers (template only)
+│       │   ├── satellite/        # Satellite (template only)
+│       │   └── README.md         # Domain implementation guide
+│       ├── state_generator/      # State generation from plans
+│       │   ├── __init__.py
+│       │   ├── pddl_parser.py    # PDDL parsing utilities
+│       │   └── state_generator.py
+│       ├── state_renderer/       # Domain-specific renderers
+│       │   ├── __init__.py
+│       │   ├── base_renderer.py  # Base renderer class
+│       │   ├── blocks_world_renderer.py  # Blocks World renderer
+│       │   ├── gripper_renderer.py       # Gripper renderer
+│       │   ├── depot_renderer.py         # Depot template
+│       │   ├── hanoi_renderer.py         # Hanoi template
+│       │   ├── logistics_renderer.py     # Logistics template
+│       │   ├── rovers_renderer.py        # Rovers template
+│       │   └── satellite_renderer.py     # Satellite template
+│       ├── planner_runner/       # Planner execution
+│       │   ├── __init__.py
+│       │   └── runner.py
+│       ├── output/               # Generated state files
+│       ├── tests/                # Python test files
+│       └── README.md             # Planner module documentation
 │
-├── planning-tools/               # Fast Downward Planner (Submodule)
+├── planning-tools/               # Fast Downward Planner (Git Submodule)
 │   └── downward/
 │
-├── run_new.sh                    # Quick start script (Mac/Linux)
-├── run_new.bat                   # Quick start script (Windows)
 └── README.md                     # This file
 ```
 
@@ -201,102 +169,201 @@ planning-visualizer/
 
 ### 1. Select a Domain
 Choose from available planning domains:
-- **Blocks World** - Classic block stacking problem
-- **Gripper** - Robot with grippers moving balls between rooms
+- **Blocks World** - Classic block stacking problem with pick-up, put-down, stack, and unstack actions
+- **Gripper** - Robot with grippers moving balls between rooms (supports up to 8 balls and 4 rooms)
 
-### 2. Provide a Problem
-Two options:
-- **Upload File** - Upload a `.pddl` problem file
-- **Paste Text** - Paste PDDL problem definition directly
+### 2. Provide a Problem (Optional)
+Two options for custom problems:
+- **Use custom problem** checkbox unchecked - Uses default example problem
+- **Use custom problem** checkbox checked:
+  - **Upload File** - Upload a `.pddl` problem file
+  - **Paste Text** - Paste PDDL problem definition directly
 
 ### 3. Generate Visualization
 Click **"Generate States"** to:
-- Run the planner (Fast Downward or fallback)
+- Parse the PDDL problem
+- Run the planner (Fast Downward if available, fallback otherwise)
 - Generate intermediate states
 - Render domain-specific visualization
 
-### 4. Control Animation
+### 4. Control Visualization
+- 🔍 **Zoom** - Mouse wheel to zoom in/out (10% to 500%)
+- 🖱️ **Pan** - Click and drag to navigate the canvas
+- ➕➖ **Zoom Buttons** - Click +/− buttons in top-right corner
+- 🔄 **Reset** - Click reset button to return to default view
 - ▶️ **Play/Pause** - Control animation playback
-- ⏮️ **Previous/Next** - Step through states manually
-- 🎚️ **Speed Control** - Adjust animation speed
-- 📍 **Timeline** - Jump to any state directly
+- ⏮️⏭️ **Previous/Next** - Step through states manually
+- 🎚️ **Speed Control** - Adjust animation speed (slider below visualization)
+- 📍 **Timeline** - Jump to any state directly using the slider
 
 ---
 
-## 🔧 Troubleshooting
+## 🔧 API Endpoints
 
-### ⚠️ Fast Downward Not Found / Empty Directory
+### `visualizer.generateStates`
+Loads pre-computed example data for a domain.
 
-**Symptom:** Error message `Could not find 'downward' in build 'release'` or empty `planning-tools/downward/` directory.
-
-**Cause:** The Fast Downward submodule was not initialized when cloning the repository.
-
-**Solution:**
-
-```bash
-cd planning-visualizer
-git submodule update --init --recursive
-cd planning-tools/downward
-./build.py release
+**Input:**
+```typescript
+{
+  domain: "blocks-world" | "gripper"
+}
 ```
 
-**Quick Fix Script:**
-
-```bash
-./setup_fast_downward.sh
+**Output:**
+```typescript
+{
+  success: boolean;
+  domain: string;
+  problem: string;
+  plan: string[];
+  num_states: number;
+  states: RenderedState[];
+}
 ```
 
-This script will:
-1. Initialize the Fast Downward submodule
-2. Check for required build tools
-3. Build Fast Downward
-4. Verify the installation
+### `visualizer.uploadAndGenerate`
+Processes custom PDDL problems.
 
-**Alternative:** Run in fallback mode (no build required) - the app will use pre-computed example plans.
+**Input:**
+```typescript
+{
+  domainContent: string;      // Empty string to use repository domain
+  problemContent: string;     // PDDL problem definition
+  domainName: "blocks-world" | "gripper";
+}
+```
+
+**Output:**
+```typescript
+{
+  success: boolean;
+  domain: string;
+  problem: string;
+  plan: string[];
+  num_states: number;
+  states: RenderedState[];
+  used_planner: boolean;
+  planner_info: string;
+}
+```
+
+### `visualizer.listDomains`
+Returns list of available domains.
+
+### `visualizer.checkStatus`
+Checks Python and Fast Downward availability.
 
 ---
 
-### ⚠️ Fast Downward Build Fails
+## 🧪 Testing
 
-**Issue 1: macOS Xcode 15+ Compatibility (Most Common on Mac)**
+### Python Modules
 
-**Symptom:** C++ compilation errors mentioning `std::size_t`, `std::nothrow_t`, or namespace issues.
-
-**Quick Fix:**
 ```bash
-./fix_macos_build.sh
+cd backend/planner
+
+# Test state generator
+python tests/test_state_generator.py
+
+# Test state renderer
+python tests/test_state_renderer.py
 ```
-
-This updates Fast Downward to a version compatible with newer Xcode.
-
-**Alternative:** Use fallback mode (recommended for most users):
-```bash
-./run_new.sh  # Works perfectly without Fast Downward
-```
-
-See [MACOS_BUILD_ISSUES.md](MACOS_BUILD_ISSUES.md) for detailed solutions.
 
 ---
 
-**Issue 2: Directory Path Contains Spaces**
+## 💻 Technology Stack
 
-Fast Downward C++ build fails if the project path contains spaces (e.g., `"final project"`, `"My Documents"`).
+### Frontend
+- **React 19** - UI framework
+- **TypeScript 5.7** - Type safety
+- **Tailwind CSS 4** - Utility-first styling
+- **tRPC 11** - Type-safe API client
+- **Vite 6** - Build tool and dev server
+- **Radix UI** - Accessible component primitives
+- **Lucide React** - Icon library
+- **Wouter** - Lightweight routing
 
-**Solution:**
-```bash
-# Move to a path without spaces
-mv "~/Documents/final project/planning-visualizer" ~/planning-visualizer
-cd ~/planning-visualizer
-./run_new.sh
-```
+### Backend API
+- **Node.js** - Runtime environment
+- **Express 4** - Web framework
+- **tRPC 11** - Type-safe API server
+- **TypeScript 5.9** - Type safety
+- **Zod 4** - Schema validation
+- **SuperJSON** - JSON serialization with type preservation
 
-The run scripts automatically detect this issue and warn you.
+### Planning Engine
+- **Python 3.11+** - Core language (no external dependencies)
+- **Fast Downward** - Classical planner (optional)
+- **Custom PDDL Parsers** - Problem and state parsing
+- **Domain Renderers** - Visualization logic
 
 ---
 
-### ⚠️ Port Already in Use
+## 🔧 Implementation Details
 
-If ports 3000 or 4000 are occupied:
+### Zoom & Pan System
+The `StateCanvas` component implements interactive zoom and pan:
+- **Zoom Range:** 10% to 500%
+- **Zoom Method:** Mouse wheel (centered on cursor position)
+- **Pan Method:** Click and drag
+- **Controls:** Floating UI with +/− buttons and reset
+- **Implementation:** Canvas 2D context transformations
+
+### Automatic File Cleanup
+Uploaded PDDL files are automatically deleted after processing:
+- Problem files deleted after successful or failed processing
+- Custom domain files deleted (repository domains preserved)
+- Cleanup happens in `visualizer.ts` `uploadAndGenerate` endpoint
+- Prevents disk space accumulation in `backend/api/uploads/`
+
+### Renderer Architecture
+Each domain has a dedicated renderer extending `BaseRenderer`:
+- **`parse_state()`** - Extracts objects and predicates from PDDL state
+- **`render_state()`** - Converts parsed state to `RenderedState` format
+- **Color Schemes** - Pre-defined colors for visual consistency
+- **Extensibility** - Templates provided for 5 additional domains
+
+### State Generation
+The `StateGenerator` class:
+- Parses initial state from PDDL problem
+- Applies action sequences to generate intermediate states
+- Tracks object positions and relationships
+- Outputs structured state data for renderers
+
+---
+
+## 🤝 Contributing
+
+### Adding a New Domain
+
+See `backend/planner/domains/README.md` for detailed instructions. Summary:
+
+1. **Create PDDL files** in `backend/planner/domains/new_domain/`
+   - `domain.pddl` - Domain definition
+   - `p1.pddl` - Example problem
+
+2. **Implement renderer** in `backend/planner/state_renderer/new_domain_renderer.py`
+   - Extend `BaseRenderer`
+   - Implement `parse_state()` and `render_state()`
+
+3. **Register renderer** in `backend/planner/state_renderer/__init__.py`
+   - Import renderer class
+   - Add to `RendererFactory._renderers` dictionary
+
+4. **Update API** in `backend/api/visualizer.ts`
+   - Add domain to `DOMAIN_CONFIGS`
+   - Add to enum in `generateStates` and `uploadAndGenerate` input schemas
+
+5. **Test** with example problem
+
+Templates for Depot, Hanoi, Logistics, Rovers, and Satellite domains are already provided.
+
+---
+
+## 🐛 Troubleshooting
+
+### Port Already in Use
 
 **Mac/Linux:**
 ```bash
@@ -309,112 +376,46 @@ lsof -ti:4000 | xargs kill
 
 **Windows:**
 ```cmd
-# Find process using port 3000
+# Find process using port
 netstat -ano | findstr :3000
 
 # Kill the process (replace <PID> with actual process ID)
 taskkill /PID <PID> /F
 ```
 
----
+### Python Not Found
 
-### ⚠️ Python Not Found
-
-If the backend can't find Python, create a `.env` file:
-
+Create `.env` file in `backend/api/`:
 ```bash
 cd backend/api
-echo "PYTHON_CMD=python3.12" > .env
+echo "PYTHON_CMD=python3" > .env
 ```
 
-Replace `python3.12` with your Python command (`python3`, `python`, etc.).
+Replace `python3` with your Python command (`python`, `python3.11`, etc.).
 
----
-
-### ⚠️ Frontend Can't Connect to Backend
+### Frontend Can't Connect to Backend
 
 1. Verify backend is running: http://localhost:4000
-2. Check frontend proxy in `frontend/vite.config.ts`
+2. Check `frontend/vite.config.ts` proxy configuration (should point to `http://localhost:4000`)
 3. Ensure no firewall is blocking local connections
 
----
+### Fast Downward Not Available
 
-### ⚠️ Windows-Specific Issues
-
-**Fast Downward requires Visual Studio Build Tools:**
-
-1. Download: https://visualstudio.microsoft.com/downloads/
-2. Install "Desktop development with C++"
-3. Restart your terminal
-4. Run `run_new.bat` again
-
-**Alternatively:** Use fallback mode (works without Fast Downward)
-
----
-
-## 🧪 Testing
-
-### Test Python Modules
-
-```bash
-cd backend/planner
-
-# Test individual domains
-python test_blocksworld.py
-python test_gripper.py
-
-# Test all domains
-python test_domains.py
-```
-
-### Test Backend API
-
-```bash
-cd backend/api
-pnpm test
-```
-
----
-
-## 💻 Technology Stack
-
-### Frontend
-- **React 19** - UI framework
-- **TypeScript** - Type safety
-- **Tailwind CSS 4** - Styling
-- **tRPC** - Type-safe API client
-- **Vite** - Build tool
-- **Framer Motion** - Animations
-
-### Backend API
-- **Node.js** - Runtime
-- **Express** - Web framework
-- **tRPC** - Type-safe API server
-- **TypeScript** - Type safety
-
-### Planning Engine
-- **Python 3.11+** - Core language
-- **Fast Downward** - Classical planner
-- **Custom PDDL Parsers** - Problem parsing
-- **Domain Renderers** - Visualization logic
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! To add a new planning domain:
-
-1. Add PDDL files to `backend/planner/domains/new_domain/`
-2. Create renderer in `backend/planner/state_renderer/new_domain_renderer.py`
-3. Register renderer in `backend/planner/state_renderer/renderer_factory.py`
-4. Add domain config in `backend/api/visualizer.ts`
-5. Create test file `backend/planner/test_newdomain.py`
+The application works without Fast Downward:
+- Pre-computed example data is used for default problems
+- Custom problems will use fallback plans if Fast Downward is not installed
+- To install Fast Downward:
+  ```bash
+  git submodule update --init --recursive
+  cd planning-tools/downward
+  ./build.py release
+  ```
 
 ---
 
 ## 📄 License
 
-MIT License - See [LICENSE](LICENSE) for details
+MIT License
 
 ---
 
@@ -435,7 +436,7 @@ MIT License - See [LICENSE](LICENSE) for details
 
 <div align="center">
 
-**Built with ❤️ for the planning community**
+**Built for the planning community**
 
 [⭐ Star this repo](https://github.com/Diabhsn3/planning-visualizer) • [🐛 Report Bug](https://github.com/Diabhsn3/planning-visualizer/issues) • [✨ Request Feature](https://github.com/Diabhsn3/planning-visualizer/issues)
 
