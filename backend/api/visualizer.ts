@@ -170,7 +170,7 @@ export const visualizerRouter = router({
           `"${PYTHON_CMD}" "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}"`,
           {
             maxBuffer: 10 * 1024 * 1024,
-            timeout: 3600000, // 60 minute timeout for planner (Python default is 600s, but giving extra buffer)
+            timeout: 2400000, // 40 minute timeout for planner (Python default is 1800s/30min + buffer)
             env: {
               ...process.env,
               PYTHONPATH: '', // Clear PYTHONPATH to prevent Python 3.13 imports
