@@ -4,6 +4,17 @@ import tempfile
 import sys
 import os
 
+# Configurable timeout for Fast Downward (in seconds)
+# Can be overridden via environment variable PLANNER_TIMEOUT
+DEFAULT_PLANNER_TIMEOUT = 300  # 5 minutes default (was 60 seconds)
+
+def get_planner_timeout() -> int:
+    """Get the planner timeout from environment or use default."""
+    try:
+        return int(os.environ.get('PLANNER_TIMEOUT', DEFAULT_PLANNER_TIMEOUT))
+    except (ValueError, TypeError):
+        return DEFAULT_PLANNER_TIMEOUT
+
 # Planner directory (where domains are located)
 PLANNER_DIR = Path(__file__).resolve().parent.parent
 # Project root (where planning-tools is located)
@@ -63,22 +74,24 @@ def _get_fallback_plan(domain_name: str) -> list[str]:
     return fallback_plans.get(domain_name, [])
 
 
-def run_planner(domain_rel, problem_rel):
+def run_planner(domain_rel, problem_rel, timeout: int = None):
     """
-
-
-    
     Run planner with fallback support.
     
     Args:
         domain_rel: Relative path to domain file (e.g., 'domains/blocks_world/domain.pddl')
         problem_rel: Relative path to problem file (e.g., 'domains/blocks_world/p1.pddl')
+        timeout: Optional timeout in seconds (default: from environment or 300s)
         
     Returns:
         List of action strings
     """
     domain = PLANNER_DIR / domain_rel
     problem = PLANNER_DIR / problem_rel
+    
+    # Use provided timeout or get from environment/default
+    if timeout is None:
+        timeout = get_planner_timeout()
     
     # Check if files exist
     if not domain.exists():
@@ -120,7 +133,7 @@ def run_planner(domain_rel, problem_rel):
                     cmd,
                     capture_output=True,
                     text=True,
-                    timeout=60  # 60 second timeout
+                    timeout=timeout  # Configurable timeout (default 300s)
                 )
                 
                 if result.returncode == 0 and plan_file.exists():
@@ -152,7 +165,15 @@ def run_planner(domain_rel, problem_rel):
                     except:
                         pass
                         
-        except (FileNotFoundError, subprocess.TimeoutExpired, RuntimeError) as e:
+        except subprocess.TimeoutExpired as e:
+            # Re-raise timeout with helpful message
+            raise subprocess.TimeoutExpired(
+                e.cmd,
+                timeout,
+                output=f"Fast Downward timed out after {timeout} seconds. "
+                       f"For large problems, try increasing PLANNER_TIMEOUT environment variable."
+            )
+        except (FileNotFoundError, RuntimeError) as e:
             # Fall through to fallback - don't print error for "not built" case
             pass
     

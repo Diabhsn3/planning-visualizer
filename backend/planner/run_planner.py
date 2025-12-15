@@ -6,7 +6,19 @@ Planner integration script - runs Fast Downward if available, otherwise uses pre
 import sys
 import subprocess
 import tempfile
+import os
 from pathlib import Path
+
+# Configurable timeout for Fast Downward (in seconds)
+# Can be overridden via environment variable PLANNER_TIMEOUT
+DEFAULT_PLANNER_TIMEOUT = 300  # 5 minutes default (was 60 seconds)
+
+def get_planner_timeout() -> int:
+    """Get the planner timeout from environment or use default."""
+    try:
+        return int(os.environ.get('PLANNER_TIMEOUT', DEFAULT_PLANNER_TIMEOUT))
+    except (ValueError, TypeError):
+        return DEFAULT_PLANNER_TIMEOUT
 
 # Path to Fast Downward - try multiple possible locations
 # This handles both local development and Manus environment
@@ -35,22 +47,28 @@ if FD_PATH is None:
     FD_PATH = POSSIBLE_FD_PATHS[0]
 
 
-def run_fast_downward(domain_path: str, problem_path: str) -> list[str]:
+def run_fast_downward(domain_path: str, problem_path: str, timeout: int = None) -> list[str]:
     """
     Run Fast Downward planner to solve the problem.
     
     Args:
         domain_path: Path to domain PDDL file
         problem_path: Path to problem PDDL file
+        timeout: Timeout in seconds (default: from environment or 300s)
         
     Returns:
         List of action strings
         
     Raises:
         RuntimeError: If planner fails
+        subprocess.TimeoutExpired: If planner times out
     """
     if not FD_PATH.exists():
         raise FileNotFoundError(f"Fast Downward not found at {FD_PATH}")
+    
+    # Use provided timeout or get from environment/default
+    if timeout is None:
+        timeout = get_planner_timeout()
     
     # Create temporary file for plan output
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.plan') as tmp:
@@ -72,7 +90,7 @@ def run_fast_downward(domain_path: str, problem_path: str) -> list[str]:
             cmd,
             capture_output=True,
             text=True,
-            timeout=60  # 60 second timeout
+            timeout=timeout
         )
         
         if result.returncode != 0:
@@ -125,7 +143,7 @@ def get_fallback_plan(domain_name: str) -> list[str]:
     return fallback_plans.get(domain_name, [])
 
 
-def solve_problem(domain_path: str, problem_path: str, domain_name: str = None) -> tuple[list[str], bool]:
+def solve_problem(domain_path: str, problem_path: str, domain_name: str = None, timeout: int = None) -> tuple[list[str], bool]:
     """
     Solve a planning problem using Fast Downward or fallback to predefined plan.
     
@@ -133,6 +151,7 @@ def solve_problem(domain_path: str, problem_path: str, domain_name: str = None) 
         domain_path: Path to domain PDDL file
         problem_path: Path to problem PDDL file
         domain_name: Optional domain name for fallback
+        timeout: Optional timeout in seconds (default: from environment or 300s)
         
     Returns:
         Tuple of (plan actions, used_planner)
@@ -141,8 +160,17 @@ def solve_problem(domain_path: str, problem_path: str, domain_name: str = None) 
     """
     try:
         # Try to run Fast Downward
-        actions = run_fast_downward(domain_path, problem_path)
+        actions = run_fast_downward(domain_path, problem_path, timeout)
         return actions, True
+    except subprocess.TimeoutExpired as e:
+        # Re-raise timeout errors with more context
+        timeout_used = timeout if timeout else get_planner_timeout()
+        raise subprocess.TimeoutExpired(
+            e.cmd, 
+            timeout_used,
+            output=f"Fast Downward timed out after {timeout_used} seconds. "
+                   f"For large problems, try increasing PLANNER_TIMEOUT environment variable."
+        )
     except (FileNotFoundError, RuntimeError) as e:
         # Fall back to predefined plan
         print(f"Warning: Could not run Fast Downward ({e}). Using fallback plan.", file=sys.stderr)
@@ -156,22 +184,29 @@ def solve_problem(domain_path: str, problem_path: str, domain_name: str = None) 
 def main():
     """CLI interface for testing."""
     if len(sys.argv) < 3:
-        print("Usage: run_planner.py <domain_path> <problem_path> [domain_name]")
+        print("Usage: run_planner.py <domain_path> <problem_path> [domain_name] [timeout_seconds]")
+        print(f"\nCurrent timeout: {get_planner_timeout()} seconds")
+        print("Set PLANNER_TIMEOUT environment variable to override.")
         sys.exit(1)
     
     domain_path = sys.argv[1]
     problem_path = sys.argv[2]
     domain_name = sys.argv[3] if len(sys.argv) > 3 else None
+    timeout = int(sys.argv[4]) if len(sys.argv) > 4 else None
     
     try:
-        actions, used_planner = solve_problem(domain_path, problem_path, domain_name)
+        actions, used_planner = solve_problem(domain_path, problem_path, domain_name, timeout)
         
         print(f"Planner: {'Fast Downward' if used_planner else 'Fallback'}")
+        print(f"Timeout: {timeout if timeout else get_planner_timeout()} seconds")
         print(f"Plan length: {len(actions)}")
         print("Actions:")
         for i, action in enumerate(actions, 1):
             print(f"  {i}. {action}")
             
+    except subprocess.TimeoutExpired as e:
+        print(f"Error: {e.output}", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
