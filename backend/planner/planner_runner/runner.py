@@ -6,7 +6,7 @@ import os
 
 # Configurable timeout for Fast Downward (in seconds)
 # Can be overridden via environment variable PLANNER_TIMEOUT
-DEFAULT_PLANNER_TIMEOUT = 300  # 5 minutes default 
+DEFAULT_PLANNER_TIMEOUT = 600  # 10 minutes default 
 
 def get_planner_timeout() -> int:
     """Get the planner timeout from environment or use default."""
