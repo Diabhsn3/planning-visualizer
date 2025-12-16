@@ -73,36 +73,14 @@ export function StateCanvas({ state, width = 800, height = 600 }: StateCanvasPro
     } else if (state.domain === "gripper") {
       renderGripper(ctx, state);
     } else {
-      renderDefault(ctx, state);
+      renderGeneric(ctx, state);
     }
 
     // Restore context state
     ctx.restore();
   }, [state, width, height, scale, offset]);
 
-  // Handle mouse wheel for zoom
-  // const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-  //   e.preventDefault();
-    
-  //   const canvas = canvasRef.current;
-  //   if (!canvas) return;
-
-  //   const rect = canvas.getBoundingClientRect();
-  //   const mouseX = e.clientX - rect.left;
-  //   const mouseY = e.clientY - rect.top;
-
-  //   // Calculate zoom
-  //   const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-  //   const newScale = Math.min(Math.max(0.1, scale * zoomFactor), 5);
-
-  //   // Adjust offset to zoom towards mouse position
-  //   const scaleChange = newScale / scale;
-  //   const newOffsetX = mouseX - (mouseX - offset.x) * scaleChange;
-  //   const newOffsetY = mouseY - (mouseY - offset.y) * scaleChange;
-
-  //   setScale(newScale);
-  //   setOffset({ x: newOffsetX, y: newOffsetY });
-  // };
+  
 
   // Handle mouse down for panning
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -625,25 +603,589 @@ drawClaw(centerX + armOffsetX, armBaseY, {
 /**
  * DEFAULT DOMAIN FALLBACK
  */
-function renderDefault(ctx: CanvasRenderingContext2D, state: RenderedState) {
+function renderGeneric(ctx: CanvasRenderingContext2D, state: RenderedState) {
+  // Group objects by type for organized rendering
+  const objectsByType = groupObjectsByType(state.objects);
+  
+  // Sort all objects by z_index for proper layering
+  const sortedObjects = [...state.objects].sort((a, b) => {
+    const zA = a.properties?.z_index ?? 0;
+    const zB = b.properties?.z_index ?? 0;
+    return zA - zB; // Lower z_index drawn first (background)
+  });
+
+  // Create a map for quick object lookup (used for relations)
+  const objectMap = new Map<string, VisualObject>();
+  state.objects.forEach(obj => objectMap.set(obj.id, obj));
+
+  // Draw domain title
+  drawDomainTitle(ctx, state.domain);
+
+  // Draw all objects in z-order
+  sortedObjects.forEach(obj => {
+    drawGenericObject(ctx, obj, state.relations, objectMap);
+  });
+
+  // Draw relations (arrows, lines) on top
+  drawRelations(ctx, state.relations, objectMap);
+
+  // Draw legend
+  drawLegend(ctx, objectsByType);
+}
+
+/**
+ * Group objects by their type for legend and organized processing
+ */
+function groupObjectsByType(objects: VisualObject[]): Map<string, VisualObject[]> {
+  const groups = new Map<string, VisualObject[]>();
+  objects.forEach(obj => {
+    const type = obj.type;
+    if (!groups.has(type)) {
+      groups.set(type, []);
+    }
+    groups.get(type)!.push(obj);
+  });
+  return groups;
+}
+
+/**
+ * Draw the domain title at the top
+ */
+function drawDomainTitle(ctx: CanvasRenderingContext2D, domain: string) {
   ctx.fillStyle = "#333";
-  ctx.font = "16px Arial";
+  ctx.font = "bold 18px Arial";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
+  ctx.fillText(`Domain: ${domain}`, 20, 15);
+}
 
-  let y = 20;
-  ctx.fillText(`Domain: ${state.domain}`, 20, y);
-  y += 30;
+/**
+ * Draw a single object based on its properties
+ */
+function drawGenericObject(
+  ctx: CanvasRenderingContext2D, 
+  obj: VisualObject,
+  relations: VisualRelation[],
+  objectMap: Map<string, VisualObject>
+) {
+  if (!obj.position) return;
 
-  ctx.fillText(`Objects: ${state.objects.length}`, 20, y);
-  y += 25;
+  const [x, y] = obj.position;
+  const props = obj.properties || {};
 
-  for (const obj of state.objects.slice(0, 10)) {
-    ctx.fillText(`- ${obj.label} (${obj.type})`, 40, y);
-    y += 20;
+  // Determine shape from properties
+  const shape = inferShape(props);
+
+  // Get visual properties with defaults
+  const color = props.color || getDefaultColor(obj.type);
+  const borderColor = props.borderColor || darkenColor(color);
+  const borderWidth = props.borderWidth ?? 2;
+
+  // Check if this object is "held" or "contained" (special highlighting)
+  const isHeld = props.held || isObjectHeld(obj.id, relations);
+  const isHighlighted = props.highlighted || props.selected;
+
+  // Set styles
+  ctx.fillStyle = color;
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = borderWidth;
+
+  // Draw based on shape
+  switch (shape) {
+    case "circle":
+      drawCircle(ctx, x, y, props);
+      break;
+    case "square":
+      drawSquare(ctx, x, y, props);
+      break;
+    case "triangle":
+      drawTriangle(ctx, x, y, props);
+      break;
+    case "ellipse":
+      drawEllipse(ctx, x, y, props);
+      break;
+    case "diamond":
+      drawDiamond(ctx, x, y, props);
+      break;
+    case "hexagon":
+      drawHexagon(ctx, x, y, props);
+      break;
+    case "rectangle":
+    default:
+      drawRectangle(ctx, x, y, props);
+      break;
   }
 
-  if (state.objects.length > 10) {
-    ctx.fillText(`... and ${state.objects.length - 10} more`, 40, y);
+  // Draw highlight border if held/selected
+  if (isHeld || isHighlighted) {
+    drawHighlight(ctx, x, y, props, shape);
+  }
+
+  // Draw label
+  drawLabel(ctx, x, y, obj.label, props, shape);
+
+  // Draw type indicator (small text below)
+  if (props.showType !== false) {
+    drawTypeIndicator(ctx, x, y, obj.type, props, shape);
   }
 }
+
+/**
+ * Infer shape from properties
+ */
+function inferShape(props: Record<string, any>): string {
+  // Explicit shape property takes priority
+  if (props.shape) return props.shape;
+
+  // Infer from dimensions
+  if (props.radius) return "circle";
+  if (props.radiusX && props.radiusY) return "ellipse";
+  if (props.size) return "square";
+  if (props.width && props.height) {
+    if (props.width === props.height) return "square";
+    return "rectangle";
+  }
+
+  // Default to rectangle
+  return "rectangle";
+}
+
+/**
+ * Get default color based on object type
+ */
+function getDefaultColor(type: string): string {
+  const colorMap: Record<string, string> = {
+    // Common planning domain types
+    "block": "#FF6B6B",
+    "surface": "#8B4513",
+    "table": "#8B4513",
+    "gripper": "#607D8B",
+    "robot": "#607D8B",
+    "ball": "#4ECDC4",
+    "room": "#E8E8E8",
+    "location": "#90EE90",
+    "city": "#87CEEB",
+    "truck": "#4A90E2",
+    "airplane": "#9B59B6",
+    "package": "#F5A623",
+    "crate": "#D2691E",
+    "hoist": "#708090",
+    "pallet": "#DEB887",
+    "rover": "#E74C3C",
+    "waypoint": "#3498DB",
+    "store": "#2ECC71",
+    "satellite": "#9B59B6",
+    "instrument": "#E67E22",
+    "mode": "#1ABC9C",
+    "direction": "#F39C12",
+    "objective": "#E91E63",
+    "disk": "#FF9800",
+    "peg": "#795548",
+    // Generic fallbacks
+    "agent": "#3498DB",
+    "object": "#95A5A6",
+    "container": "#BDC3C7",
+    "target": "#E74C3C",
+    "goal": "#2ECC71",
+  };
+
+  // Try exact match
+  if (colorMap[type.toLowerCase()]) {
+    return colorMap[type.toLowerCase()];
+  }
+
+  // Try partial match
+  for (const [key, color] of Object.entries(colorMap)) {
+    if (type.toLowerCase().includes(key)) {
+      return color;
+    }
+  }
+
+  // Generate consistent color from type name
+  return stringToColor(type);
+}
+
+/**
+ * Generate a consistent color from a string
+ */
+function stringToColor(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  
+  const h = hash % 360;
+  return `hsl(${h}, 65%, 55%)`;
+}
+
+/**
+ * Darken a color for borders
+ */
+function darkenColor(color: string): string {
+  // Simple darkening - works for hex colors
+  if (color.startsWith("#")) {
+    const r = Math.max(0, parseInt(color.slice(1, 3), 16) - 40);
+    const g = Math.max(0, parseInt(color.slice(3, 5), 16) - 40);
+    const b = Math.max(0, parseInt(color.slice(5, 7), 16) - 40);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+  return "#333";
+}
+
+/**
+ * Check if object is held by looking at relations
+ */
+function isObjectHeld(objId: string, relations: VisualRelation[]): boolean {
+  return relations.some(rel => 
+    (rel.type === "holding" || rel.type === "carry" || rel.type === "grasping") && 
+    rel.target === objId
+  );
+}
+
+// ============================================================
+// SHAPE DRAWING FUNCTIONS
+// ============================================================
+
+function drawRectangle(ctx: CanvasRenderingContext2D, x: number, y: number, props: Record<string, any>) {
+  const width = props.width || 60;
+  const height = props.height || 60;
+  const cornerRadius = props.cornerRadius || 0;
+
+  if (cornerRadius > 0) {
+    drawRoundedRect(ctx, x, y, width, height, cornerRadius);
+  } else {
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeRect(x, y, width, height);
+  }
+}
+
+function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawCircle(ctx: CanvasRenderingContext2D, x: number, y: number, props: Record<string, any>) {
+  const radius = props.radius || 30;
+
+  ctx.beginPath();
+  ctx.arc(x + radius, y + radius, radius, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawSquare(ctx: CanvasRenderingContext2D, x: number, y: number, props: Record<string, any>) {
+  const size = props.size || props.width || 60;
+
+  ctx.fillRect(x, y, size, size);
+  ctx.strokeRect(x, y, size, size);
+}
+
+function drawTriangle(ctx: CanvasRenderingContext2D, x: number, y: number, props: Record<string, any>) {
+  const width = props.width || 60;
+  const height = props.height || 60;
+
+  ctx.beginPath();
+  ctx.moveTo(x + width / 2, y);           // Top point
+  ctx.lineTo(x + width, y + height);       // Bottom right
+  ctx.lineTo(x, y + height);               // Bottom left
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawEllipse(ctx: CanvasRenderingContext2D, x: number, y: number, props: Record<string, any>) {
+  const radiusX = props.radiusX || props.width / 2 || 30;
+  const radiusY = props.radiusY || props.height / 2 || 20;
+
+  ctx.beginPath();
+  ctx.ellipse(x + radiusX, y + radiusY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawDiamond(ctx: CanvasRenderingContext2D, x: number, y: number, props: Record<string, any>) {
+  const width = props.width || 60;
+  const height = props.height || 60;
+
+  ctx.beginPath();
+  ctx.moveTo(x + width / 2, y);            // Top
+  ctx.lineTo(x + width, y + height / 2);   // Right
+  ctx.lineTo(x + width / 2, y + height);   // Bottom
+  ctx.lineTo(x, y + height / 2);           // Left
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawHexagon(ctx: CanvasRenderingContext2D, x: number, y: number, props: Record<string, any>) {
+  const size = props.size || props.width || 60;
+  const centerX = x + size / 2;
+  const centerY = y + size / 2;
+  const radius = size / 2;
+
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i - Math.PI / 2;
+    const px = centerX + radius * Math.cos(angle);
+    const py = centerY + radius * Math.sin(angle);
+    if (i === 0) {
+      ctx.moveTo(px, py);
+    } else {
+      ctx.lineTo(px, py);
+    }
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+// ============================================================
+// LABEL AND HIGHLIGHT FUNCTIONS
+// ============================================================
+
+function drawHighlight(ctx: CanvasRenderingContext2D, x: number, y: number, props: Record<string, any>, shape: string) {
+  const width = props.width || props.size || props.radius * 2 || 60;
+  const height = props.height || props.size || props.radius * 2 || 60;
+
+  ctx.save();
+  ctx.strokeStyle = "#ffd54f";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(x - 3, y - 3, width + 6, height + 6);
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawLabel(ctx: CanvasRenderingContext2D, x: number, y: number, label: string, props: Record<string, any>, shape: string) {
+  const width = props.width || props.size || props.radius * 2 || 60;
+  const height = props.height || props.size || props.radius * 2 || 60;
+
+  // Calculate center
+  let centerX = x + width / 2;
+  let centerY = y + height / 2;
+
+  // Adjust for circles (position is top-left of bounding box)
+  if (shape === "circle") {
+    const radius = props.radius || 30;
+    centerX = x + radius;
+    centerY = y + radius;
+  }
+
+  // Text styling
+  const textColor = props.textColor || getContrastColor(props.color || "#999");
+  const fontSize = props.fontSize || Math.min(24, Math.max(12, width / 3));
+  const fontWeight = props.fontWeight || "bold";
+
+  ctx.fillStyle = textColor;
+  ctx.font = `${fontWeight} ${fontSize}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, centerX, centerY);
+}
+
+function drawTypeIndicator(ctx: CanvasRenderingContext2D, x: number, y: number, type: string, props: Record<string, any>, shape: string) {
+  const width = props.width || props.size || props.radius * 2 || 60;
+  const height = props.height || props.size || props.radius * 2 || 60;
+
+  // Position below the object
+  const centerX = x + width / 2;
+  const bottomY = y + height + 12;
+
+  ctx.fillStyle = "#666";
+  ctx.font = "10px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText(type, centerX, bottomY);
+}
+
+/**
+ * Get contrasting text color (black or white) based on background
+ */
+function getContrastColor(bgColor: string): string {
+  // Convert to RGB
+  let r = 128, g = 128, b = 128;
+
+  if (bgColor.startsWith("#")) {
+    r = parseInt(bgColor.slice(1, 3), 16);
+    g = parseInt(bgColor.slice(3, 5), 16);
+    b = parseInt(bgColor.slice(5, 7), 16);
+  } else if (bgColor.startsWith("rgb")) {
+    const match = bgColor.match(/\d+/g);
+    if (match) {
+      r = parseInt(match[0]);
+      g = parseInt(match[1]);
+      b = parseInt(match[2]);
+    }
+  } else if (bgColor.startsWith("hsl")) {
+    // For HSL, assume light colors need dark text
+    return "#333";
+  }
+
+  // Calculate luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? "#333" : "#fff";
+}
+
+// ============================================================
+// RELATIONS DRAWING
+// ============================================================
+
+function drawRelations(ctx: CanvasRenderingContext2D, relations: VisualRelation[], objectMap: Map<string, VisualObject>) {
+  relations.forEach(rel => {
+    if (!rel.target) return;
+
+    const source = objectMap.get(rel.source);
+    const target = objectMap.get(rel.target);
+
+    if (!source?.position || !target?.position) return;
+
+    // Skip containment relations (visual is implicit)
+    if (rel.type === "in" || rel.type === "inside" || rel.type === "contains") {
+      return;
+    }
+
+    // Skip location relations (position already reflects this)
+    if (rel.type === "at" || rel.type === "on" || rel.type === "ontable") {
+      return;
+    }
+
+    // Draw arrow for other relations
+    const sourceCenter = getObjectCenter(source);
+    const targetCenter = getObjectCenter(target);
+
+    const relProps = rel.properties || {};
+    const color = relProps.color || "#666";
+    const lineWidth = relProps.lineWidth || 1;
+    const showArrow = relProps.showArrow !== false;
+    const dashed = relProps.dashed || false;
+
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = lineWidth;
+
+    if (dashed) {
+      ctx.setLineDash([5, 5]);
+    }
+
+    if (showArrow) {
+      drawArrow(ctx, sourceCenter, targetCenter);
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(sourceCenter.x, sourceCenter.y);
+      ctx.lineTo(targetCenter.x, targetCenter.y);
+      ctx.stroke();
+    }
+
+    if (dashed) {
+      ctx.setLineDash([]);
+    }
+
+    // Draw relation label if specified
+    if (relProps.showLabel && rel.type) {
+      const midX = (sourceCenter.x + targetCenter.x) / 2;
+      const midY = (sourceCenter.y + targetCenter.y) / 2;
+      ctx.fillStyle = "#333";
+      ctx.font = "10px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(rel.type, midX, midY - 5);
+    }
+  });
+}
+
+function getObjectCenter(obj: VisualObject): { x: number; y: number } {
+  const [x, y] = obj.position || [0, 0];
+  const props = obj.properties || {};
+
+  const width = props.width || props.size || props.radius * 2 || 60;
+  const height = props.height || props.size || props.radius * 2 || 60;
+
+  return {
+    x: x + width / 2,
+    y: y + height / 2
+  };
+}
+
+function drawArrow(ctx: CanvasRenderingContext2D, from: { x: number; y: number }, to: { x: number; y: number }) {
+  const headLength = 10;
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+
+  // Shorten the line slightly so arrow doesn't overlap target
+  const shortenBy = 20;
+  const dist = Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2);
+  const ratio = (dist - shortenBy) / dist;
+  const endX = from.x + (to.x - from.x) * ratio;
+  const endY = from.y + (to.y - from.y) * ratio;
+
+  // Draw line
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(endX, endY);
+  ctx.stroke();
+
+  // Draw arrow head
+  ctx.beginPath();
+  ctx.moveTo(endX, endY);
+  ctx.lineTo(
+    endX - headLength * Math.cos(angle - Math.PI / 6),
+    endY - headLength * Math.sin(angle - Math.PI / 6)
+  );
+  ctx.lineTo(
+    endX - headLength * Math.cos(angle + Math.PI / 6),
+    endY - headLength * Math.sin(angle + Math.PI / 6)
+  );
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ============================================================
+// LEGEND
+// ============================================================
+
+function drawLegend(ctx: CanvasRenderingContext2D, objectsByType: Map<string, VisualObject[]>) {
+  const legendX = 20;
+  let legendY = 50;
+  const itemHeight = 20;
+  const boxSize = 12;
+
+  ctx.font = "12px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+
+  // Draw legend title
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 12px Arial";
+  ctx.fillText("Legend:", legendX, legendY);
+  legendY += itemHeight;
+
+  ctx.font = "12px Arial";
+
+  objectsByType.forEach((objects, type) => {
+    // Get color from first object of this type
+    const color = objects[0]?.properties?.color || getDefaultColor(type);
+
+    // Draw color box
+    ctx.fillStyle = color;
+    ctx.fillRect(legendX, legendY - boxSize / 2, boxSize, boxSize);
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(legendX, legendY - boxSize / 2, boxSize, boxSize);
+
+    // Draw type name and count
+    ctx.fillStyle = "#333";
+    ctx.fillText(`${type} (${objects.length})`, legendX + boxSize + 8, legendY);
+
+    legendY += itemHeight;
+  });
+}
+
