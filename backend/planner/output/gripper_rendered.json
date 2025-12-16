@@ -16,7 +16,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E8F5E9",
+            "color": "#F5F5F5",
             "has_robot": true
           }
         },
@@ -31,7 +31,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E3F2FD",
+            "color": "#F5F5F5",
             "has_robot": false
           }
         },
@@ -105,7 +105,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#FF6B6B",
+            "color": "#9E9E9E",
             "status": "in rooma"
           }
         },
@@ -119,7 +119,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#4ECDC4",
+            "color": "#9E9E9E",
             "status": "in rooma"
           }
         },
@@ -182,7 +182,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E8F5E9",
+            "color": "#F5F5F5",
             "has_robot": true
           }
         },
@@ -197,7 +197,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E3F2FD",
+            "color": "#F5F5F5",
             "has_robot": false
           }
         },
@@ -271,7 +271,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#FF6B6B",
+            "color": "#9E9E9E",
             "status": "held by left"
           }
         },
@@ -285,7 +285,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#4ECDC4",
+            "color": "#9E9E9E",
             "status": "in rooma"
           }
         },
@@ -349,7 +349,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E8F5E9",
+            "color": "#F5F5F5",
             "has_robot": true
           }
         },
@@ -364,7 +364,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E3F2FD",
+            "color": "#F5F5F5",
             "has_robot": false
           }
         },
@@ -438,7 +438,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#FF6B6B",
+            "color": "#9E9E9E",
             "status": "held by left"
           }
         },
@@ -452,7 +452,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#4ECDC4",
+            "color": "#9E9E9E",
             "status": "held by right"
           }
         },
@@ -516,7 +516,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E8F5E9",
+            "color": "#F5F5F5",
             "has_robot": false
           }
         },
@@ -531,7 +531,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E3F2FD",
+            "color": "#F5F5F5",
             "has_robot": true
           }
         },
@@ -605,7 +605,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#FF6B6B",
+            "color": "#9E9E9E",
             "status": "held by left"
           }
         },
@@ -619,7 +619,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#4ECDC4",
+            "color": "#9E9E9E",
             "status": "held by right"
           }
         },
@@ -683,7 +683,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E8F5E9",
+            "color": "#F5F5F5",
             "has_robot": false
           }
         },
@@ -698,7 +698,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E3F2FD",
+            "color": "#F5F5F5",
             "has_robot": true
           }
         },
@@ -772,7 +772,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#FF6B6B",
+            "color": "#9E9E9E",
             "status": "in roomb"
           }
         },
@@ -786,7 +786,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#4ECDC4",
+            "color": "#9E9E9E",
             "status": "held by right"
           }
         },
@@ -850,7 +850,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E8F5E9",
+            "color": "#F5F5F5",
             "has_robot": false
           }
         },
@@ -865,7 +865,7 @@
           "properties": {
             "width": 200,
             "height": 300,
-            "color": "#E3F2FD",
+            "color": "#F5F5F5",
             "has_robot": true
           }
         },
@@ -939,7 +939,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#FF6B6B",
+            "color": "#9E9E9E",
             "status": "in roomb"
           }
         },
@@ -953,7 +953,7 @@
           ],
           "properties": {
             "size": 30,
-            "color": "#4ECDC4",
+            "color": "#9E9E9E",
             "status": "in roomb"
           }
         },
@@ -983,7 +983,7 @@
         },
         {
           "type": "at",
-          "source": "ball2",
+          "source": "ball1",
           "target": "roomb",
           "properties": {
             "relationship": "located_in"
@@ -991,7 +991,7 @@
         },
         {
           "type": "at",
-          "source": "ball1",
+          "source": "ball2",
           "target": "roomb",
           "properties": {
             "relationship": "located_in"

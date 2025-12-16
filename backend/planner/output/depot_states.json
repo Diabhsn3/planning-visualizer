@@ -1,0 +1,67 @@
+{
+  "domain": "depot",
+  "problem": "bw-3",
+  "plan": [
+    "(load c1 t1 d1)",
+    "(drive t1 d1 s1)",
+    "(unload c1 t1 s1)"
+  ],
+  "states": [
+    {
+      "at-truck": [
+        [
+          "t1",
+          "d1"
+        ]
+      ],
+      "at": [
+        [
+          "c1",
+          "d1"
+        ]
+      ]
+    },
+    {
+      "at-truck": [
+        [
+          "t1",
+          "d1"
+        ]
+      ],
+      "in-truck": [
+        [
+          "c1",
+          "t1"
+        ]
+      ]
+    },
+    {
+      "in-truck": [
+        [
+          "c1",
+          "t1"
+        ]
+      ],
+      "at-truck": [
+        [
+          "t1",
+          "s1"
+        ]
+      ]
+    },
+    {
+      "at": [
+        [
+          "c1",
+          "s1"
+        ]
+      ],
+      "at-truck": [
+        [
+          "t1",
+          "s1"
+        ]
+      ]
+    }
+  ]
+}

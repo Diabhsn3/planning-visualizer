@@ -14,15 +14,102 @@ from planner_runner.runner import run_planner
 from state_generator import StateGenerator
 import json
 
+################################## sola
 
+
+
+def test_depot():
+    """Test state generator with depot."""
+    print("=" * 60)
+    print("Testing depot Domain")
+    print("=" * 60)
+
+    domain_path = "backend/planner/domains/depot/domain.pddl"
+    problem_path = "backend/planner/domains/depot/p1.pddl"
+
+    
+    # Step 1: Run planner to get action sequence
+    print("\n[Step 1] Running planner...")
+    actions = run_planner(domain_path, problem_path)
+    print(f"Plan found with {len(actions)} actions:")
+    for i, action in enumerate(actions):
+        print(f"  {i + 1}. {action}")
+
+
+    # Step 2
+    print("\n[Step 2] Initializing state generator...")
+    # sg = StateGenerator(
+    #     str(PLANNER_DIR / domain_path),
+    #     str(PLANNER_DIR / problem_path)
+    # )
+    sg = StateGenerator(
+    str(Path(domain_path).resolve()),
+    str(Path(problem_path).resolve())
+)
+
+    # Print initial state
+    print("\nInitial state:")
+    init_state = sg.get_current_state()
+    for pred in sorted(init_state, key=lambda p: (p.name, str(p.params))):
+        print(f"  {pred}")
+    
+    # Step 3: Apply actions and generate states
+    print("\n[Step 3] Applying actions and generating states...")
+    states = sg.apply_plan(actions)
+    
+    print(f"\nGenerated {len(states)} states (including initial state)")
+    
+    # Print each state
+    for i, state in enumerate(states):
+        if i == 0:
+            print(f"\nState {i} (Initial):")
+        else:
+            print(f"\nState {i} (After action: {actions[i-1]}):")
+        
+        for pred in sorted(state, key=lambda p: (p.name, str(p.params))):
+            print(f"  {pred}")
+    
+    # Step 4: Generate JSON representation
+    print("\n[Step 4] Generating JSON representation...")
+    states_json = sg.generate_states_json(actions)
+    
+    print("\nJSON representation:")
+    print(json.dumps(states_json, indent=2))
+    
+    # Save to file
+    output_file = PLANNER_DIR / "output" / "depot_states.json"
+    output_file.parent.mkdir(exist_ok=True)
+    with open(output_file, 'w') as f:
+        json.dump({
+            "domain": "depot",
+            "problem": "bw-3",
+            "plan": actions,
+            "states": states_json
+        }, f, indent=2)
+    
+    print(f"\nStates saved to: {output_file}")
+    
+    return True    
+
+
+
+
+
+
+
+#########################################  sola   
 def test_blocks_world():
     """Test state generator with blocks world domain."""
     print("=" * 60)
     print("Testing Blocks World Domain")
     print("=" * 60)
     
-    domain_path = "domains/blocks_world/domain.pddl"
-    problem_path = "domains/blocks_world/p1.pddl"
+    # domain_path = "domains/blocks_world/domain.pddl"
+    # problem_path = "domains/blocks_world/p1.pddl"
+
+    domain_path = "backend/planner/domains/blocks_world/domain.pddl"
+    problem_path = "backend/planner/domains/blocks_world/p1.pddl"
+
     
     # Step 1: Run planner to get action sequence
     print("\n[Step 1] Running planner...")
@@ -33,11 +120,15 @@ def test_blocks_world():
     
     # Step 2: Initialize state generator
     print("\n[Step 2] Initializing state generator...")
+    # sg = StateGenerator(
+    #     str(PLANNER_DIR / domain_path),
+    #     str(PLANNER_DIR / problem_path)
+    # )
     sg = StateGenerator(
-        str(PLANNER_DIR / domain_path),
-        str(PLANNER_DIR / problem_path)
-    )
-    
+    str(Path(domain_path).resolve()),
+    str(Path(problem_path).resolve())
+)
+
     # Print initial state
     print("\nInitial state:")
     init_state = sg.get_current_state()
@@ -89,9 +180,13 @@ def test_gripper():
     print("Testing Gripper Domain")
     print("=" * 60)
     
-    domain_path = "domains/gripper/domain.pddl"
-    problem_path = "domains/gripper/p1.pddl"
+    # domain_path = "domains/gripper/domain.pddl"
+    # problem_path = "domains/gripper/p1.pddl"
     
+    
+    domain_path = "backend/planner/domains/gripper/domain.pddl"
+    problem_path = "backend/planner/domains/gripper/p1.pddl"
+
     # Step 1: Run planner
     print("\n[Step 1] Running planner...")
     actions = run_planner(domain_path, problem_path)
@@ -101,9 +196,13 @@ def test_gripper():
     
     # Step 2: Initialize state generator
     print("\n[Step 2] Initializing state generator...")
+    # sg = StateGenerator(
+    #     str(PLANNER_DIR / domain_path),
+    #     str(PLANNER_DIR / problem_path)
+    # )
     sg = StateGenerator(
-        str(PLANNER_DIR / domain_path),
-        str(PLANNER_DIR / problem_path)
+    str(Path(domain_path).resolve()),
+    str(Path(problem_path).resolve())
     )
     
     # Print initial state
@@ -148,7 +247,10 @@ def main():
         # Test gripper
         success2 = test_gripper()
         
-        if success1 and success2:
+        # Test Depot
+        success3 = test_depot()
+
+        if success1 and success2 and success3:
             print("\n" + "=" * 60)
             print("✓ All tests passed!")
             print("=" * 60)
@@ -168,3 +270,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

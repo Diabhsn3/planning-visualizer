@@ -23,10 +23,12 @@ export default function Visualizer() {
     enabled: showStatus,
   });
 
-  const domains = [
-    { id: "blocks-world", name: "Blocks World", description: "Classic block stacking problem" },
-    { id: "gripper", name: "Gripper", description: "Robot gripper moving balls between rooms" },
-  ];
+const domains = [
+  { id: "blocks-world", name: "Blocks World", description: "Classic block stacking problem" },
+  { id: "gripper", name: "Gripper", description: "Robot gripper moving balls between rooms" },
+  { id: "depot", name: "Depot", description: "Transporting packages via trucks and depots" },
+];
+
 
   const getDefaultProblem = (domain: string): string => {
     if (domain === "blocks-world") {
@@ -71,7 +73,28 @@ export default function Visualizer() {
     )
   )
 )`;
-    }
+    }else if (domain === "depot") {
+  return `(define (problem depot-default)
+  (:domain depot)
+  (:objects
+    truck1 - truck
+    package1 package2 - package
+    depot1 distributor1 - location
+  )
+  (:init
+    (at truck1 depot1)
+    (at package1 depot1)
+    (at package2 depot1)
+  )
+  (:goal
+    (and
+      (at package1 distributor1)
+      (at package2 distributor1)
+    )
+  )
+)`;
+}
+
     return "";
   };
 
@@ -461,7 +484,8 @@ export default function Visualizer() {
 
             {/* Canvas */}
             <div className="mb-6">
-              <StateCanvas state={renderedStates[currentStateIndex]} />
+              {/* <StateCanvas state={renderedStates[currentStateIndex]} /> */}
+              <StateCanvas state={renderedStates[currentStateIndex]} isFirst={currentStateIndex === 0} isLast={currentStateIndex === renderedStates.length - 1}/>
             </div>
 
             {/* Controls */}

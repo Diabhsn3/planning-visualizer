@@ -15,7 +15,7 @@ from .blocks_world_renderer import BlocksWorldRenderer
 from .gripper_renderer import GripperRenderer
 
 # TODO: Uncomment these imports when renderers are implemented
-# from .depot_renderer import DepotRenderer
+from .depot_renderer import DepotRenderer
 # from .hanoi_renderer import HanoiRenderer
 # from .logistics_renderer import LogisticsRenderer
 # from .rovers_renderer import RoversRenderer
@@ -32,7 +32,7 @@ class RendererFactory:
         'blocks-world': BlocksWorldRenderer,
         'gripper': GripperRenderer,
         # TODO: Add these renderers when implemented:
-        # 'depot': DepotRenderer,
+        'depot': DepotRenderer,
         # 'hanoi': HanoiRenderer,
         # 'logistics': LogisticsRenderer,
         # 'rovers': RoversRenderer,

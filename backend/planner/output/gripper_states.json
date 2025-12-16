@@ -1,17 +1,6 @@
 {
   "domain": "gripper",
-  "problem": "gripper-p1",
-  "objects": {
-    "roomb": "room",
-    "rooma": "room",
-    "ball2": "ball",
-    "ball1": "ball",
-    "room": "ball",
-    "right": "gripper",
-    "left": "gripper",
-    "ball": "gripper",
-    "gripper": "object"
-  },
+  "problem": "gripper-1",
   "plan": [
     "(pick ball1 rooma left)",
     "(pick ball2 rooma right)",
@@ -19,7 +8,6 @@
     "(drop ball1 roomb left)",
     "(drop ball2 roomb right)"
   ],
-  "num_states": 6,
   "states": [
     {
       "at": [
@@ -32,27 +20,21 @@
           "rooma"
         ]
       ],
+      "free": [
+        [
+          "left"
+        ],
+        [
+          "right"
+        ]
+      ],
       "at-robby": [
         [
           "rooma"
         ]
-      ],
-      "free": [
-        [
-          "right"
-        ],
-        [
-          "left"
-        ]
       ]
     },
     {
-      "carry": [
-        [
-          "ball1",
-          "left"
-        ]
-      ],
       "at": [
         [
           "ball2",
@@ -68,6 +50,12 @@
         [
           "rooma"
         ]
+      ],
+      "carry": [
+        [
+          "ball1",
+          "left"
+        ]
       ]
     },
     {
@@ -88,11 +76,6 @@
       ]
     },
     {
-      "at-robby": [
-        [
-          "roomb"
-        ]
-      ],
       "carry": [
         [
           "ball2",
@@ -102,20 +85,14 @@
           "ball1",
           "left"
         ]
-      ]
-    },
-    {
+      ],
       "at-robby": [
         [
           "roomb"
         ]
-      ],
-      "carry": [
-        [
-          "ball2",
-          "right"
-        ]
-      ],
+      ]
+    },
+    {
       "at": [
         [
           "ball1",
@@ -126,9 +103,28 @@
         [
           "left"
         ]
+      ],
+      "carry": [
+        [
+          "ball2",
+          "right"
+        ]
+      ],
+      "at-robby": [
+        [
+          "roomb"
+        ]
       ]
     },
     {
+      "free": [
+        [
+          "left"
+        ],
+        [
+          "right"
+        ]
+      ],
       "at": [
         [
           "ball2",
@@ -142,14 +138,6 @@
       "at-robby": [
         [
           "roomb"
-        ]
-      ],
-      "free": [
-        [
-          "right"
-        ],
-        [
-          "left"
         ]
       ]
     }

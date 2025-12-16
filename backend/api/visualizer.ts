@@ -52,6 +52,7 @@ function getPythonCommand(): string {
   return 'python3';
 }
 
+// ################# Determines the command we will use to run the Planner script.
 const PYTHON_CMD = getPythonCommand();
 console.log('[Python Detection] Using Python command:', PYTHON_CMD);
 
@@ -73,6 +74,11 @@ const DOMAIN_CONFIGS = {
     description: "Robot with grippers moving balls between rooms",
     domainFile: path.join(PLANNER_DIR, "domains/gripper/domain.pddl"),
   },
+  "depot": {
+    name: "Depot",
+    description: "Trucks deliver packages between depots and distributors",
+    domainFile: path.join(PLANNER_DIR, "domains/depot/domain.pddl"),
+  },
 };
 
 export const visualizerRouter = router({
@@ -82,7 +88,7 @@ export const visualizerRouter = router({
   generateStates: publicProcedure
     .input(
       z.object({
-        domain: z.enum(["blocks-world", "gripper"]),
+        domain: z.enum(["blocks-world", "gripper", "depot"]),
       })
     )
     .mutation(async ({ input }) => {
@@ -128,7 +134,7 @@ export const visualizerRouter = router({
       z.object({
         domainContent: z.string(),
         problemContent: z.string(),
-        domainName: z.enum(["blocks-world", "gripper"]),
+        domainName: z.enum(["blocks-world", "gripper", "depot"]),
       })
     )
     .mutation(async ({ input }) => {

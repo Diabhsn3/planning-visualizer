@@ -1,80 +1,104 @@
-"""
-Depot Domain Renderer
-
-TODO: Implement visualization for the Depot domain.
-
-The Depot domain involves:
-- Trucks that can drive between locations
-- Hoists that can lift and drop crates
-- Crates that need to be transported
-- Depots and distributors as locations
-
-Reference implementations:
-- blocks_world_renderer.py for basic rendering structure
-- gripper_renderer.py for multi-room visualization
-"""
-
-from typing import Dict, List, Any
-from .base_renderer import BaseRenderer, RenderedState
+from typing import Dict, List, Any, Set, Optional
+from .base_renderer import BaseStateRenderer, RenderedState, VisualObject, VisualRelation
 
 
-class DepotRenderer(BaseRenderer):
+class DepotRenderer(BaseStateRenderer):
     """
     Renderer for the Depot planning domain.
-    
-    TODO: Implement the following methods:
-    1. parse_state() - Extract trucks, hoists, crates, and locations from PDDL state
-    2. render_state() - Create visual representation of depot configuration
-    3. Define color scheme for different object types
-    4. Design layout for multiple locations
+    Converts planning states into visual objects and relations.
     """
-    
+
     def __init__(self):
-        super().__init__()
-        # TODO: Define colors for depot objects
+        super().__init__("depot")
         self.colors = {
-            "truck": "#FF6B6B",      # Red for trucks
-            "hoist": "#4ECDC4",      # Teal for hoists
-            "crate": "#FFE66D",      # Yellow for crates
-            "depot": "#95E1D3",      # Light green for depots
-            "distributor": "#F38181", # Pink for distributors
+            "truck": "#00BFFF",       # Blue
+            "package": "#FFD700",     # Yellow
+            "depot": "#A9A9A9",       # Gray
+            "distributor": "#32CD32", # Green
         }
-    
-    def parse_state(self, state_str: str) -> Dict[str, Any]:
-        """
-        Parse a PDDL state string into structured data.
-        
-        TODO: Extract:
-        - Truck locations and contents
-        - Hoist locations and what they're holding
-        - Crate locations
-        - Available hoists at each location
-        
-        Args:
-            state_str: Raw PDDL state string
-            
-        Returns:
-            Dictionary with parsed state information
-        """
-        # TODO: Implement parsing logic
-        raise NotImplementedError("Depot state parsing not yet implemented")
-    
-    def render_state(self, state_data: Dict[str, Any], state_index: int) -> RenderedState:
+
+    def render(self, state: Set, objects: Dict[str, str], metadata: Optional[Dict] = None) -> RenderedState:
         """
         Render a depot state as a visual representation.
-        
-        TODO: Design visualization showing:
-        - Multiple locations (depots and distributors)
-        - Trucks at their current locations
-        - Hoists and what they're holding
-        - Crates at each location or in trucks
-        
+
         Args:
-            state_data: Parsed state information
-            state_index: Index of this state in the plan
-            
+            state: Set of predicates representing the state
+            objects: Dictionary mapping object names to types
+            metadata: Optional metadata (step number, action)
+
         Returns:
             RenderedState object with visual elements
         """
-        # TODO: Implement rendering logic
-        raise NotImplementedError("Depot state rendering not yet implemented")
+        visual_objects = []
+        visual_relations = []
+
+        # Step 1: Create basic positions by type and index
+        type_positions = {
+            "depot": [0, 0],
+            "distributor": [6, 0],
+            "truck": [3, -2],
+            "package": [3, 2],
+        }
+        instance_counters = {}  # Keep track of how many of each type were placed
+
+        def get_position(obj_type: str) -> List[float]:
+            base = type_positions.get(obj_type, [0, 0])
+            count = instance_counters.get(obj_type, 0)
+            instance_counters[obj_type] = count + 1
+            # Offset each object slightly
+            return [base[0] + count * 1.5, base[1]]
+
+        # Step 2: Create visual objects
+        for obj_name, obj_type in objects.items():
+            if obj_name in ["package", "truck", "depot", "distributor"]:
+                continue  # skip type names that got mistakenly parsed as objects
+
+            color = self.colors.get(obj_type, "#888888")
+            pos = get_position(obj_type)
+
+            visual_objects.append(VisualObject(
+                id=obj_name,
+                type=obj_type,
+                label=obj_name.upper(),
+                position=pos,
+                properties={"color": color}
+            ))
+
+        # Step 3: Create relations from predicates
+        for pred in state:
+            name = pred.name
+            params = pred.params
+
+            if name == "at":
+                pkg, loc = params
+                visual_relations.append(VisualRelation(
+                    type="at",
+                    source=pkg,
+                    target=loc,
+                    properties={"description": f"{pkg} at {loc}"}
+                ))
+
+            elif name == "at-truck":
+                truck, loc = params
+                visual_relations.append(VisualRelation(
+                    type="at-truck",
+                    source=truck,
+                    target=loc,
+                    properties={"description": f"{truck} at {loc}"}
+                ))
+
+            elif name == "in-truck":
+                pkg, truck = params
+                visual_relations.append(VisualRelation(
+                    type="in-truck",
+                    source=pkg,
+                    target=truck,
+                    properties={"description": f"{pkg} in {truck}"}
+                ))
+
+        return RenderedState(
+            domain=self.domain_name,
+            objects=visual_objects,
+            relations=visual_relations,
+            metadata=metadata
+        )

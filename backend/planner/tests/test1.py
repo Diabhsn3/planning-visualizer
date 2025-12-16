@@ -8,13 +8,13 @@ sys.path.insert(0, str(PLANNER_DIR))
 from planner_runner.runner import run_planner
 
 CASES = [
-    ("Blocks World p1", "domains/blocks_world/domain.pddl", "domains/blocks_world/p1.pddl"),
-    ("Logistics p1",    "domains/logistics/domain.pddl",    "domains/logistics/p1.pddl"),
-    ("Gripper p1",      "domains/gripper/domain.pddl",      "domains/gripper/p1.pddl"),
-    ("Depot p1",        "domains/depot/domain.pddl",        "domains/depot/p1.pddl"),
-    ("Hanoi p1",        "domains/hanoi/domain.pddl",        "domains/hanoi/p1.pddl"),
-    ("Rovers p1",       "domains/rovers/domain.pddl",       "domains/rovers/p1.pddl"),
-    ("Satellite p1",    "domains/satellite/domain.pddl",    "domains/satellite/p1.pddl"),
+    ("Blocks World p1", "backend/planner/domains/blocks_world/domain.pddl", "backend/planner/domains/blocks_world/p1.pddl"),
+    ("Logistics p1",    "backend/planner/domains/logistics/domain.pddl",    "backend/planner/domains/logistics/p1.pddl"),
+    ("Gripper p1",      "backend/planner/domains/gripper/domain.pddl",      "backend/planner/domains/gripper/p1.pddl"),
+    ("Depot p1",        "backend/planner/domains/depot/domain.pddl",        "backend/planner/domains/depot/p1.pddl"),
+    ("Hanoi p1",        "backend/planner/domains/hanoi/domain.pddl",        "backend/planner/domains/hanoi/p1.pddl"),
+    ("Rovers p1",       "backend/planner/domains/rovers/domain.pddl",       "backend/planner/domains/rovers/p1.pddl"),
+    ("Satellite p1",    "backend/planner/domains/satellite/domain.pddl",    "backend/planner/domains/satellite/p1.pddl"),
 ]
 
 

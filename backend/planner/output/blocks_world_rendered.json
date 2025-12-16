@@ -84,7 +84,7 @@
       "relations": [
         {
           "type": "ontable",
-          "source": "b",
+          "source": "a",
           "target": "table",
           "properties": {
             "relationship": "supported"
@@ -92,7 +92,7 @@
         },
         {
           "type": "ontable",
-          "source": "a",
+          "source": "b",
           "target": "table",
           "properties": {
             "relationship": "supported"
@@ -523,16 +523,16 @@
       "relations": [
         {
           "type": "on",
-          "source": "a",
-          "target": "b",
+          "source": "b",
+          "target": "c",
           "properties": {
             "relationship": "stacked"
           }
         },
         {
           "type": "on",
-          "source": "b",
-          "target": "c",
+          "source": "a",
+          "target": "b",
           "properties": {
             "relationship": "stacked"
           }

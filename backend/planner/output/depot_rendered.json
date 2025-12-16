@@ -1,0 +1,305 @@
+{
+  "domain": "depot",
+  "num_states": 4,
+  "states": [
+    {
+      "domain": "depot",
+      "objects": [
+        {
+          "id": "d1",
+          "type": "depot",
+          "label": "D1",
+          "position": [
+            0.0,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "s1",
+          "type": "distributor",
+          "label": "S1",
+          "position": [
+            6.0,
+            0
+          ],
+          "properties": {
+            "color": "#32CD32"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "truck",
+          "label": "T1",
+          "position": [
+            3.0,
+            -2
+          ],
+          "properties": {
+            "color": "#00BFFF"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "package",
+          "label": "C1",
+          "position": [
+            3.0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "d1",
+          "properties": {
+            "description": "t1 at d1"
+          }
+        },
+        {
+          "type": "at",
+          "source": "c1",
+          "target": "d1",
+          "properties": {
+            "description": "c1 at d1"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 0
+      }
+    },
+    {
+      "domain": "depot",
+      "objects": [
+        {
+          "id": "d1",
+          "type": "depot",
+          "label": "D1",
+          "position": [
+            0.0,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "s1",
+          "type": "distributor",
+          "label": "S1",
+          "position": [
+            6.0,
+            0
+          ],
+          "properties": {
+            "color": "#32CD32"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "truck",
+          "label": "T1",
+          "position": [
+            3.0,
+            -2
+          ],
+          "properties": {
+            "color": "#00BFFF"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "package",
+          "label": "C1",
+          "position": [
+            3.0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "d1",
+          "properties": {
+            "description": "t1 at d1"
+          }
+        },
+        {
+          "type": "in-truck",
+          "source": "c1",
+          "target": "t1",
+          "properties": {
+            "description": "c1 in t1"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 1,
+        "action": "(load c1 t1 d1)"
+      }
+    },
+    {
+      "domain": "depot",
+      "objects": [
+        {
+          "id": "d1",
+          "type": "depot",
+          "label": "D1",
+          "position": [
+            0.0,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "s1",
+          "type": "distributor",
+          "label": "S1",
+          "position": [
+            6.0,
+            0
+          ],
+          "properties": {
+            "color": "#32CD32"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "truck",
+          "label": "T1",
+          "position": [
+            3.0,
+            -2
+          ],
+          "properties": {
+            "color": "#00BFFF"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "package",
+          "label": "C1",
+          "position": [
+            3.0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "s1",
+          "properties": {
+            "description": "t1 at s1"
+          }
+        },
+        {
+          "type": "in-truck",
+          "source": "c1",
+          "target": "t1",
+          "properties": {
+            "description": "c1 in t1"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 2,
+        "action": "(drive t1 d1 s1)"
+      }
+    },
+    {
+      "domain": "depot",
+      "objects": [
+        {
+          "id": "d1",
+          "type": "depot",
+          "label": "D1",
+          "position": [
+            0.0,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "s1",
+          "type": "distributor",
+          "label": "S1",
+          "position": [
+            6.0,
+            0
+          ],
+          "properties": {
+            "color": "#32CD32"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "truck",
+          "label": "T1",
+          "position": [
+            3.0,
+            -2
+          ],
+          "properties": {
+            "color": "#00BFFF"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "package",
+          "label": "C1",
+          "position": [
+            3.0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at",
+          "source": "c1",
+          "target": "s1",
+          "properties": {
+            "description": "c1 at s1"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "s1",
+          "properties": {
+            "description": "t1 at s1"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 3,
+        "action": "(unload c1 t1 s1)"
+      }
+    }
+  ]
+}

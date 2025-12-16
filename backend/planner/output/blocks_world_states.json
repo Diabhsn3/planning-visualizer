@@ -1,41 +1,34 @@
 {
   "domain": "blocks-world",
   "problem": "bw-1",
-  "objects": {
-    "c": "block",
-    "b": "block",
-    "a": "block",
-    "block": "object"
-  },
   "plan": [
     "(pick-up b)",
     "(stack b c)",
     "(pick-up a)",
     "(stack a b)"
   ],
-  "num_states": 5,
   "states": [
     {
-      "ontable": [
-        [
-          "c"
-        ],
-        [
-          "b"
-        ],
-        [
-          "a"
-        ]
-      ],
       "clear": [
         [
-          "b"
-        ],
-        [
           "c"
         ],
         [
           "a"
+        ],
+        [
+          "b"
+        ]
+      ],
+      "ontable": [
+        [
+          "a"
+        ],
+        [
+          "b"
+        ],
+        [
+          "c"
         ]
       ],
       "handempty": [
@@ -45,41 +38,41 @@
     {
       "ontable": [
         [
-          "c"
+          "a"
         ],
         [
+          "c"
+        ]
+      ],
+      "clear": [
+        [
           "a"
+        ],
+        [
+          "c"
         ]
       ],
       "holding": [
         [
           "b"
         ]
-      ],
-      "clear": [
-        [
-          "c"
-        ],
-        [
-          "a"
-        ]
       ]
     },
     {
       "ontable": [
         [
-          "c"
+          "a"
         ],
         [
-          "a"
+          "c"
         ]
       ],
       "clear": [
         [
-          "b"
+          "a"
         ],
         [
-          "a"
+          "b"
         ]
       ],
       "handempty": [
@@ -116,6 +109,19 @@
       ]
     },
     {
+      "clear": [
+        [
+          "a"
+        ]
+      ],
+      "handempty": [
+        []
+      ],
+      "ontable": [
+        [
+          "c"
+        ]
+      ],
       "on": [
         [
           "a",
@@ -124,19 +130,6 @@
         [
           "b",
           "c"
-        ]
-      ],
-      "ontable": [
-        [
-          "c"
-        ]
-      ],
-      "handempty": [
-        []
-      ],
-      "clear": [
-        [
-          "a"
         ]
       ]
     }
