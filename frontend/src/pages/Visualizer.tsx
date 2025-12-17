@@ -74,25 +74,28 @@ const domains = [
   )
 )`;
     }else if (domain === "depot") {
-  return `(define (problem depot-default)
+  return `(define (problem depot-p1)
   (:domain depot)
+
   (:objects
-    truck1 - truck
-    package1 package2 - package
-    depot1 distributor1 - location
+      d1 - depot
+      s1 - distributor
+      t1 - truck
+      c1 - package
   )
+
   (:init
-    (at truck1 depot1)
-    (at package1 depot1)
-    (at package2 depot1)
+      (at c1 d1)
+      (at-truck t1 d1)
   )
+
   (:goal
-    (and
-      (at package1 distributor1)
-      (at package2 distributor1)
-    )
+      (and
+        (at c1 s1)
+      )
   )
-)`;
+)
+`;
 }
 
     return "";

@@ -84,7 +84,6 @@ else
 fi
 
 # Step 4: Check Fast Downward
-<<<<<<< Updated upstream
 echo ""
 echo "Step 4: Checking Fast Downward planner..."
 if [ -f "planning-tools/downward/fast-downward.py" ]; then
@@ -161,61 +160,6 @@ else
         cd ../..
     fi
 fi
-=======
-# echo ""
-# echo "Step 4: Checking Fast Downward planner..."
-# if [ -f "planning-tools/downward/fast-downward.py" ]; then
-#     if [ -d "planning-tools/downward/builds/release" ]; then
-#         echo "[OK] Fast Downward already built"
-#     else
-#         echo "[INFO] Fast Downward not built. Building now..."
-#         echo "This may take a few minutes..."
-#         cd planning-tools/downward
-#         if ./build.py 2>&1; then
-#             echo "[OK] Fast Downward built successfully"
-#             cd ../..
-#         else
-#             echo "[WARNING] Fast Downward build failed"
-#             echo "The app will start in fallback mode (limited functionality)"
-#             echo "See SETUP_MAC.md for troubleshooting"
-#             cd ../..
-#         fi
-#     fi
-# else
-#     echo "[INFO] Fast Downward not found. Initializing submodule..."
-#     git submodule update --init --recursive
-#     echo "[INFO] Building Fast Downward..."
-#     cd planning-tools/downward
-#     if ./build.py 2>&1; then
-#         echo "[OK] Fast Downward built successfully"
-#         cd ../..
-#     else
-#         echo "[WARNING] Fast Downward build failed"
-#         echo "The app will start in fallback mode"
-#         cd ../..
-#     fi
-# fi
-echo Step 4: Checking Visual Studio Build Tools...
-
-# REM נסה לטעון את הסביבה של VS Build Tools (x64)
-set "VS_BUILDTOOLS_PATH=%ProgramFiles(x86)%\Microsoft Visual Studio\2022\BuildTools"
-if exist "%VS_BUILDTOOLS_PATH%\VC\Auxiliary\Build\vcvarsall.bat" (
-    call "%VS_BUILDTOOLS_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64 >nul
-)
-
-
-where cl >nul 2>nul
-if %errorlevel%==0 (
-    echo [OK] Visual Studio Build Tools with C++ found
-) else (
-    echo [WARNING] Visual Studio Build Tools not found
-    echo.
-    echo Fast Downward requires Visual Studio Build Tools with C++ support.
-    echo The app will start in fallback mode (limited functionality).
-    echo.
-    pause
-)
->>>>>>> Stashed changes
 
 echo ""
 echo "======================================"
