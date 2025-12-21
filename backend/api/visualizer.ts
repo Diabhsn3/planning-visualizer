@@ -69,17 +69,26 @@ const DOMAIN_CONFIGS = {
     description: "Classic block stacking problem",
     domainFile: path.join(PLANNER_DIR, "domains/blocks_world/domain.pddl"),
   },
+
   "gripper": {
     name: "Gripper",
     description: "Robot with grippers moving balls between rooms",
     domainFile: path.join(PLANNER_DIR, "domains/gripper/domain.pddl"),
   },
+
   "depot": {
     name: "Depot",
     description: "Trucks deliver packages between depots and distributors",
     domainFile: path.join(PLANNER_DIR, "domains/depot/domain.pddl"),
   },
+
+  "hanoi": {
+    name: "Hanoi",
+    description: "Moving disks between pegs (Tower of Hanoi)",
+    domainFile: path.join(PLANNER_DIR, "domains/hanoi/domain.pddl"),
+  },
 };
+
 
 export const visualizerRouter = router({
   /**
@@ -88,7 +97,7 @@ export const visualizerRouter = router({
   generateStates: publicProcedure
     .input(
       z.object({
-        domain: z.enum(["blocks-world", "gripper", "depot"]),
+        domain: z.enum(["blocks-world", "gripper", "depot", "hanoi"]),
       })
     )
     .mutation(async ({ input }) => {
@@ -134,7 +143,7 @@ export const visualizerRouter = router({
       z.object({
         domainContent: z.string(),
         problemContent: z.string(),
-        domainName: z.enum(["blocks-world", "gripper", "depot"]),
+        domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi"]),
       })
     )
     .mutation(async ({ input }) => {

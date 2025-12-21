@@ -23,16 +23,18 @@ export default function Visualizer() {
     enabled: showStatus,
   });
 
-const domains = [
-  { id: "blocks-world", name: "Blocks World", description: "Classic block stacking problem" },
-  { id: "gripper", name: "Gripper", description: "Robot gripper moving balls between rooms" },
-  { id: "depot", name: "Depot", description: "Transporting packages via trucks and depots" },
-];
+  const domains = [
+    { id: "blocks-world", name: "Blocks World", description: "Classic block stacking problem" },
+    { id: "gripper", name: "Gripper", description: "Robot gripper moving balls between rooms" },
+    { id: "depot", name: "Depot", description: "Transporting packages via trucks and depots" },
+    { id: "hanoi", name: "Hanoi", description: "Moving disks between pegs (Tower of Hanoi)" },
+  ];
+
 
 
   const getDefaultProblem = (domain: string): string => {
-    if (domain === "blocks-world") {
-      return `(define (problem bw-default)
+  if (domain === "blocks-world") {
+    return `(define (problem bw-default)
   (:domain blocks-world)
   (:objects a b c - block)
   (:init
@@ -51,8 +53,10 @@ const domains = [
     )
   )
 )`;
-    } else if (domain === "gripper") {
-      return `(define (problem gripper-default)
+  }
+
+  if (domain === "gripper") {
+    return `(define (problem gripper-default)
   (:domain gripper)
   (:objects
     rooma roomb - room
@@ -73,33 +77,53 @@ const domains = [
     )
   )
 )`;
-    }else if (domain === "depot") {
-  return `(define (problem depot-p1)
+  }
+
+  if (domain === "depot") {
+    return `(define (problem depot-p1)
   (:domain depot)
-
   (:objects
-      d1 - depot
-      s1 - distributor
-      t1 - truck
-      c1 - package
+    d1 - depot
+    s1 - distributor
+    t1 - truck
+    c1 - package
   )
-
   (:init
-      (at c1 d1)
-      (at-truck t1 d1)
+    (at c1 d1)
+    (at-truck t1 d1)
   )
-
   (:goal
-      (and
-        (at c1 s1)
-      )
+    (and
+      (at c1 s1)
+    )
   )
-)
-`;
-}
+)`;
+  }
 
-    return "";
-  };
+  if (domain === "hanoi") {
+    return `(define (problem hanoi-default)
+  (:domain hanoi)
+  (:objects
+    d1 d2 d3 - disk
+    p1 p2 p3 - peg
+  )
+  (:init
+    (on d1 p1)
+    (on d2 p1)
+    (on d3 p1)
+  )
+  (:goal
+    (and
+      (on d1 p3)
+      (on d2 p3)
+      (on d3 p3)
+    )
+  )
+)`;
+  }
+
+  return "";
+};
 
   const prebuiltStates = null;
 

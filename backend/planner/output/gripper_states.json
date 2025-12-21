@@ -35,17 +35,6 @@
       ]
     },
     {
-      "at": [
-        [
-          "ball2",
-          "rooma"
-        ]
-      ],
-      "free": [
-        [
-          "right"
-        ]
-      ],
       "at-robby": [
         [
           "rooma"
@@ -56,23 +45,34 @@
           "ball1",
           "left"
         ]
+      ],
+      "at": [
+        [
+          "ball2",
+          "rooma"
+        ]
+      ],
+      "free": [
+        [
+          "right"
+        ]
       ]
     },
     {
-      "carry": [
-        [
-          "ball2",
-          "right"
-        ],
-        [
-          "ball1",
-          "left"
-        ]
-      ],
       "at-robby": [
         [
           "rooma"
         ]
+      ],
+      "carry": [
+        [
+          "ball2",
+          "right"
+        ],
+        [
+          "ball1",
+          "left"
+        ]
       ]
     },
     {
@@ -99,11 +99,6 @@
           "roomb"
         ]
       ],
-      "free": [
-        [
-          "left"
-        ]
-      ],
       "carry": [
         [
           "ball2",
@@ -114,30 +109,35 @@
         [
           "roomb"
         ]
-      ]
-    },
-    {
+      ],
       "free": [
         [
           "left"
-        ],
-        [
-          "right"
         ]
-      ],
+      ]
+    },
+    {
       "at": [
         [
-          "ball2",
+          "ball1",
           "roomb"
         ],
         [
-          "ball1",
+          "ball2",
           "roomb"
         ]
       ],
       "at-robby": [
         [
           "roomb"
+        ]
+      ],
+      "free": [
+        [
+          "left"
+        ],
+        [
+          "right"
         ]
       ]
     }

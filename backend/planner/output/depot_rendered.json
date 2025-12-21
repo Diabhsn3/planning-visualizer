@@ -56,19 +56,19 @@
       ],
       "relations": [
         {
-          "type": "at-truck",
-          "source": "t1",
-          "target": "d1",
-          "properties": {
-            "description": "t1 at d1"
-          }
-        },
-        {
           "type": "at",
           "source": "c1",
           "target": "d1",
           "properties": {
             "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "d1",
+          "properties": {
+            "description": "t1 at d1"
           }
         }
       ],
@@ -280,19 +280,19 @@
       ],
       "relations": [
         {
-          "type": "at",
-          "source": "c1",
-          "target": "s1",
-          "properties": {
-            "description": "c1 at s1"
-          }
-        },
-        {
           "type": "at-truck",
           "source": "t1",
           "target": "s1",
           "properties": {
             "description": "t1 at s1"
+          }
+        },
+        {
+          "type": "at",
+          "source": "c1",
+          "target": "s1",
+          "properties": {
+            "description": "c1 at s1"
           }
         }
       ],

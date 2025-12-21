@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { renderDepot } from "@/components/renderDepot";
-
+import {renderHanoi} from "@/components/renderHanoi";
 
 // Global robot image for gripper domain
 const robotImage = new Image();
@@ -87,6 +87,8 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
       const badgeLocIds = new Set(state.objects.filter(o => o.type === "depot" || o.type === "distributor").map(o => o.id));
       renderDepot(ctx, state, {showBadges: isFirst || isLast,badgeLocIds});
       // renderDepot(ctx, state,  { showBadges: isFirst || isLast });
+    } else if(state.domain === "hanoi"){
+      renderHanoi(ctx, state);
     }  
      else {
       renderDefault(ctx, state);
