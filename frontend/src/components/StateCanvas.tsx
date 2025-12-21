@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { renderDepot } from "@/components/renderDepot";
+
 
 // Global robot image for gripper domain
 const robotImage = new Image();
@@ -82,7 +84,9 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     } else if (state.domain === "gripper") {
       renderGripper(ctx, state);
     } else if(state.domain === "depot"){
-      renderDepot(ctx, state,  { showBadges: isFirst || isLast });
+      const badgeLocIds = new Set(state.objects.filter(o => o.type === "depot" || o.type === "distributor").map(o => o.id));
+      renderDepot(ctx, state, {showBadges: isFirst || isLast,badgeLocIds});
+      // renderDepot(ctx, state,  { showBadges: isFirst || isLast });
     }  
      else {
       renderDefault(ctx, state);
@@ -90,7 +94,9 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
 
     // Restore context state
     ctx.restore();
-  }, [state, width, height, scale, offset]);
+    }, [state, width, height, scale, offset, isFirst, isLast]);
+
+  // }, [state, width, height, scale, offset]);
 
   // Handle mouse wheel for zoom
   // const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
@@ -232,295 +238,6 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
       </div>
     </div>
   );
-}
-
-
-/**
- * DEPOT DOMAIN
- */
-
-const truckImg = new Image();
-truckImg.src = "/truck.png";
-
-const packageImg = new Image();
-packageImg.src = "/package.png";
-
-function renderDepot(ctx: CanvasRenderingContext2D, state: RenderedState) {
-  const gridSize = 100;
-  const padding = 22;
-
-  const truckW = 70, truckH = 44;
-  const pkgW = 44, pkgH = 44;
-
-  const locations = state.objects.filter((o) => o.type === "depot" || o.type === "distributor");
-  const trucks = state.objects.filter((o) => o.type === "truck");
-  const packages = state.objects.filter((o) => o.type === "package");
-
-  // relations
-  const truckAt = new Map<string, string>();        // truckId -> locationId
-  const packageAt = new Map<string, string>();      // pkgId -> locationId
-  const packageInTruck = new Map<string, string>(); // pkgId -> truckId
-
-  for (const rel of state.relations) {
-    if (rel.type === "at-truck" && rel.target) truckAt.set(rel.source, rel.target);
-    if (rel.type === "at" && rel.target) packageAt.set(rel.source, rel.target);
-    if (rel.type === "in-truck" && rel.target) packageInTruck.set(rel.source, rel.target);
-  }
-
-  const locById = new Map(locations.map((l) => [l.id, l]));
-  const truckById = new Map(trucks.map((t) => [t.id, t]));
-
-  // helpers
-  const roundRectPath = (x: number, y: number, w: number, h: number, r = 16) => {
-    const rr = Math.min(r, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rr);
-    ctx.arcTo(x + w, y + h, x, y + h, rr);
-    ctx.arcTo(x, y + h, x, y, rr);
-    ctx.arcTo(x, y, x + w, y, rr);
-    ctx.closePath();
-  };
-
-  const drawShadowedImage = (
-    img: HTMLImageElement,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    fallbackColor: string
-  ) => {
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.18)";
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 3;
-
-    if (img.complete) ctx.drawImage(img, x, y, w, h);
-    else {
-      ctx.fillStyle = fallbackColor;
-      ctx.fillRect(x, y, w, h);
-    }
-    ctx.restore();
-  };
-
-  // bounds
-  let maxGX = 0, maxGY = 0;
-  for (const loc of locations) {
-    if (!loc.position) continue;
-    maxGX = Math.max(maxGX, loc.position[0]);
-    maxGY = Math.max(maxGY, loc.position[1]);
-  }
-  const cols = Math.max(8, maxGX + 2);
-  const rows = Math.max(5, maxGY + 2);
-  const mapW = cols * gridSize;
-  const mapH = rows * gridSize;
-
-  // center in current transform
-  const t = ctx.getTransform();
-  const currentScale = t.a || 1;
-  const viewW = ctx.canvas.width / currentScale;
-  const viewH = ctx.canvas.height / currentScale;
-
-  const startX = Math.max(padding, (viewW - mapW) / 2);
-  const startY = Math.max(padding, (viewH - mapH) / 2);
-
-  const gridToPx = (gx: number, gy: number) => ({
-    px: startX + gx * gridSize,
-    py: startY + gy * gridSize,
-  });
-
-  // background + panel
-  ctx.save();
-  ctx.fillStyle = "#f6f7fb";
-  ctx.fillRect(0, 0, viewW, viewH);
-  ctx.restore();
-
-  ctx.save();
-  ctx.shadowColor = "rgba(0,0,0,0.10)";
-  ctx.shadowBlur = 18;
-  ctx.shadowOffsetY = 6;
-  roundRectPath(startX - 12, startY - 12, mapW + 24, mapH + 24, 18);
-  ctx.fillStyle = "#ffffff";
-  ctx.fill();
-  ctx.restore();
-
-  // grid
-  ctx.save();
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const px = startX + x * gridSize;
-      const py = startY + y * gridSize;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(px, py, gridSize, gridSize);
-      ctx.strokeStyle = "rgba(0,0,0,0.08)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px, py, gridSize, gridSize);
-    }
-  }
-  ctx.strokeStyle = "rgba(0,0,0,0.18)";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(startX, startY, mapW, mapH);
-  ctx.restore();
-
-  // build cell occupancy
-  const cell = new Map<string, { truck?: VisualObject; pkgsAt: VisualObject[]; pkgsInTruck: VisualObject[] }>();
-  const key = (x: number, y: number) => `${x},${y}`;
-  const ensure = (x: number, y: number) => {
-    const k = key(x, y);
-    if (!cell.has(k)) cell.set(k, { pkgsAt: [], pkgsInTruck: [] });
-    return cell.get(k)!;
-  };
-
-  // place trucks
-  for (const tr of trucks) {
-    const locId = truckAt.get(tr.id);
-    const loc = locId ? locById.get(locId) : undefined;
-    if (!loc?.position) continue;
-    const [gx, gy] = loc.position;
-    ensure(gx, gy).truck = tr;
-  }
-
-  // place packages: split between at-location and in-truck
-  for (const p of packages) {
-    if (packageInTruck.has(p.id)) {
-      const trId = packageInTruck.get(p.id)!;
-      const trLocId = truckAt.get(trId);
-      const loc = trLocId ? locById.get(trLocId) : undefined;
-      if (!loc?.position) continue;
-      const [gx, gy] = loc.position;
-      ensure(gx, gy).pkgsInTruck.push(p);
-    } else if (packageAt.has(p.id)) {
-      const locId = packageAt.get(p.id)!;
-      const loc = locById.get(locId);
-      if (!loc?.position) continue;
-      const [gx, gy] = loc.position;
-      ensure(gx, gy).pkgsAt.push(p);
-    }
-  }
-
-  // draw locations (📍/✅)
-  for (const loc of locations) {
-    if (!loc.position) continue;
-    const [gx, gy] = loc.position;
-    const { px, py } = gridToPx(gx, gy);
-    const props = loc.properties || {};
-
-    ctx.save();
-    roundRectPath(px + 8, py + 8, gridSize - 16, gridSize - 16, 16);
-    ctx.fillStyle = props.color || "#dddddd";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,0.30)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    const icon = loc.type === "depot" ? "📍" : "✅";
-    roundRectPath(px + gridSize / 2 - 22, py + 16, 44, 28, 14);
-    ctx.fillStyle = "rgba(255,255,255,0.90)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,0.18)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.fillStyle = "#111";
-    ctx.font = "bold 34px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(icon, px + gridSize / 2, py + 30);
-    ctx.restore();
-  }
-
-  // draw trucks + packages per cell
-  for (const [k, v] of cell.entries()) {
-    const [gxStr, gyStr] = k.split(",");
-    const gx = Number(gxStr);
-    const gy = Number(gyStr);
-    const { px, py } = gridToPx(gx, gy);
-
-    const hasTruck = !!v.truck;
-    const hasAt = v.pkgsAt.length > 0;
-    const hasIn = v.pkgsInTruck.length > 0;
-
-    const centerY = py + gridSize * 0.62;
-
-    // slots
-    const leftCX = px + gridSize * 0.34;
-    const rightCX = px + gridSize * 0.72;
-    const midCX = px + gridSize * 0.52;
-
-    // TRUCK position (if packages are on the ground too, keep side-by-side)
-    const truckCX = hasTruck && hasAt ? leftCX : (hasTruck ? midCX : midCX);
-
-    // draw truck
-    if (v.truck) {
-      const tx = truckCX - truckW / 2;
-      const ty = centerY - truckH / 2;
-      drawShadowedImage(truckImg, tx, ty, truckW, truckH, "#00BFFF");
-
-      // ✅ IMPORTANT: packages IN-TRUCK are drawn ON TOP of the truck
-      if (hasIn) {
-        const topPkgX = tx + truckW * 0.58 - pkgW * 0.32;
-        const topPkgY = ty - pkgH * 0.20;
-
-        ctx.save();
-        // a tiny "loaded" glow so state 1/2 look different
-        ctx.shadowColor = "rgba(255, 200, 0, 0.35)";
-        ctx.shadowBlur = 14;
-
-        // draw first package on truck
-        drawShadowedImage(packageImg, topPkgX, topPkgY, pkgW * 0.65, pkgH * 0.65, "#FFD700");
-        ctx.restore();
-
-        // badge with count if more than 1
-        if (v.pkgsInTruck.length > 1) {
-          const extra = v.pkgsInTruck.length;
-          const bx = tx + truckW - 10;
-          const by = ty - 6;
-
-          ctx.save();
-          roundRectPath(bx - 16, by - 10, 34, 20, 10);
-          ctx.fillStyle = "rgba(17,17,17,0.85)";
-          ctx.fill();
-          ctx.fillStyle = "#fff";
-          ctx.font = "bold 11px Arial";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText(`${extra}`, bx + 1, by);
-          ctx.restore();
-        }
-      }
-    }
-
-    // packages AT-LOCATION (on the ground, right side if truck exists)
-    if (hasAt) {
-      const pkgCX = hasTruck ? rightCX : midCX;
-      const maxShow = 2;
-      const show = Math.min(v.pkgsAt.length, maxShow);
-
-      for (let i = 0; i < show; i++) {
-        const x = pkgCX - pkgW / 2;
-        const y = (centerY - pkgH / 2) + i * (pkgH + 8);
-        drawShadowedImage(packageImg, x, y, pkgW, pkgH, "#FFD700");
-        // ❌ no border, no label
-      }
-
-      if (v.pkgsAt.length > maxShow) {
-        const extra = v.pkgsAt.length - maxShow;
-        const bx = pkgCX + 16;
-        const by = centerY - pkgH / 2 - 8;
-
-        ctx.save();
-        roundRectPath(bx - 16, by - 10, 34, 20, 10);
-        ctx.fillStyle = "rgba(17,17,17,0.85)";
-        ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 11px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(`+${extra}`, bx + 1, by);
-        ctx.restore();
-      }
-    }
-  }
 }
 
 
