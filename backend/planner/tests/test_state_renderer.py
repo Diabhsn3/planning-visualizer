@@ -183,6 +183,88 @@ def test_depot_renderer():
 
     return True
     
+def test_rovers_renderer():
+    """Test Rovers domain renderer with state sequence."""
+    print("\n" + "=" * 60)
+    print("Testing Rovers Renderer")
+    print("=" * 60)
+
+    domain_path = PLANNER_DIR / "domains/rovers/domain.pddl"
+    problem_path = PLANNER_DIR / "domains/rovers/p1.pddl"
+
+    # Step 1: Generate states
+    print("\n[Step 1] Generating states...")
+    sg = StateGenerator(str(domain_path), str(problem_path))
+
+    plan = [
+        "(calibrate r1 w1)",
+        "(navigate r1 w1 w2)",
+        "(take-image r1 t1 w2)",
+        "(communicate r1 t1)"
+    ]
+
+    states = sg.apply_plan(plan)
+    print(f"Generated {len(states)} states")
+
+    # Step 2: Get renderer
+    print("\n[Step 2] Getting renderer...")
+    renderer = RendererFactory.get_renderer(sg.parser.domain_name)
+    print(f"Using renderer: {renderer.__class__.__name__}")
+
+    # Step 3: Render states
+    print("\n[Step 3] Rendering states...")
+    rendered_states = renderer.render_sequence(
+        states,
+        sg.parser.objects,
+        plan
+    )
+
+    print(f"Rendered {len(rendered_states)} states")
+
+    # Show first & last rendered state
+    for i in [0, len(rendered_states) - 1]:
+        rendered = rendered_states[i]
+        title = "Initial" if i == 0 else "Final"
+
+        print(f"\n{'='*50}")
+        print(f"Rendered State {i} ({title})")
+        print(f"{'='*50}")
+
+        print(f"  Domain: {rendered.domain}")
+        print(f"  Objects: {len(rendered.objects)}")
+        print(f"  Relations: {len(rendered.relations)}")
+
+        # Count object types
+        types = {}
+        for obj in rendered.objects:
+            types[obj.type] = types.get(obj.type, 0) + 1
+        print(f"  Object types: {types}")
+
+    # Step 4: Export to JSON
+    print("\n[Step 4] Exporting to JSON...")
+    json_output = renderer.render_sequence_to_json(
+        states,
+        sg.parser.objects,
+        plan
+    )
+
+    output_file = PLANNER_DIR / "output" / "rovers_rendered.json"
+    output_file.parent.mkdir(exist_ok=True)
+
+    with open(output_file, 'w') as f:
+        f.write(json_output)
+
+    print(f"✓ Rendered states saved to: {output_file}")
+
+    # Validate JSON structure
+    data = json.loads(json_output)
+    assert data["domain"] == "rovers"
+    assert data["num_states"] == len(states)
+    assert len(data["states"]) == len(states)
+
+    print("✓ JSON structure validated")
+
+    return True
 
 ################## sola    
 def test_blocks_world_renderer():
@@ -453,6 +535,7 @@ def main():
 
     test_depot_renderer()
     test_hanoi_renderer()
+    test_rovers_renderer()
 
 # def main():
 #     """Run all tests."""

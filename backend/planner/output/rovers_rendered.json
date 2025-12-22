@@ -1,0 +1,430 @@
+{
+  "domain": "rovers",
+  "num_states": 5,
+  "states": [
+    {
+      "domain": "rovers",
+      "objects": [
+        {
+          "id": "r1",
+          "type": "rover",
+          "label": "r1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w2",
+          "type": "waypoint",
+          "label": "w2",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w1",
+          "type": "waypoint",
+          "label": "w1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "rover",
+          "type": "waypoint",
+          "label": "rover",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "target",
+          "label": "t1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "waypoint",
+          "type": "target",
+          "label": "waypoint",
+          "properties": {
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "connected",
+          "source": "w1",
+          "target": "w2"
+        },
+        {
+          "type": "connected",
+          "source": "w2",
+          "target": "w1"
+        },
+        {
+          "type": "at-rover",
+          "source": "r1",
+          "target": "w1"
+        },
+        {
+          "type": "at-target",
+          "source": "t1",
+          "target": "w2"
+        }
+      ],
+      "metadata": {
+        "step": 0
+      }
+    },
+    {
+      "domain": "rovers",
+      "objects": [
+        {
+          "id": "r1",
+          "type": "rover",
+          "label": "r1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w2",
+          "type": "waypoint",
+          "label": "w2",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w1",
+          "type": "waypoint",
+          "label": "w1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "rover",
+          "type": "waypoint",
+          "label": "rover",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "target",
+          "label": "t1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "waypoint",
+          "type": "target",
+          "label": "waypoint",
+          "properties": {
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-target",
+          "source": "t1",
+          "target": "w2"
+        },
+        {
+          "type": "at-rover",
+          "source": "r1",
+          "target": "w1"
+        },
+        {
+          "type": "calibrated",
+          "source": "r1"
+        },
+        {
+          "type": "connected",
+          "source": "w1",
+          "target": "w2"
+        },
+        {
+          "type": "connected",
+          "source": "w2",
+          "target": "w1"
+        }
+      ],
+      "metadata": {
+        "step": 1,
+        "action": "(calibrate r1 w1)"
+      }
+    },
+    {
+      "domain": "rovers",
+      "objects": [
+        {
+          "id": "r1",
+          "type": "rover",
+          "label": "r1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w2",
+          "type": "waypoint",
+          "label": "w2",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w1",
+          "type": "waypoint",
+          "label": "w1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "rover",
+          "type": "waypoint",
+          "label": "rover",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "target",
+          "label": "t1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "waypoint",
+          "type": "target",
+          "label": "waypoint",
+          "properties": {
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-target",
+          "source": "t1",
+          "target": "w2"
+        },
+        {
+          "type": "calibrated",
+          "source": "r1"
+        },
+        {
+          "type": "connected",
+          "source": "w1",
+          "target": "w2"
+        },
+        {
+          "type": "at-rover",
+          "source": "r1",
+          "target": "w2"
+        },
+        {
+          "type": "connected",
+          "source": "w2",
+          "target": "w1"
+        }
+      ],
+      "metadata": {
+        "step": 2,
+        "action": "(navigate r1 w1 w2)"
+      }
+    },
+    {
+      "domain": "rovers",
+      "objects": [
+        {
+          "id": "r1",
+          "type": "rover",
+          "label": "r1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w2",
+          "type": "waypoint",
+          "label": "w2",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w1",
+          "type": "waypoint",
+          "label": "w1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "rover",
+          "type": "waypoint",
+          "label": "rover",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "target",
+          "label": "t1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "waypoint",
+          "type": "target",
+          "label": "waypoint",
+          "properties": {
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "connected",
+          "source": "w2",
+          "target": "w1"
+        },
+        {
+          "type": "at-target",
+          "source": "t1",
+          "target": "w2"
+        },
+        {
+          "type": "calibrated",
+          "source": "r1"
+        },
+        {
+          "type": "connected",
+          "source": "w1",
+          "target": "w2"
+        },
+        {
+          "type": "at-rover",
+          "source": "r1",
+          "target": "w2"
+        },
+        {
+          "type": "have-image",
+          "source": "r1",
+          "target": "t1"
+        }
+      ],
+      "metadata": {
+        "step": 3,
+        "action": "(take-image r1 t1 w2)"
+      }
+    },
+    {
+      "domain": "rovers",
+      "objects": [
+        {
+          "id": "r1",
+          "type": "rover",
+          "label": "r1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w2",
+          "type": "waypoint",
+          "label": "w2",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "w1",
+          "type": "waypoint",
+          "label": "w1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "rover",
+          "type": "waypoint",
+          "label": "rover",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "target",
+          "label": "t1",
+          "properties": {
+            "status": "unknown"
+          }
+        },
+        {
+          "id": "waypoint",
+          "type": "target",
+          "label": "waypoint",
+          "properties": {
+            "status": "unknown"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "connected",
+          "source": "w2",
+          "target": "w1"
+        },
+        {
+          "type": "at-target",
+          "source": "t1",
+          "target": "w2"
+        },
+        {
+          "type": "calibrated",
+          "source": "r1"
+        },
+        {
+          "type": "connected",
+          "source": "w1",
+          "target": "w2"
+        },
+        {
+          "type": "at-rover",
+          "source": "r1",
+          "target": "w2"
+        },
+        {
+          "type": "have-image",
+          "source": "r1",
+          "target": "t1"
+        },
+        {
+          "type": "communicated",
+          "source": "t1"
+        }
+      ],
+      "metadata": {
+        "step": 4,
+        "action": "(communicate r1 t1)"
+      }
+    }
+  ]
+}

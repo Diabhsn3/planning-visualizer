@@ -1,0 +1,169 @@
+{
+  "domain": "rovers",
+  "problem": "rovers-1",
+  "plan": [
+    "(calibrate r1 w1)",
+    "(navigate r1 w1 w2)",
+    "(take-image r1 t1 w2)",
+    "(communicate r1 t1)"
+  ],
+  "states": [
+    {
+      "at-target": [
+        [
+          "t1",
+          "w2"
+        ]
+      ],
+      "at-rover": [
+        [
+          "r1",
+          "w1"
+        ]
+      ],
+      "connected": [
+        [
+          "w2",
+          "w1"
+        ],
+        [
+          "w1",
+          "w2"
+        ]
+      ]
+    },
+    {
+      "at-rover": [
+        [
+          "r1",
+          "w1"
+        ]
+      ],
+      "connected": [
+        [
+          "w2",
+          "w1"
+        ],
+        [
+          "w1",
+          "w2"
+        ]
+      ],
+      "calibrated": [
+        [
+          "r1"
+        ]
+      ],
+      "at-target": [
+        [
+          "t1",
+          "w2"
+        ]
+      ]
+    },
+    {
+      "calibrated": [
+        [
+          "r1"
+        ]
+      ],
+      "connected": [
+        [
+          "w2",
+          "w1"
+        ],
+        [
+          "w1",
+          "w2"
+        ]
+      ],
+      "at-target": [
+        [
+          "t1",
+          "w2"
+        ]
+      ],
+      "at-rover": [
+        [
+          "r1",
+          "w2"
+        ]
+      ]
+    },
+    {
+      "calibrated": [
+        [
+          "r1"
+        ]
+      ],
+      "connected": [
+        [
+          "w2",
+          "w1"
+        ],
+        [
+          "w1",
+          "w2"
+        ]
+      ],
+      "have-image": [
+        [
+          "r1",
+          "t1"
+        ]
+      ],
+      "at-target": [
+        [
+          "t1",
+          "w2"
+        ]
+      ],
+      "at-rover": [
+        [
+          "r1",
+          "w2"
+        ]
+      ]
+    },
+    {
+      "calibrated": [
+        [
+          "r1"
+        ]
+      ],
+      "connected": [
+        [
+          "w2",
+          "w1"
+        ],
+        [
+          "w1",
+          "w2"
+        ]
+      ],
+      "have-image": [
+        [
+          "r1",
+          "t1"
+        ]
+      ],
+      "communicated": [
+        [
+          "t1"
+        ]
+      ],
+      "at-target": [
+        [
+          "t1",
+          "w2"
+        ]
+      ],
+      "at-rover": [
+        [
+          "r1",
+          "w2"
+        ]
+      ]
+    }
+  ]
+}

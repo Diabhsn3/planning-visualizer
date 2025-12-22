@@ -87,6 +87,12 @@ const DOMAIN_CONFIGS = {
     description: "Moving disks between pegs (Tower of Hanoi)",
     domainFile: path.join(PLANNER_DIR, "domains/hanoi/domain.pddl"),
   },
+  "rovers": {
+  name: "Rovers",
+  description: "Planetary rovers navigating between waypoints and collecting images",
+  domainFile: path.join(PLANNER_DIR, "domains/rovers/domain.pddl"),
+  },
+
 };
 
 
@@ -97,7 +103,7 @@ export const visualizerRouter = router({
   generateStates: publicProcedure
     .input(
       z.object({
-        domain: z.enum(["blocks-world", "gripper", "depot", "hanoi"]),
+        domain: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"]),
       })
     )
     .mutation(async ({ input }) => {
@@ -143,7 +149,7 @@ export const visualizerRouter = router({
       z.object({
         domainContent: z.string(),
         problemContent: z.string(),
-        domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi"]),
+        domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"]),
       })
     )
     .mutation(async ({ input }) => {

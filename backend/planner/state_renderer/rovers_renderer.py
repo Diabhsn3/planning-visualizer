@@ -1,84 +1,239 @@
-"""
-Rovers Domain Renderer
+# backend/planner/state_renderer/rovers_renderer.py
 
-TODO: Implement visualization for the Rovers domain.
-
-The Rovers domain involves:
-- Rovers that can navigate between waypoints
-- Cameras and instruments for taking images and samples
-- Waypoints connected by paths
-- Objectives to achieve (images, soil/rock samples)
-
-Reference implementations:
-- gripper_renderer.py for multi-location visualization
-- depot_renderer.py for object management
-"""
-
-from typing import Dict, List, Any
-from .base_renderer import BaseRenderer, RenderedState
+from typing import Dict, List, Optional, Set
+from .base_renderer import BaseStateRenderer, RenderedState, VisualObject, VisualRelation
 
 
-class RoversRenderer(BaseRenderer):
+class RoversRenderer(BaseStateRenderer):
     """
     Renderer for the Rovers planning domain.
-    
-    TODO: Implement the following methods:
-    1. parse_state() - Extract rovers, waypoints, and objectives
-    2. render_state() - Create visual representation of planetary exploration
-    3. Design waypoint network layout
-    4. Show rover positions and equipment status
+    Converts planning states into visual objects and relations.
     """
-    
+
     def __init__(self):
-        super().__init__()
-        # TODO: Define colors for rovers objects
+        super().__init__("rovers")
         self.colors = {
-            "rover": "#FF6B6B",       # Red for rovers
-            "waypoint": "#95E1D3",    # Light green for waypoints
-            "camera": "#4ECDC4",      # Teal for cameras
-            "sample": "#FFE66D",      # Yellow for samples
-            "objective": "#F38181",   # Pink for objectives
-            "path": "#CCCCCC",        # Gray for paths between waypoints
+            "rover": "#FF6B6B",        # Red
+            "waypoint": "#95E1D3",     # Light green
+            "target": "#FFE66D",       # Yellow
+            "path": "rgba(0,0,0,0.20)" # Gray-ish
         }
-    
-    def parse_state(self, state_str: str) -> Dict[str, Any]:
-        """
-        Parse a PDDL state string into structured data.
-        
-        TODO: Extract:
-        - Rover positions and equipment
-        - Waypoint locations and connections
-        - Camera and instrument status
-        - Collected samples and images
-        - Remaining objectives
-        
-        Args:
-            state_str: Raw PDDL state string
-            
-        Returns:
-            Dictionary with parsed state information
-        """
-        # TODO: Implement parsing logic
-        raise NotImplementedError("Rovers state parsing not yet implemented")
-    
-    def render_state(self, state_data: Dict[str, Any], state_index: int) -> RenderedState:
+
+    def render(
+        self,
+        state: Set,
+        objects: Dict[str, str],
+        metadata: Optional[Dict] = None
+    ) -> RenderedState:
         """
         Render a rovers state as a visual representation.
-        
-        TODO: Design visualization showing:
-        - Network of waypoints (nodes)
-        - Paths between waypoints (edges)
-        - Rovers at their current waypoints
-        - Equipment status (cameras, instruments)
-        - Completed vs. pending objectives
-        - Visual indication of rover capabilities
-        
+
         Args:
-            state_data: Parsed state information
-            state_index: Index of this state in the plan
-            
+            state: Set of predicates representing the state
+            objects: Dictionary mapping object names to types
+            metadata: Optional metadata (step number, action)
+
         Returns:
             RenderedState object with visual elements
         """
-        # TODO: Implement rendering logic
-        raise NotImplementedError("Rovers state rendering not yet implemented")
+        visual_objects: List[VisualObject] = []
+        visual_relations: List[VisualRelation] = []
+
+        # ------------------------------------------------------------
+        # 1) Collect objects by type
+        # ------------------------------------------------------------
+        rovers = [name for name, typ in objects.items() if typ == "rover"]
+        waypoints = [name for name, typ in objects.items() if typ == "waypoint"]
+        targets = [name for name, typ in objects.items() if typ == "target"]
+
+        # Defensive: sometimes parser mistakenly includes type names as objects
+        rovers = [r for r in rovers if r not in ["rover", "waypoint", "target"]]
+        waypoints = [w for w in waypoints if w not in ["rover", "waypoint", "target"]]
+        targets = [t for t in targets if t not in ["rover", "waypoint", "target"]]
+
+        # ------------------------------------------------------------
+        # 2) Parse predicates into useful maps/sets
+        # ------------------------------------------------------------
+        rover_at: Dict[str, str] = {}           # r -> w
+        target_at: Dict[str, str] = {}          # t -> w
+        calibrated: Set[str] = set()            # set of rovers
+        have_image: Set[tuple] = set()          # (r, t)
+        communicated: Set[str] = set()          # set of targets
+        connections: Set[tuple] = set()         # (w1, w2) directed, but we can dedup
+
+        for pred in state:
+            name = pred.name
+            params = pred.params
+
+            if name == "at-rover":
+                r, w = params
+                rover_at[r] = w
+
+            elif name == "at-target":
+                t, w = params
+                target_at[t] = w
+
+            elif name == "calibrated":
+                (r,) = params
+                calibrated.add(r)
+
+            elif name == "have-image":
+                r, t = params
+                have_image.add((r, t))
+
+            elif name == "communicated":
+                (t,) = params
+                communicated.add(t)
+
+            elif name == "connected":
+                w1, w2 = params
+                # normalize undirected edge: store sorted to avoid duplicates
+                a, b = sorted([w1, w2])
+                connections.add((a, b))
+
+        # ------------------------------------------------------------
+        # 3) Layout: give each waypoint a position (grid-like)
+        # ------------------------------------------------------------
+        # Sort waypoints by numeric suffix if possible: w1,w2,w3...
+        def num_suffix(x: str) -> int:
+            import re
+            m = re.search(r"(\d+)$", x)
+            return int(m.group(1)) if m else 9999
+
+        waypoints_sorted = sorted(waypoints, key=lambda w: (num_suffix(w), w))
+
+        # Simple layout: place waypoints in a row/2-rows grid
+        # (works well for small-medium maps; you can upgrade later)
+        cols = max(3, min(6, len(waypoints_sorted)))
+        positions: Dict[str, List[float]] = {}
+
+        for idx, w in enumerate(waypoints_sorted):
+            gx = idx % cols
+            gy = idx // cols
+            positions[w] = [gx * 2.0, gy * 2.0]  # spacing
+
+        # ------------------------------------------------------------
+        # 4) Create VisualObjects (waypoints, rovers, targets)
+        # ------------------------------------------------------------
+        # Waypoints
+        for w in waypoints_sorted:
+            visual_objects.append(
+                VisualObject(
+                    id=w,
+                    type="waypoint",
+                    label=w.upper(),
+                    position=positions.get(w),
+                    properties={"color": self.colors["waypoint"]}
+                )
+            )
+
+        # Targets (place near their waypoint)
+        target_sorted = sorted(targets, key=lambda t: (num_suffix(t), t))
+        for t in target_sorted:
+            w = target_at.get(t)
+            base = positions.get(w, [0.0, 0.0])
+            # offset target slightly to the right/down of its waypoint
+            pos = [base[0] + 0.6, base[1] + 0.6]
+
+            visual_objects.append(
+                VisualObject(
+                    id=t,
+                    type="target",
+                    label=t.upper(),
+                    position=pos,
+                    properties={
+                        "color": self.colors["target"],
+                        "communicated": t in communicated
+                    }
+                )
+            )
+
+        # Rovers (place near their waypoint)
+        rover_sorted = sorted(rovers, key=lambda r: (num_suffix(r), r))
+        for r in rover_sorted:
+            w = rover_at.get(r)
+            base = positions.get(w, [0.0, 0.0])
+            # offset rover slightly to the left/up of its waypoint
+            pos = [base[0] - 0.6, base[1] - 0.6]
+
+            # which targets does this rover have images of?
+            imgs = [t for (rr, t) in have_image if rr == r]
+
+            visual_objects.append(
+                VisualObject(
+                    id=r,
+                    type="rover",
+                    label=r.upper(),
+                    position=pos,
+                    properties={
+                        "color": self.colors["rover"],
+                        "calibrated": r in calibrated,
+                        "images": imgs
+                    }
+                )
+            )
+
+        # ------------------------------------------------------------
+        # 5) Create VisualRelations (edges & facts)
+        # ------------------------------------------------------------
+        # Connections between waypoints
+        for (w1, w2) in connections:
+            visual_relations.append(
+                VisualRelation(
+                    type="connected",
+                    source=w1,
+                    target=w2,
+                    properties={"color": self.colors["path"]}
+                )
+            )
+
+        # Rover at waypoint
+        for r, w in rover_at.items():
+            visual_relations.append(
+                VisualRelation(
+                    type="at-rover",
+                    source=r,
+                    target=w,
+                    properties={"description": f"{r} at {w}"}
+                )
+            )
+
+        # Target at waypoint
+        for t, w in target_at.items():
+            visual_relations.append(
+                VisualRelation(
+                    type="at-target",
+                    source=t,
+                    target=w,
+                    properties={"description": f"{t} at {w}"}
+                )
+            )
+
+        # have-image relations
+        for (r, t) in have_image:
+            visual_relations.append(
+                VisualRelation(
+                    type="have-image",
+                    source=r,
+                    target=t,
+                    properties={"description": f"{r} has image of {t}"}
+                )
+            )
+
+        # communicated relations (target communicated)
+        for t in communicated:
+            visual_relations.append(
+                VisualRelation(
+                    type="communicated",
+                    source=t,
+                    target=None,
+                    properties={"description": f"{t} communicated"}
+                )
+            )
+
+        return RenderedState(
+            domain=self.domain_name,
+            objects=visual_objects,
+            relations=visual_relations,
+            metadata=metadata
+        )

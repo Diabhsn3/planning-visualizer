@@ -15,6 +15,67 @@ from state_generator import StateGenerator
 import json
 
 ################################## sola
+def test_rovers():
+    """Test state generator with rovers domain."""
+    print("\n" + "=" * 60)
+    print("Testing Rovers Domain")
+    print("=" * 60)
+
+    domain_path = "backend/planner/domains/rovers/domain.pddl"
+    problem_path = "backend/planner/domains/rovers/p1.pddl"
+
+    # Step 1: Run planner
+    print("\n[Step 1] Running planner...")
+    actions = run_planner(domain_path, problem_path)
+    print(f"Plan found with {len(actions)} actions:")
+    for i, action in enumerate(actions):
+        print(f"  {i + 1}. {action}")
+
+    # Step 2: Initialize state generator
+    print("\n[Step 2] Initializing state generator...")
+    sg = StateGenerator(
+        str(Path(domain_path).resolve()),
+        str(Path(problem_path).resolve())
+    )
+
+    # Print initial state
+    print("\nInitial state:")
+    init_state = sg.get_current_state()
+    for pred in sorted(init_state, key=lambda p: (p.name, str(p.params))):
+        print(f"  {pred}")
+
+    # Step 3: Apply actions and generate states
+    print("\n[Step 3] Applying actions and generating states...")
+    states = sg.apply_plan(actions)
+
+    print(f"\nGenerated {len(states)} states (including initial state)")
+
+    for i, state in enumerate(states):
+        if i == 0:
+            print(f"\nState {i} (Initial):")
+        else:
+            print(f"\nState {i} (After action: {actions[i-1]}):")
+
+        for pred in sorted(state, key=lambda p: (p.name, str(p.params))):
+            print(f"  {pred}")
+
+    # Step 4: Generate JSON representation
+    print("\n[Step 4] Generating JSON representation...")
+    states_json = sg.generate_states_json(actions)
+
+    output_file = PLANNER_DIR / "output" / "rovers_states.json"
+    output_file.parent.mkdir(exist_ok=True)
+    with open(output_file, 'w') as f:
+        json.dump({
+            "domain": "rovers",
+            "problem": "rovers-1",
+            "plan": actions,
+            "states": states_json
+        }, f, indent=2)
+
+    print(f"\nStates saved to: {output_file}")
+
+    return True
 
 def test_hanoi():
     """Test state generator with hanoi domain."""
@@ -312,7 +373,10 @@ def main():
 
         success4 = test_hanoi()
 
-        if success1 and success2 and success3 and success4:
+        success5 = test_rovers()
+
+
+        if success1 and success2 and success3 and success4 and success5:
             print("\n" + "=" * 60)
             print("✓ All tests passed!")
             print("=" * 60)

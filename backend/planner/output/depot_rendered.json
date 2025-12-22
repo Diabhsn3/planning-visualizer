@@ -130,19 +130,19 @@
       ],
       "relations": [
         {
-          "type": "at-truck",
-          "source": "t1",
-          "target": "d1",
-          "properties": {
-            "description": "t1 at d1"
-          }
-        },
-        {
           "type": "in-truck",
           "source": "c1",
           "target": "t1",
           "properties": {
             "description": "c1 in t1"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "d1",
+          "properties": {
+            "description": "t1 at d1"
           }
         }
       ],
@@ -205,19 +205,19 @@
       ],
       "relations": [
         {
-          "type": "at-truck",
-          "source": "t1",
-          "target": "s1",
-          "properties": {
-            "description": "t1 at s1"
-          }
-        },
-        {
           "type": "in-truck",
           "source": "c1",
           "target": "t1",
           "properties": {
             "description": "c1 in t1"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "s1",
+          "properties": {
+            "description": "t1 at s1"
           }
         }
       ],
@@ -280,19 +280,19 @@
       ],
       "relations": [
         {
-          "type": "at-truck",
-          "source": "t1",
-          "target": "s1",
-          "properties": {
-            "description": "t1 at s1"
-          }
-        },
-        {
           "type": "at",
           "source": "c1",
           "target": "s1",
           "properties": {
             "description": "c1 at s1"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "s1",
+          "properties": {
+            "description": "t1 at s1"
           }
         }
       ],

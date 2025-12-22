@@ -28,6 +28,7 @@ export default function Visualizer() {
     { id: "gripper", name: "Gripper", description: "Robot gripper moving balls between rooms" },
     { id: "depot", name: "Depot", description: "Transporting packages via trucks and depots" },
     { id: "hanoi", name: "Hanoi", description: "Moving disks between pegs (Tower of Hanoi)" },
+    { id: "rovers", name: "Rovers", description: "Planetary exploration with rovers, waypoints and targets" },
   ];
 
 
@@ -121,6 +122,28 @@ export default function Visualizer() {
   )
 )`;
   }
+  if (domain === "rovers") {
+  return `(define (problem rovers-default)
+  (:domain rovers)
+  (:objects
+    r1 - rover
+    w1 w2 - waypoint
+    t1 - target
+  )
+  (:init
+    (at-rover r1 w1)
+    (connected w1 w2)
+    (connected w2 w1)
+    (at-target t1 w2)
+  )
+  (:goal
+    (and
+      (communicated t1)
+    )
+  )
+)`;
+}
+
 
   return "";
 };

@@ -65,12 +65,12 @@
       "relations": [
         {
           "type": "on",
-          "source": "d1",
+          "source": "d2",
           "target": "p1"
         },
         {
           "type": "on",
-          "source": "d2",
+          "source": "d1",
           "target": "p1"
         },
         {
@@ -146,6 +146,11 @@
       "relations": [
         {
           "type": "on",
+          "source": "d2",
+          "target": "p1"
+        },
+        {
+          "type": "on",
           "source": "d1",
           "target": "p1"
         },
@@ -153,11 +158,6 @@
           "type": "on",
           "source": "d3",
           "target": "p3"
-        },
-        {
-          "type": "on",
-          "source": "d2",
-          "target": "p1"
         }
       ],
       "metadata": {
@@ -228,13 +228,13 @@
       "relations": [
         {
           "type": "on",
-          "source": "d1",
-          "target": "p1"
+          "source": "d2",
+          "target": "p3"
         },
         {
           "type": "on",
-          "source": "d2",
-          "target": "p3"
+          "source": "d1",
+          "target": "p1"
         },
         {
           "type": "on",
@@ -315,12 +315,12 @@
         },
         {
           "type": "on",
-          "source": "d3",
+          "source": "d1",
           "target": "p3"
         },
         {
           "type": "on",
-          "source": "d1",
+          "source": "d3",
           "target": "p3"
         }
       ],
