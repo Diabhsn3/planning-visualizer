@@ -1,12 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
-import { Play, Pause, SkipForward, SkipBack, Upload, FileText } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Upload, FileText, AlertTriangle, Clock, Zap } from "lucide-react";
+
+// Search strategy type
+interface SearchStrategy {
+  id: string;
+  name: string;
+  description: string;
+  isOptimal: boolean;
+  speed: "fast" | "medium" | "slow";
+  whenToUse: string;
+  warning: string | null;
+}
 
 export default function Visualizer() {
   const [selectedDomain, setSelectedDomain] = useState("blocks-world");
+  const [selectedStrategy, setSelectedStrategy] = useState("lazy-greedy-ff");
   const [useCustomProblem, setUseCustomProblem] = useState(false);
   const [inputMode, setInputMode] = useState<"file" | "text">("file");
   const [problemFile, setProblemFile] = useState<File | null>(null);
@@ -16,8 +28,13 @@ export default function Visualizer() {
   const [currentStateIndex, setCurrentStateIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1000);
-  const [plannerInfo, setPlannerInfo] = useState<{used_planner: boolean, info: string} | null>(null);
+  const [plannerInfo, setPlannerInfo] = useState<{used_planner: boolean, info: string, strategy?: any} | null>(null);
   const [showStatus, setShowStatus] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Fetch search strategies from backend
+  const strategiesQuery = trpc.visualizer.listStrategies.useQuery();
 
   const statusQuery = trpc.visualizer.checkStatus.useQuery(undefined, {
     enabled: showStatus,
@@ -31,11 +48,28 @@ export default function Visualizer() {
     { id: "rovers", name: "Rovers", description: "Planetary exploration with rovers, waypoints and targets" },
   ];
 
+  // Timer for elapsed time during processing
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isProcessing) {
+      setElapsedTime(0);
+      interval = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isProcessing]);
 
+  // Get current strategy details
+  const currentStrategy = strategiesQuery.data?.find(
+    (s: SearchStrategy) => s.id === selectedStrategy
+  ) as SearchStrategy | undefined;
 
   const getDefaultProblem = (domain: string): string => {
-  if (domain === "blocks-world") {
-    return `(define (problem bw-default)
+    if (domain === "blocks-world") {
+      return `(define (problem bw-default)
   (:domain blocks-world)
   (:objects a b c - block)
   (:init
@@ -54,10 +88,10 @@ export default function Visualizer() {
     )
   )
 )`;
-  }
+    }
 
-  if (domain === "gripper") {
-    return `(define (problem gripper-default)
+    if (domain === "gripper") {
+      return `(define (problem gripper-default)
   (:domain gripper)
   (:objects
     rooma roomb - room
@@ -78,10 +112,10 @@ export default function Visualizer() {
     )
   )
 )`;
-  }
+    }
 
-  if (domain === "depot") {
-    return `(define (problem depot-p1)
+    if (domain === "depot") {
+      return `(define (problem depot-p1)
   (:domain depot)
   (:objects
     d1 - depot
@@ -99,10 +133,10 @@ export default function Visualizer() {
     )
   )
 )`;
-  }
+    }
 
-  if (domain === "hanoi") {
-    return `(define (problem hanoi-default)
+    if (domain === "hanoi") {
+      return `(define (problem hanoi-default)
   (:domain hanoi)
   (:objects
     d1 d2 d3 - disk
@@ -121,9 +155,10 @@ export default function Visualizer() {
     )
   )
 )`;
-  }
-  if (domain === "rovers") {
-  return `(define (problem rovers-default)
+    }
+
+    if (domain === "rovers") {
+      return `(define (problem rovers-default)
   (:domain rovers)
   (:objects
     r1 - rover
@@ -142,47 +177,59 @@ export default function Visualizer() {
     )
   )
 )`;
-}
+    }
 
-
-  return "";
-};
-
-  const prebuiltStates = null;
+    return "";
+  };
 
   const uploadMutation = trpc.visualizer.uploadAndGenerate.useMutation({
     onSuccess: (data) => {
+      setIsProcessing(false);
       setRenderedStates(data.states);
       setPlan(data.plan);
       setCurrentStateIndex(0);
       setPlannerInfo({
         used_planner: data.used_planner || false,
-        info: data.planner_info || "Unknown"
+        info: data.planner_info || "Unknown",
+        strategy: data.search_strategy
       });
     },
     onError: (error) => {
-      alert(`Error: ${error.message}`);
+      setIsProcessing(false);
+      // Check if it's a timeout error and provide helpful message
+      let errorMessage = error.message;
+      if (errorMessage.toLowerCase().includes("timed out")) {
+        if (currentStrategy?.isOptimal) {
+          errorMessage += "\n\nTip: Try using a faster satisficing strategy like 'Lazy Greedy + FF' for quicker results.";
+        }
+      }
+      alert(`Error: ${errorMessage}`);
     },
   });
 
   const handleGenerate = () => {
+    setIsProcessing(true);
+    
     if (useCustomProblem) {
       if (inputMode === "file" && !problemFile) {
+        setIsProcessing(false);
         alert("Please select a problem file");
         return;
       }
       if (inputMode === "text" && !problemText.trim()) {
+        setIsProcessing(false);
         alert("Please paste PDDL content");
         return;
       }
 
       const reader = new FileReader();
       const processContent = (content: string) => {
-      uploadMutation.mutate({
-        domainContent: "",
-        problemContent: content,
-        domainName: selectedDomain,
-      });
+        uploadMutation.mutate({
+          domainContent: "",
+          problemContent: content,
+          domainName: selectedDomain as any,
+          searchStrategy: selectedStrategy as any,
+        });
       };
 
       if (inputMode === "file" && problemFile) {
@@ -199,39 +246,11 @@ export default function Visualizer() {
       uploadMutation.mutate({
         domainContent: "",
         problemContent: getDefaultProblem(selectedDomain),
-        domainName: selectedDomain,
+        domainName: selectedDomain as any,
+        searchStrategy: selectedStrategy as any,
       });
     }
   };
-
-//   const loadExample = () => {
-//     const examplePDDL = `(define (problem bw-example-1)
-//   (:domain blocks-world)
-
-//   (:objects
-//     a b c - block
-//   )
-
-//   (:init
-//     (ontable a)
-//     (ontable b)
-//     (on c a)
-//     (clear c)
-//     (clear b)
-//     (handempty)
-//   )
-
-//   (:goal
-//     (and
-//       (ontable a)
-//       (on b a)
-//       (on c b)
-//       (clear c)
-//     )
-//   )
-// )`;
-//     setProblemText(examplePDDL);
-//   };
 
   // Playback controls
   const handlePlay = () => {
@@ -258,6 +277,27 @@ export default function Visualizer() {
 
   const handlePrevious = () => {
     setCurrentStateIndex((prev) => Math.max(prev - 1, 0));
+  };
+
+  // Helper to get speed icon
+  const getSpeedIcon = (speed: string) => {
+    switch (speed) {
+      case "fast":
+        return <Zap className="w-4 h-4 text-green-500" />;
+      case "medium":
+        return <Clock className="w-4 h-4 text-yellow-500" />;
+      case "slow":
+        return <AlertTriangle className="w-4 h-4 text-red-500" />;
+      default:
+        return null;
+    }
+  };
+
+  // Helper to format elapsed time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
   return (
@@ -340,14 +380,6 @@ export default function Visualizer() {
                     </p>
                   </div>
                 )}
-                {(!statusQuery.data.python.available || !statusQuery.data.fastDownward.available) && (
-                  <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-                    <p className="text-sm text-yellow-800">
-                      ⚠ Some components are missing. The visualizer will use fallback plans that may not match your problems.
-                      See <strong>LOCAL_SETUP.md</strong> for setup instructions.
-                    </p>
-                  </div>
-                )}
               </div>
             ) : (
               <p className="text-red-600">Failed to check system status</p>
@@ -359,7 +391,7 @@ export default function Visualizer() {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Configuration</h2>
           <p className="text-sm text-gray-600 mb-4">
-            Select a domain and optionally provide a custom problem
+            Select a domain, search strategy, and optionally provide a custom problem
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -382,20 +414,90 @@ export default function Visualizer() {
               </p>
             </div>
 
-            {/* Generate Button */}
-            <div className="flex items-end">
-              <Button
-                onClick={handleGenerate}
-                disabled={uploadMutation.isPending}
-                className="w-full h-12 text-lg"
+            {/* Search Strategy Selection */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Search Strategy</label>
+              <select
+                value={selectedStrategy}
+                onChange={(e) => setSelectedStrategy(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                {uploadMutation.isPending
-                  ? "Processing..."
-                  : useCustomProblem
-                  ? "Solve Problem"
-                  : "Generate States"}
-              </Button>
+                {strategiesQuery.data?.map((strategy: SearchStrategy) => (
+                  <option key={strategy.id} value={strategy.id}>
+                    {strategy.name}
+                  </option>
+                ))}
+              </select>
+              
+              {/* Strategy Details */}
+              {currentStrategy && (
+                <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    {getSpeedIcon(currentStrategy.speed)}
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                      currentStrategy.isOptimal 
+                        ? "bg-purple-100 text-purple-700" 
+                        : "bg-blue-100 text-blue-700"
+                    }`}>
+                      {currentStrategy.isOptimal ? "Optimal" : "Satisficing"}
+                    </span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                      currentStrategy.speed === "fast" 
+                        ? "bg-green-100 text-green-700"
+                        : currentStrategy.speed === "medium"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : "bg-red-100 text-red-700"
+                    }`}>
+                      {currentStrategy.speed.charAt(0).toUpperCase() + currentStrategy.speed.slice(1)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mb-1">{currentStrategy.description}</p>
+                  <p className="text-xs text-gray-500 italic">When to use: {currentStrategy.whenToUse}</p>
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* Warning for slow strategies */}
+          {currentStrategy?.warning && (
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-800">{currentStrategy.warning}</p>
+            </div>
+          )}
+
+          {/* Generate Button */}
+          <div className="mt-6">
+            <Button
+              onClick={handleGenerate}
+              disabled={uploadMutation.isPending || isProcessing}
+              className="w-full h-12 text-lg"
+            >
+              {isProcessing ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>Processing... ({formatTime(elapsedTime)})</span>
+                </div>
+              ) : useCustomProblem ? (
+                "Solve Problem"
+              ) : (
+                "Generate States"
+              )}
+            </Button>
+            
+            {/* Processing indicator with time */}
+            {isProcessing && (
+              <div className="mt-2 text-center">
+                <p className="text-sm text-gray-600">
+                  Using: <strong>{currentStrategy?.name || selectedStrategy}</strong>
+                </p>
+                {currentStrategy?.isOptimal && elapsedTime > 30 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Optimal search can take a while for complex problems. Consider using a satisficing strategy for faster results.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Custom Problem Section */}
@@ -480,9 +582,6 @@ export default function Visualizer() {
                       <label className="block text-sm font-medium text-gray-700">
                         PDDL Problem Content
                       </label>
-                      {/* <Button variant="outline" size="sm" onClick={loadExample} type="button">
-                        Load Example
-                      </Button> */}
                     </div>
                     <Textarea
                       value={problemText}
@@ -523,18 +622,41 @@ export default function Visualizer() {
                 </div>
               )}
             </div>
+            
+            {/* Strategy info badge */}
+            {plannerInfo?.strategy && (
+              <div className="mb-4 flex items-center gap-2">
+                <span className="text-sm text-gray-600">Strategy used:</span>
+                <span className={`text-xs font-medium px-2 py-1 rounded ${
+                  plannerInfo.strategy.isOptimal 
+                    ? "bg-purple-100 text-purple-700" 
+                    : "bg-blue-100 text-blue-700"
+                }`}>
+                  {plannerInfo.strategy.name}
+                </span>
+                <span className={`text-xs font-medium px-2 py-1 rounded ${
+                  plannerInfo.strategy.speed === "fast" 
+                    ? "bg-green-100 text-green-700"
+                    : plannerInfo.strategy.speed === "medium"
+                    ? "bg-yellow-100 text-yellow-700"
+                    : "bg-red-100 text-red-700"
+                }`}>
+                  {plannerInfo.strategy.speed}
+                </span>
+              </div>
+            )}
+            
             {!plannerInfo?.used_planner && (
               <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                 <p className="text-sm text-yellow-800">
                   <strong>Warning:</strong> Fast Downward planner not available. Using fallback plan that may not match your problem.
-                  Please build Fast Downward locally .
+                  Please build Fast Downward locally.
                 </p>
               </div>
             )}
 
             {/* Canvas */}
             <div className="mb-6">
-              {/* <StateCanvas state={renderedStates[currentStateIndex]} /> */}
               <StateCanvas state={renderedStates[currentStateIndex]} isFirst={currentStateIndex === 0} isLast={currentStateIndex === renderedStates.length - 1}/>
             </div>
 
@@ -601,8 +723,8 @@ export default function Visualizer() {
               {/* Plan Steps */}
               {plan.length > 0 && (
                 <div className="mt-4">
-                  <h3 className="text-sm font-semibold mb-2">Plan Steps:</h3>
-                  <div className="space-y-1">
+                  <h3 className="text-sm font-semibold mb-2">Plan Steps ({plan.length} actions):</h3>
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
                     {plan.map((action, idx) => (
                       <div
                         key={idx}
