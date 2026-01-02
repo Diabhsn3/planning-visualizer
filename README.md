@@ -1,443 +1,307 @@
 # Planning Visualizer
 
-An interactive web application for visualizing classical planning problems and solutions with domain-specific renderers and real-time animations.
+A modern web application for visualizing classical planning problems and solutions. It integrates the Fast Downward planning system with domain-specific renderers, allowing users to explore how different search strategies solve PDDL problems step-by-step.
 
-![Planning Visualizer](https://img.shields.io/badge/React-19-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue) ![Python](https://img.shields.io/badge/Python-3.11+-green)
-
-**Supported Domains:** Blocks World • Gripper
+![React](https://img.shields.io/badge/React-19-blue) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue) ![Python](https://img.shields.io/badge/Python-3.11+-green) ![Fast Downward](https://img.shields.io/badge/Fast%20Downward-Integrated-orange)
 
 ---
 
-## ✨ Features
+## Features
 
-- 🎨 **Interactive Visualization** - Canvas-based rendering with domain-specific visualizations
-- 🔍 **Zoom & Pan Controls** - Mouse wheel zoom and click-drag panning for detailed inspection
-- 📝 **Custom Problems** - Upload PDDL files or paste problem definitions directly
-- ⚡ **Real-time Controls** - Play, pause, adjust speed, and navigate through plan steps
-- 🎯 **Domain-Specific Rendering** - Tailored visualizations for Blocks World and Gripper domains
-- 🔄 **Automatic File Cleanup** - Temporary uploaded files are automatically deleted after processing
-- 🚀 **Modern Stack** - React 19, TypeScript, Tailwind CSS 4, tRPC, Node.js, Python
+The Planning Visualizer provides an interactive environment for understanding automated planning. Users can select a planning domain, choose a search strategy, provide a custom problem, and watch the planner solve it with a visual, step-by-step animation.
+
+**Core Capabilities:**
+
+- **Interactive Canvas Visualization**: Domain-specific renderers draw each state on an HTML5 canvas. Users can zoom (10%–500%) with the mouse wheel and pan by clicking and dragging.
+- **Search Strategy Selection**: Choose from 10+ Fast Downward search strategies, ranging from optimal (A* + LM-cut) to fast satisficing (Lazy Greedy + FF). The UI displays each strategy's speed, optimality, and a recommendation for when to use it.
+- **Custom Problem Input**: Upload a `.pddl` file or paste the problem definition directly into a text area. The application parses the problem and runs the planner in real-time.
+- **Playback Controls**: Play, pause, step forward/backward, and adjust animation speed. A timeline slider allows jumping to any state in the plan.
+- **Real-time Feedback**: The UI shows elapsed time during planning, warns users when a slow strategy is selected, and suggests faster alternatives if a timeout occurs.
+- **Automatic File Cleanup**: Temporary uploaded files are deleted after processing to prevent disk clutter.
 
 ---
 
-## 🚀 Quick Start
+## Supported Domains
+
+The visualizer includes PDDL files and renderers for several classic planning domains. The renderers for **Blocks World** and **Gripper** are fully implemented. The others are provided as templates with TODO markers for future development.
+
+| Domain | Status | Description |
+|---|:---:|---|
+| **Blocks World** | ✅ Implemented | Stack and unstack blocks on a table. Supports unlimited blocks with cycling colors. |
+| **Gripper** | ✅ Implemented | A robot with two grippers moves balls between rooms. Supports up to 8 balls and 4 rooms. |
+| Depot | 📝 Template | Transport crates between depots using trucks and hoists. |
+| Hanoi | 📝 Template | The classic Tower of Hanoi puzzle. |
+| Logistics | 📝 Template | Deliver packages between cities using trucks and airplanes. |
+| Rovers | 📝 Template | Navigate rovers on a planet to collect samples and data. |
+| Satellite | 📝 Template | Point satellite instruments to take images of celestial targets. |
+
+---
+
+## Search Strategies
+
+The application provides a curated whitelist of Fast Downward search strategies. Users select a strategy by its name, and the backend maps it to the correct command-line arguments. Raw CLI arguments are never accepted from the frontend for security.
+
+### Optimal Strategies (Guaranteed Shortest Plan)
+
+| Strategy | Speed | When to Use |
+|---|:---:|---|
+| A* + LM-cut | 🔴 Slow | When you need the absolute shortest plan and can wait. |
+| A* Blind | 🔴 Slow | For very small problems only (breadth-first behavior). |
+| A* + h^max | 🔴 Slow | An alternative when LM-cut fails or is too slow. |
+
+### Satisficing Strategies (Fast, Good Plans)
+
+| Strategy | Speed | When to Use |
+|---|:---:|---|
+| **Lazy Greedy + FF** | 🟢 Fast | **Recommended default.** Best for quick results. |
+| Greedy Best-First + FF | 🟢 Fast | General-purpose fast planning. |
+| Greedy + h^add | 🟢 Fast | Alternative when FF doesn't work well for a domain. |
+| LAMA-first | 🟡 Medium | Good balance of speed and plan quality. |
+| Greedy + CEA | 🟡 Medium | Useful for domains with many actions. |
+
+### Weighted A* (Bounded Suboptimal)
+
+| Strategy | Speed | When to Use |
+|---|:---:|---|
+| Weighted A* (w=3) + FF | 🟡 Medium | Faster than optimal, with at most 3x optimal cost. |
+| Weighted A* (w=2) + LM-cut | 🟡 Medium | Better quality than w=3, still faster than optimal. |
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-| Requirement | Version | Installation |
-|------------|---------|--------------|
-| **Python** | 3.11+ | [python.org](https://www.python.org/downloads/) |
-| **Node.js** | 18+ | [nodejs.org](https://nodejs.org/) |
-| **pnpm** | Latest | `npm install -g pnpm` |
-| **Git** | Latest | [git-scm.com](https://git-scm.com/) |
+Before you begin, ensure you have the following installed:
 
-**Optional:**
-- **C++ Compiler** - For building Fast Downward (GCC on Linux, Xcode on Mac, Visual Studio Build Tools on Windows)
+| Software | Version | Notes |
+|---|---|---|
+| **Node.js** | 18 or later | [Download](https://nodejs.org/) |
+| **Python** | 3.11 or later | [Download](https://www.python.org/downloads/) |
+| **pnpm** | Latest | Install with `npm install -g pnpm` |
+| **Git** | Latest | [Download](https://git-scm.com/) |
+| **C++ Compiler** | (Optional) | Required to build Fast Downward. GCC on Linux, Xcode on macOS, or Visual Studio Build Tools on Windows. |
 
 ### Installation
 
-```bash
-# Clone repository
-git clone https://github.com/Diabhsn3/planning-visualizer.git
-cd planning-visualizer
+1.  **Clone the repository:**
 
-# Initialize Fast Downward submodule (optional)
-git submodule update --init --recursive
+    ```bash
+    git clone https://github.com/Diabhsn3/planning-visualizer.git
+    cd planning-visualizer
+    ```
 
-# Install backend dependencies
-cd backend/api
-pnpm install
+2.  **Initialize the Fast Downward submodule:**
 
-# Install frontend dependencies
-cd ../../frontend
-pnpm install
-```
+    ```bash
+    git submodule update --init --recursive
+    ```
 
-### Running the Application
+3.  **Run the setup script (Recommended):**
 
-**Terminal 1 - Backend API:**
-```bash
-cd backend/api
-pnpm dev
-```
-Backend runs on **http://localhost:4000**
+    The provided script checks dependencies, installs packages, builds Fast Downward, and starts the servers.
 
-**Terminal 2 - Frontend:**
-```bash
-cd frontend
-pnpm dev
-```
-Frontend runs on **http://localhost:3000**
+    ```bash
+    # On macOS/Linux
+    ./run_new.sh
 
-**Access the application:** http://localhost:3000
+    # On Windows
+    run_new.bat
+    ```
 
-> **Note:** The application works without Fast Downward using pre-computed example data. Custom problem solving requires Fast Downward installation.
+    The application will be available at **http://localhost:3000**.
+
+### Manual Setup
+
+If you prefer to run the steps manually:
+
+1.  **Build Fast Downward:**
+
+    ```bash
+    cd planning-tools/downward
+    ./build.py
+    cd ../..
+    ```
+
+2.  **Install dependencies:**
+
+    ```bash
+    # Backend
+    cd backend/api && pnpm install && cd ../..
+
+    # Frontend
+    cd frontend && pnpm install && cd ..
+    ```
+
+3.  **Start the servers (in separate terminals):**
+
+    ```bash
+    # Terminal 1: Backend API (runs on port 4000)
+    cd backend/api && pnpm dev
+
+    # Terminal 2: Frontend (runs on port 3000)
+    cd frontend && pnpm dev
+    ```
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 planning-visualizer/
-│
-├── frontend/                      # React Frontend (Port 3000)
+├── frontend/                     # React 19 + TypeScript + Tailwind CSS
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── Visualizer.tsx    # Main visualizer interface
-│   │   │   └── NotFound.tsx      # 404 page
+│   │   │   └── Visualizer.tsx    # Main application page
 │   │   ├── components/
-│   │   │   ├── StateCanvas.tsx   # Canvas renderer with zoom/pan
-│   │   │   ├── ErrorBoundary.tsx # Error boundary component
-│   │   │   └── ui/               # Radix UI components
-│   │   ├── hooks/                # Custom React hooks
-│   │   │   ├── useComposition.ts # Input composition handling
-│   │   │   ├── useMobile.tsx     # Mobile detection
-│   │   │   └── usePersistFn.ts   # Function persistence
-│   │   ├── lib/
-│   │   │   ├── trpc.ts           # tRPC client setup
-│   │   │   └── utils.ts          # Utility functions
-│   │   ├── contexts/
-│   │   │   └── ThemeContext.tsx  # Theme provider
-│   │   └── main.tsx              # Application entry point
-│   ├── public/
-│   │   └── rooboot.png           # Robot image for gripper domain
-│   ├── vite.config.ts            # Vite configuration
-│   └── package.json
+│   │   │   └── StateCanvas.tsx   # Canvas renderer with zoom/pan
+│   │   └── ...
+│   └── vite.config.ts            # Vite configuration with API proxy
 │
 ├── backend/
-│   ├── api/                      # Node.js/Express API (Port 4000)
-│   │   ├── _core/                # Core server infrastructure
-│   │   │   ├── index.ts          # Server entry point
-│   │   │   ├── trpc.ts           # tRPC setup
-│   │   │   ├── context.ts        # Request context
-│   │   │   ├── systemRouter.ts   # System health endpoints
-│   │   │   └── types/            # Shared types
-│   │   ├── data/                 # Pre-computed example data
-│   │   │   ├── blocks_world_rendered.json
-│   │   │   └── gripper_rendered.json
-│   │   ├── uploads/              # Temporary PDDL file uploads (auto-cleaned)
+│   ├── api/                      # Node.js + Express + tRPC API
 │   │   ├── visualizer.ts         # Main API endpoints
-│   │   ├── routers.ts            # tRPC route definitions
-│   │   └── package.json
+│   │   ├── uploads/              # Temporary PDDL files (auto-cleaned)
+│   │   └── ...
 │   │
-│   └── planner/                  # Python Planning Engine
-│       ├── visualizer_api.py     # Main Python API entry point
-│       ├── run_planner.py        # Fast Downward integration
-│       ├── domains/              # PDDL domain definitions
-│       │   ├── blocks_world/     # Blocks World (implemented)
-│       │   │   ├── domain.pddl
-│       │   │   └── p1.pddl
-│       │   ├── gripper/          # Gripper (implemented)
-│       │   │   ├── domain.pddl
-│       │   │   └── p1.pddl
-│       │   ├── depot/            # Depot (template only)
-│       │   ├── hanoi/            # Hanoi (template only)
-│       │   ├── logistics/        # Logistics (template only)
-│       │   ├── rovers/           # Rovers (template only)
-│       │   ├── satellite/        # Satellite (template only)
-│       │   └── README.md         # Domain implementation guide
-│       ├── state_generator/      # State generation from plans
-│       │   ├── __init__.py
-│       │   ├── pddl_parser.py    # PDDL parsing utilities
-│       │   └── state_generator.py
-│       ├── state_renderer/       # Domain-specific renderers
-│       │   ├── __init__.py
-│       │   ├── base_renderer.py  # Base renderer class
-│       │   ├── blocks_world_renderer.py  # Blocks World renderer
-│       │   ├── gripper_renderer.py       # Gripper renderer
-│       │   ├── depot_renderer.py         # Depot template
-│       │   ├── hanoi_renderer.py         # Hanoi template
-│       │   ├── logistics_renderer.py     # Logistics template
-│       │   ├── rovers_renderer.py        # Rovers template
-│       │   └── satellite_renderer.py     # Satellite template
-│       ├── planner_runner/       # Planner execution
-│       │   ├── __init__.py
-│       │   └── runner.py
-│       ├── output/               # Generated state files
-│       ├── tests/                # Python test files
-│       └── README.md             # Planner module documentation
+│   └── planner/                  # Python planning engine
+│       ├── visualizer_api.py     # Main entry point for Node.js
+│       ├── run_planner.py        # Fast Downward subprocess wrapper
+│       ├── search_strategies.py  # Strategy whitelist and metadata
+│       ├── domains/              # PDDL domain and problem files
+│       │   ├── blocks_world/
+│       │   ├── gripper/
+│       │   └── ...
+│       └── state_renderer/       # Domain-specific visualization logic
+│           ├── base_renderer.py
+│           ├── blocks_world_renderer.py
+│           └── gripper_renderer.py
 │
-├── planning-tools/               # Fast Downward Planner (Git Submodule)
-│   └── downward/
+├── planning-tools/
+│   └── downward/                 # Fast Downward (Git submodule)
 │
+├── run_new.sh                    # Setup and run script (macOS/Linux)
+├── run_new.bat                   # Setup and run script (Windows)
 └── README.md                     # This file
 ```
 
 ---
 
-## 🎮 Usage
+## How It Works
 
-### 1. Select a Domain
-Choose from available planning domains:
-- **Blocks World** - Classic block stacking problem with pick-up, put-down, stack, and unstack actions
-- **Gripper** - Robot with grippers moving balls between rooms (supports up to 8 balls and 4 rooms)
+The application follows a layered architecture:
 
-### 2. Provide a Problem (Optional)
-Two options for custom problems:
-- **Use custom problem** checkbox unchecked - Uses default example problem
-- **Use custom problem** checkbox checked:
-  - **Upload File** - Upload a `.pddl` problem file
-  - **Paste Text** - Paste PDDL problem definition directly
+1.  **Frontend (React)**: The user selects a domain, strategy, and optionally provides a custom problem. The frontend sends a request to the backend via tRPC.
 
-### 3. Generate Visualization
-Click **"Generate States"** to:
-- Parse the PDDL problem
-- Run the planner (Fast Downward if available, fallback otherwise)
-- Generate intermediate states
-- Render domain-specific visualization
+2.  **Backend API (Node.js)**: The API validates the request, saves any uploaded problem to a temporary file, and spawns a Python subprocess.
 
-### 4. Control Visualization
-- 🔍 **Zoom** - Mouse wheel to zoom in/out (10% to 500%)
-- 🖱️ **Pan** - Click and drag to navigate the canvas
-- ➕➖ **Zoom Buttons** - Click +/− buttons in top-right corner
-- 🔄 **Reset** - Click reset button to return to default view
-- ▶️ **Play/Pause** - Control animation playback
-- ⏮️⏭️ **Previous/Next** - Step through states manually
-- 🎚️ **Speed Control** - Adjust animation speed (slider below visualization)
-- 📍 **Timeline** - Jump to any state directly using the slider
+3.  **Python Wrapper**: The `visualizer_api.py` script receives the domain, problem path, and strategy ID. It calls `run_planner.py` to execute Fast Downward.
+
+4.  **Fast Downward**: The planner runs with the selected search strategy. If a plan is found, it's written to a file.
+
+5.  **State Generation**: The Python wrapper parses the plan, applies each action to the initial state, and generates a sequence of intermediate states.
+
+6.  **Rendering**: Each state is passed to the domain-specific renderer (e.g., `blocks_world_renderer.py`), which outputs a JSON structure describing shapes, colors, and positions.
+
+7.  **Visualization**: The JSON is returned to the frontend, which draws each state on the canvas and provides playback controls.
 
 ---
 
-## 🔧 API Endpoints
+## Configuration
 
-### `visualizer.generateStates`
-Loads pre-computed example data for a domain.
+### Planner Timeout
 
-**Input:**
-```typescript
-{
-  domain: "blocks-world" | "gripper"
-}
-```
-
-**Output:**
-```typescript
-{
-  success: boolean;
-  domain: string;
-  problem: string;
-  plan: string[];
-  num_states: number;
-  states: RenderedState[];
-}
-```
-
-### `visualizer.uploadAndGenerate`
-Processes custom PDDL problems.
-
-**Input:**
-```typescript
-{
-  domainContent: string;      // Empty string to use repository domain
-  problemContent: string;     // PDDL problem definition
-  domainName: "blocks-world" | "gripper";
-}
-```
-
-**Output:**
-```typescript
-{
-  success: boolean;
-  domain: string;
-  problem: string;
-  plan: string[];
-  num_states: number;
-  states: RenderedState[];
-  used_planner: boolean;
-  planner_info: string;
-}
-```
-
-### `visualizer.listDomains`
-Returns list of available domains.
-
-### `visualizer.checkStatus`
-Checks Python and Fast Downward availability.
-
----
-
-## 🧪 Testing
-
-### Python Modules
+The default timeout for the Fast Downward planner is **30 minutes (1800 seconds)**. This can be changed via an environment variable:
 
 ```bash
-cd backend/planner
+# Set a 1-hour timeout
+export PLANNER_TIMEOUT=3600
+```
 
-# Test state generator
-python tests/test_state_generator.py
+### Python Command
 
-# Test state renderer
-python tests/test_state_renderer.py
+If your Python executable is not `python3`, create a `.env` file in `backend/api/`:
+
+```bash
+echo "PYTHON_CMD=python" > backend/api/.env
 ```
 
 ---
 
-## 💻 Technology Stack
-
-### Frontend
-- **React 19** - UI framework
-- **TypeScript 5.7** - Type safety
-- **Tailwind CSS 4** - Utility-first styling
-- **tRPC 11** - Type-safe API client
-- **Vite 6** - Build tool and dev server
-- **Radix UI** - Accessible component primitives
-- **Lucide React** - Icon library
-- **Wouter** - Lightweight routing
-
-### Backend API
-- **Node.js** - Runtime environment
-- **Express 4** - Web framework
-- **tRPC 11** - Type-safe API server
-- **TypeScript 5.9** - Type safety
-- **Zod 4** - Schema validation
-- **SuperJSON** - JSON serialization with type preservation
-
-### Planning Engine
-- **Python 3.11+** - Core language (no external dependencies)
-- **Fast Downward** - Classical planner (optional)
-- **Custom PDDL Parsers** - Problem and state parsing
-- **Domain Renderers** - Visualization logic
-
----
-
-## 🔧 Implementation Details
-
-### Zoom & Pan System
-The `StateCanvas` component implements interactive zoom and pan:
-- **Zoom Range:** 10% to 500%
-- **Zoom Method:** Mouse wheel (centered on cursor position)
-- **Pan Method:** Click and drag
-- **Controls:** Floating UI with +/− buttons and reset
-- **Implementation:** Canvas 2D context transformations
-
-### Automatic File Cleanup
-Uploaded PDDL files are automatically deleted after processing:
-- Problem files deleted after successful or failed processing
-- Custom domain files deleted (repository domains preserved)
-- Cleanup happens in `visualizer.ts` `uploadAndGenerate` endpoint
-- Prevents disk space accumulation in `backend/api/uploads/`
-
-### Renderer Architecture
-Each domain has a dedicated renderer extending `BaseRenderer`:
-- **`parse_state()`** - Extracts objects and predicates from PDDL state
-- **`render_state()`** - Converts parsed state to `RenderedState` format
-- **Color Schemes** - Pre-defined colors for visual consistency
-- **Extensibility** - Templates provided for 5 additional domains
-
-### State Generation
-The `StateGenerator` class:
-- Parses initial state from PDDL problem
-- Applies action sequences to generate intermediate states
-- Tracks object positions and relationships
-- Outputs structured state data for renderers
-
----
-
-## 🤝 Contributing
+## Extending the Visualizer
 
 ### Adding a New Domain
 
-See `backend/planner/domains/README.md` for detailed instructions. Summary:
+1.  **Create PDDL files** in `backend/planner/domains/your_domain/`:
+    - `domain.pddl`: The domain definition.
+    - `p1.pddl`: A sample problem.
 
-1. **Create PDDL files** in `backend/planner/domains/new_domain/`
-   - `domain.pddl` - Domain definition
-   - `p1.pddl` - Example problem
+2.  **Implement a renderer** in `backend/planner/state_renderer/your_domain_renderer.py`:
+    - Extend `BaseRenderer`.
+    - Implement `parse_state()` and `render_state()`.
 
-2. **Implement renderer** in `backend/planner/state_renderer/new_domain_renderer.py`
-   - Extend `BaseRenderer`
-   - Implement `parse_state()` and `render_state()`
+3.  **Register the renderer** in `backend/planner/state_renderer/__init__.py`:
+    - Import your class.
+    - Add it to the `RENDERERS` dictionary.
 
-3. **Register renderer** in `backend/planner/state_renderer/__init__.py`
-   - Import renderer class
-   - Add to `RendererFactory._renderers` dictionary
+4.  **Add the domain to the frontend** in `frontend/src/pages/Visualizer.tsx`:
+    - Add an entry to the `DOMAIN_CONFIGS` array.
 
-4. **Update API** in `backend/api/visualizer.ts`
-   - Add domain to `DOMAIN_CONFIGS`
-   - Add to enum in `generateStates` and `uploadAndGenerate` input schemas
-
-5. **Test** with example problem
-
-Templates for Depot, Hanoi, Logistics, Rovers, and Satellite domains are already provided.
+Templates for Depot, Hanoi, Logistics, Rovers, and Satellite are already provided in the codebase.
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-### Port Already in Use
+### "Port already in use"
 
-**Mac/Linux:**
+Kill the process using the port:
+
 ```bash
-# Kill process on port 3000
-lsof -ti:3000 | xargs kill
+# macOS/Linux
+lsof -ti:3000 | xargs kill -9
+lsof -ti:4000 | xargs kill -9
 
-# Kill process on port 4000
-lsof -ti:4000 | xargs kill
-```
-
-**Windows:**
-```cmd
-# Find process using port
+# Windows
 netstat -ano | findstr :3000
-
-# Kill the process (replace <PID> with actual process ID)
 taskkill /PID <PID> /F
 ```
 
-### Python Not Found
+### "Python not found"
 
-Create `.env` file in `backend/api/`:
-```bash
-cd backend/api
-echo "PYTHON_CMD=python3" > .env
-```
+Ensure Python 3.11+ is installed and accessible. Set the `PYTHON_CMD` environment variable if needed (see Configuration above).
 
-Replace `python3` with your Python command (`python`, `python3.11`, etc.).
+### "Fast Downward build failed on macOS"
 
-### Frontend Can't Connect to Backend
+This is a known issue with Xcode 15+. The application will still work using pre-computed example data. For custom problems, consider using a Linux environment or Docker.
 
-1. Verify backend is running: http://localhost:4000
-2. Check `frontend/vite.config.ts` proxy configuration (should point to `http://localhost:4000`)
-3. Ensure no firewall is blocking local connections
+### "Planner timed out"
 
-### Fast Downward Not Available
-
-The application works without Fast Downward:
-- Pre-computed example data is used for default problems
-- Custom problems will use fallback plans if Fast Downward is not installed
-- To install Fast Downward:
-  ```bash
-  git submodule update --init --recursive
-  cd planning-tools/downward
-  ./build.py release
-  ```
+Large problems with optimal strategies (A* + LM-cut) can take a very long time. Try:
+1.  Selecting a **satisficing strategy** like "Lazy Greedy + FF".
+2.  Reducing the problem size.
+3.  Increasing the `PLANNER_TIMEOUT` environment variable.
 
 ---
 
-## 📄 License
+## Technology Stack
 
-MIT License
-
----
-
-## 🙏 Acknowledgments
-
-- [Fast Downward](https://www.fast-downward.org/) - Classical planning system
-- [PDDL](https://planning.wiki/) - Planning Domain Definition Language
-- React, TypeScript, and Python communities
+| Layer | Technologies |
+|---|---|
+| **Frontend** | React 19, TypeScript 5.7, Tailwind CSS 4, Vite 6, tRPC 11, Radix UI |
+| **Backend API** | Node.js, Express 4, tRPC 11, TypeScript 5.9, Zod 4 |
+| **Planning Engine** | Python 3.11+, Fast Downward |
 
 ---
 
-## 📞 Support
+## License
 
-- **Issues:** [GitHub Issues](https://github.com/Diabhsn3/planning-visualizer/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/Diabhsn3/planning-visualizer/discussions)
+This project is licensed under the MIT License.
 
 ---
 
-<div align="center">
+## Acknowledgments
 
-**Built for the planning community**
-
-[⭐ Star this repo](https://github.com/Diabhsn3/planning-visualizer) • [🐛 Report Bug](https://github.com/Diabhsn3/planning-visualizer/issues) • [✨ Request Feature](https://github.com/Diabhsn3/planning-visualizer/issues)
-
-</div>
+- [Fast Downward](https://www.fast-downward.org/) – The classical planning system powering this application.
+- [PDDL](https://planning.wiki/) – The Planning Domain Definition Language.
+- The React, TypeScript, and Python open-source communities.
