@@ -19,17 +19,49 @@ class BlocksWorldRenderer(BaseStateRenderer):
     - Table representation
     """
     
-    # Default colors for blocks (can be customized)
-    BLOCK_COLORS = {
-        'a': '#FF6B6B',  # Red
-        'b': '#4ECDC4',  # Teal
-        'c': '#45B7D1',  # Blue
-        'd': '#FFA07A',  # Light Salmon
-        'e': '#98D8C8',  # Mint
-        'f': '#F7DC6F',  # Yellow
-        'g': '#BB8FCE',  # Purple
-        'h': '#85C1E2',  # Sky Blue
-    }
+    # Color palette for blocks - will cycle through for any number of blocks
+    COLOR_PALETTE = [
+        '#FF6B6B',  # Red
+        '#4ECDC4',  # Teal
+        '#45B7D1',  # Blue
+        '#FFA07A',  # Light Salmon
+        '#98D8C8',  # Mint
+        '#F7DC6F',  # Yellow
+        '#BB8FCE',  # Purple
+        '#85C1E2',  # Sky Blue
+        '#F39C12',  # Orange
+        '#2ECC71',  # Green
+        '#E74C3C',  # Dark Red
+        '#9B59B6',  # Violet
+        '#1ABC9C',  # Turquoise
+        '#E91E63',  # Pink
+        '#00BCD4',  # Cyan
+        '#8BC34A',  # Light Green
+    ]
+    
+    @classmethod
+    def get_block_color(cls, block_name: str) -> str:
+        """
+        Get color for a block based on its name.
+        Colors cycle through the palette based on alphabetical order.
+        
+        Args:
+            block_name: Name of the block (e.g., 'a', 'b', 'block1')
+            
+        Returns:
+            Hex color string
+        """
+        # Convert block name to a consistent index
+        # For single letters, use their position in alphabet
+        # For other names, use hash
+        name_lower = block_name.lower()
+        if len(name_lower) == 1 and name_lower.isalpha():
+            index = ord(name_lower) - ord('a')
+        else:
+            # For multi-character names, use sum of character codes
+            index = sum(ord(c) for c in name_lower)
+        
+        return cls.COLOR_PALETTE[index % len(cls.COLOR_PALETTE)]
     
     def __init__(self):
         super().__init__("blocks-world")
@@ -100,7 +132,7 @@ class BlocksWorldRenderer(BaseStateRenderer):
                 position = [stack_x, y_pos]
                 
                 # Create visual object
-                color = self.BLOCK_COLORS.get(block, '#95A5A6')
+                color = self.get_block_color(block)
                 is_clear = block in clear_blocks
                 
                 visual_obj = VisualObject(
@@ -131,7 +163,7 @@ class BlocksWorldRenderer(BaseStateRenderer):
                 label=holding_block.upper(),
                 position=[held_x, self.table_y - 290],  # Above table, at block's fixed X
                 properties={
-                    'color': self.BLOCK_COLORS.get(holding_block, '#95A5A6'),
+                    'color': self.get_block_color(holding_block),
                     'width': self.block_size,
                     'height': self.block_size,
                     'held': True,
