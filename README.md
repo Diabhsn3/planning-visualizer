@@ -23,16 +23,16 @@ The Planning Visualizer provides an interactive environment for understanding au
 
 ## Supported Domains
 
-The visualizer includes PDDL files and renderers for several classic planning domains. The renderers for **Blocks World** and **Gripper** are fully implemented. The others are provided as templates with TODO markers for future development.
+The visualizer includes PDDL files and renderers for several classic planning domains. Five domains are fully implemented with custom renderers. Logistics and Satellite are provided as templates for future development.
 
 | Domain | Status | Description |
 |---|:---:|---|
 | **Blocks World** | ✅ Implemented | Stack and unstack blocks on a table. Supports unlimited blocks with cycling colors. |
 | **Gripper** | ✅ Implemented | A robot with two grippers moves balls between rooms. Supports up to 8 balls and 4 rooms. |
-| Depot | 📝 Template | Transport crates between depots using trucks and hoists. |
-| Hanoi | 📝 Template | The classic Tower of Hanoi puzzle. |
+| **Depot** | ✅ Implemented | Transport crates between depots using trucks and hoists. |
+| **Hanoi** | ✅ Implemented | The classic Tower of Hanoi puzzle. |
+| **Rovers** | ✅ Implemented | Navigate rovers on a planet to collect samples and data. |
 | Logistics | 📝 Template | Deliver packages between cities using trucks and airplanes. |
-| Rovers | 📝 Template | Navigate rovers on a planet to collect samples and data. |
 | Satellite | 📝 Template | Point satellite instruments to take images of celestial targets. |
 
 ---

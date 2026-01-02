@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,6 +36,7 @@ export default function Visualizer() {
   const [showStatus, setShowStatus] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Fetch search strategies from backend
   const strategiesQuery = trpc.visualizer.listStrategies.useQuery();
@@ -65,6 +66,15 @@ export default function Visualizer() {
       if (interval) clearInterval(interval);
     };
   }, [isProcessing]);
+
+  // Cleanup playback interval on unmount
+  useEffect(() => {
+    return () => {
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Get current strategy details
   const currentStrategy = strategiesQuery.data?.find(
@@ -256,12 +266,19 @@ export default function Visualizer() {
 
   // Playback controls
   const handlePlay = () => {
+    // Clear any existing interval first
+    if (playbackIntervalRef.current) {
+      clearInterval(playbackIntervalRef.current);
+    }
     setIsPlaying(true);
-    const interval = setInterval(() => {
+    playbackIntervalRef.current = setInterval(() => {
       setCurrentStateIndex((prev) => {
         if (prev >= renderedStates.length - 1) {
           setIsPlaying(false);
-          clearInterval(interval);
+          if (playbackIntervalRef.current) {
+            clearInterval(playbackIntervalRef.current);
+            playbackIntervalRef.current = null;
+          }
           return prev;
         }
         return prev + 1;
@@ -271,6 +288,10 @@ export default function Visualizer() {
 
   const handlePause = () => {
     setIsPlaying(false);
+    if (playbackIntervalRef.current) {
+      clearInterval(playbackIntervalRef.current);
+      playbackIntervalRef.current = null;
+    }
   };
 
   const handleNext = () => {
