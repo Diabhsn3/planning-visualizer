@@ -4,6 +4,7 @@ Gripper State Renderer - domain-specific rendering for gripper domain.
 Renders rooms, robot, grippers, and balls with spatial layout.
 """
 
+import re
 from typing import Dict, List, Set, Optional
 from .base_renderer import BaseStateRenderer, RenderedState, VisualObject, VisualRelation
 
@@ -199,8 +200,9 @@ class GripperRenderer(BaseStateRenderer):
             
             color = self.BALL_COLORS.get(ball, '#9E9E9E')
             
-            # Extract just the number from ball name (e.g., "ball-1" -> "1")
-            ball_label = ball.split('-')[-1] if '-' in ball else ball.upper()
+            # Extract just the number from ball name (e.g., "ball-1" -> "1" or "ball1" -> "1")
+            match = re.search(r'\d+', ball)
+            ball_label = match.group() if match else ball.upper()
             
             ball_obj = VisualObject(
                 id=ball,
