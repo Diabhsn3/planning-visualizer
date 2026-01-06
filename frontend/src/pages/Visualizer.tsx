@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
-import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
 import { 
   Play, Pause, SkipForward, SkipBack, Upload, FileText, 
-  AlertTriangle, Clock, Zap, ChevronDown, Settings, 
+  AlertTriangle, Clock, Zap, Settings, 
   Cpu, CheckCircle2, XCircle, Info, Sparkles
 } from "lucide-react";
 

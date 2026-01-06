@@ -110,8 +110,6 @@ const VALID_STRATEGY_IDS = [
   "wastar-lmcut-2",
 ] as const;
 
-type StrategyId = typeof VALID_STRATEGY_IDS[number];
-
 export const visualizerRouter = router({
   /**
    * Generate states for pre-built examples
