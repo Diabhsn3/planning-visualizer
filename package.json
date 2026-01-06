@@ -1,0 +1,12 @@
+{
+  "name": "planning-visualizer-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel dev",
+    "build:frontend": "pnpm --filter planning-visualizer-frontend build",
+    "build:backend": "pnpm --filter planning-visualizer-web build"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

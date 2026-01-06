@@ -23,7 +23,9 @@
     /* Path mapping */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@server/*": ["../backend/api/*"],
+      "@shared/*": ["../backend/api/shared/*"]
     }
   },
   "include": ["src"],

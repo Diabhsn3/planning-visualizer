@@ -155,14 +155,16 @@ export const visualizerRouter = router({
     .mutation(async ({ input }) => {
       console.log('[uploadAndGenerate] Starting with domain:', input.domainName);
       console.log('[uploadAndGenerate] Problem content length:', input.problemContent.length);
+      
+      let domainPath: string | undefined;
+      let problemPath: string | undefined;
+      
       try {
         // Create uploads directory
         const uploadsDir = path.join(__dirname, "uploads");
         await mkdir(uploadsDir, { recursive: true });
 
         const timestamp = Date.now();
-        let domainPath: string;
-        let problemPath: string;
 
         // If domainContent is empty, use the domain file from repository
         if (!input.domainContent || input.domainContent.trim() === "") {

@@ -86,9 +86,7 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     } else if (state.domain === "gripper") {
       renderGripper(ctx, state);
     } else if(state.domain === "depot"){
-      const badgeLocIds = new Set(state.objects.filter(o => o.type === "depot" || o.type === "distributor").map(o => o.id));
-      renderDepot(ctx, state, {showBadges: isFirst || isLast,badgeLocIds});
-      // renderDepot(ctx, state,  { showBadges: isFirst || isLast });
+      renderDepot(ctx, state);
     } else if(state.domain === "hanoi"){
       renderHanoi(ctx, state);
     } else if(state.domain === "rovers"){

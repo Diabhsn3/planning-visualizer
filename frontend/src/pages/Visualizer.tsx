@@ -148,8 +148,6 @@ export default function Visualizer() {
   return "";
 };
 
-  const prebuiltStates = null;
-
   const uploadMutation = trpc.visualizer.uploadAndGenerate.useMutation({
     onSuccess: (data) => {
       setRenderedStates(data.states);
@@ -181,7 +179,7 @@ export default function Visualizer() {
       uploadMutation.mutate({
         domainContent: "",
         problemContent: content,
-        domainName: selectedDomain,
+        domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers",
       });
       };
 
@@ -199,7 +197,7 @@ export default function Visualizer() {
       uploadMutation.mutate({
         domainContent: "",
         problemContent: getDefaultProblem(selectedDomain),
-        domainName: selectedDomain,
+        domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers",
       });
     }
   };
