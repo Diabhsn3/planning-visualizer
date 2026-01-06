@@ -8,6 +8,15 @@ import subprocess
 import tempfile
 import os
 from pathlib import Path
+from typing import List, Optional, Tuple
+
+# Import search strategies
+from search_strategies import (
+    get_strategy, 
+    get_default_strategy_id, 
+    validate_strategy,
+    SearchStrategy
+)
 
 # Configurable timeout for Fast Downward (in seconds)
 # Can be overridden via environment variable PLANNER_TIMEOUT
@@ -47,24 +56,41 @@ if FD_PATH is None:
     FD_PATH = POSSIBLE_FD_PATHS[0]
 
 
-def run_fast_downward(domain_path: str, problem_path: str, timeout: int = None) -> list[str]:
+def run_fast_downward(
+    domain_path: str, 
+    problem_path: str, 
+    strategy_id: str = None,
+    timeout: int = None
+) -> Tuple[List[str], str]:
     """
     Run Fast Downward planner to solve the problem.
     
     Args:
         domain_path: Path to domain PDDL file
         problem_path: Path to problem PDDL file
-        timeout: Timeout in seconds (default: from environment or 300s)
+        strategy_id: Search strategy ID (from whitelist)
+        timeout: Timeout in seconds (default: from environment or 1800s)
         
     Returns:
-        List of action strings
+        Tuple of (list of action strings, strategy name used)
         
     Raises:
         RuntimeError: If planner fails
         subprocess.TimeoutExpired: If planner times out
+        ValueError: If strategy_id is invalid
     """
     if not FD_PATH.exists():
         raise FileNotFoundError(f"Fast Downward not found at {FD_PATH}")
+    
+    # Get and validate search strategy
+    if strategy_id is None:
+        strategy_id = get_default_strategy_id()
+    
+    if not validate_strategy(strategy_id):
+        raise ValueError(f"Invalid search strategy: {strategy_id}. "
+                        f"Strategy must be from the whitelist.")
+    
+    strategy = get_strategy(strategy_id)
     
     # Use provided timeout or get from environment/default
     if timeout is None:
@@ -75,16 +101,14 @@ def run_fast_downward(domain_path: str, problem_path: str, timeout: int = None) 
         plan_file = Path(tmp.name)
     
     try:
-        # Run Fast Downward with A* and LM-cut heuristic
-        # Use the same Python interpreter that's running this script
+        # Build command with strategy-specific arguments
         cmd = [
             sys.executable,
             str(FD_PATH),
             "--plan-file", str(plan_file),
             domain_path,
             problem_path,
-            "--search", "astar(lmcut())"
-        ]
+        ] + strategy.fd_args  # Add strategy-specific search arguments
         
         result = subprocess.run(
             cmd,
@@ -98,7 +122,7 @@ def run_fast_downward(domain_path: str, problem_path: str, timeout: int = None) 
         
         # Read plan from file
         if not plan_file.exists():
-            return []
+            return [], strategy.name
         
         actions = []
         for line in plan_file.read_text().splitlines():
@@ -106,7 +130,7 @@ def run_fast_downward(domain_path: str, problem_path: str, timeout: int = None) 
             if line and not line.startswith(";"):
                 actions.append(line)
         
-        return actions
+        return actions, strategy.name
         
     finally:
         # Clean up temporary file
@@ -143,7 +167,13 @@ def get_fallback_plan(domain_name: str) -> list[str]:
     return fallback_plans.get(domain_name, [])
 
 
-def solve_problem(domain_path: str, problem_path: str, domain_name: str = None, timeout: int = None) -> tuple[list[str], bool]:
+def solve_problem(
+    domain_path: str, 
+    problem_path: str, 
+    domain_name: str = None, 
+    strategy_id: str = None,
+    timeout: int = None
+) -> Tuple[List[str], bool, str]:
     """
     Solve a planning problem using Fast Downward or fallback to predefined plan.
     
@@ -151,32 +181,48 @@ def solve_problem(domain_path: str, problem_path: str, domain_name: str = None, 
         domain_path: Path to domain PDDL file
         problem_path: Path to problem PDDL file
         domain_name: Optional domain name for fallback
-        timeout: Optional timeout in seconds (default: from environment or 300s)
+        strategy_id: Search strategy ID (from whitelist)
+        timeout: Optional timeout in seconds (default: from environment or 1800s)
         
     Returns:
-        Tuple of (plan actions, used_planner)
+        Tuple of (plan actions, used_planner, strategy_name)
         - plan actions: List of action strings
         - used_planner: True if Fast Downward was used, False if fallback
+        - strategy_name: Name of the strategy used (or "Fallback" if not using planner)
     """
+    # Get strategy for error messages
+    if strategy_id is None:
+        strategy_id = get_default_strategy_id()
+    
+    strategy = get_strategy(strategy_id)
+    strategy_name = strategy.name if strategy else "Unknown"
+    
     try:
         # Try to run Fast Downward
-        actions = run_fast_downward(domain_path, problem_path, timeout)
-        return actions, True
+        actions, used_strategy = run_fast_downward(
+            domain_path, problem_path, strategy_id, timeout
+        )
+        return actions, True, used_strategy
     except subprocess.TimeoutExpired as e:
         # Re-raise timeout errors with more context
         timeout_used = timeout if timeout else get_planner_timeout()
+        
+        # Build helpful suggestion based on strategy
+        suggestion = ""
+        if strategy and strategy.is_optimal:
+            suggestion = " Try using a satisficing strategy like 'lazy-greedy-ff' for faster results."
+        
         raise subprocess.TimeoutExpired(
             e.cmd, 
             timeout_used,
-            output=f"Fast Downward timed out after {timeout_used} seconds. "
-                   f"For large problems, try increasing PLANNER_TIMEOUT environment variable."
+            output=f"Fast Downward timed out after {timeout_used} seconds using {strategy_name}.{suggestion}"
         )
     except (FileNotFoundError, RuntimeError) as e:
         # Fall back to predefined plan
         print(f"Warning: Could not run Fast Downward ({e}). Using fallback plan.", file=sys.stderr)
         if domain_name:
             actions = get_fallback_plan(domain_name)
-            return actions, False
+            return actions, False, "Fallback (predefined plan)"
         else:
             raise RuntimeError("Fast Downward not available and no domain name provided for fallback")
 
@@ -184,20 +230,29 @@ def solve_problem(domain_path: str, problem_path: str, domain_name: str = None, 
 def main():
     """CLI interface for testing."""
     if len(sys.argv) < 3:
-        print("Usage: run_planner.py <domain_path> <problem_path> [domain_name] [timeout_seconds]")
+        print("Usage: run_planner.py <domain_path> <problem_path> [domain_name] [strategy_id] [timeout_seconds]")
         print(f"\nCurrent timeout: {get_planner_timeout()} seconds")
         print("Set PLANNER_TIMEOUT environment variable to override.")
+        print("\nAvailable strategies:")
+        from search_strategies import get_all_strategies
+        for s in get_all_strategies():
+            opt = "optimal" if s.is_optimal else "satisficing"
+            print(f"  {s.id}: {s.name} ({opt}, {s.speed})")
         sys.exit(1)
     
     domain_path = sys.argv[1]
     problem_path = sys.argv[2]
     domain_name = sys.argv[3] if len(sys.argv) > 3 else None
-    timeout = int(sys.argv[4]) if len(sys.argv) > 4 else None
+    strategy_id = sys.argv[4] if len(sys.argv) > 4 else None
+    timeout = int(sys.argv[5]) if len(sys.argv) > 5 else None
     
     try:
-        actions, used_planner = solve_problem(domain_path, problem_path, domain_name, timeout)
+        actions, used_planner, strategy_name = solve_problem(
+            domain_path, problem_path, domain_name, strategy_id, timeout
+        )
         
         print(f"Planner: {'Fast Downward' if used_planner else 'Fallback'}")
+        print(f"Strategy: {strategy_name}")
         print(f"Timeout: {timeout if timeout else get_planner_timeout()} seconds")
         print(f"Plan length: {len(actions)}")
         print("Actions:")

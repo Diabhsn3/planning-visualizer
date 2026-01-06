@@ -64,6 +64,7 @@ const PLANNING_TOOLS_DIR = path.join(__dirname, "../../../planning-tools");
 console.log('[Path Resolution] __dirname:', __dirname);
 console.log('[Path Resolution] PLANNER_DIR:', PLANNER_DIR);
 console.log('[Path Resolution] PLANNING_TOOLS_DIR:', PLANNING_TOOLS_DIR);
+
 const DOMAIN_CONFIGS = {
   "blocks-world": {
     name: "Blocks World",
@@ -89,13 +90,27 @@ const DOMAIN_CONFIGS = {
     domainFile: path.join(PLANNER_DIR, "domains/hanoi/domain.pddl"),
   },
   "rovers": {
-  name: "Rovers",
-  description: "Planetary rovers navigating between waypoints and collecting images",
-  domainFile: path.join(PLANNER_DIR, "domains/rovers/domain.pddl"),
+    name: "Rovers",
+    description: "Planetary rovers navigating between waypoints and collecting images",
+    domainFile: path.join(PLANNER_DIR, "domains/rovers/domain.pddl"),
   },
-
 };
 
+// Whitelist of valid search strategy IDs (must match backend/planner/search_strategies.py)
+const VALID_STRATEGY_IDS = [
+  "astar-lmcut",
+  "astar-blind", 
+  "astar-hmax",
+  "greedy-ff",
+  "lazy-greedy-ff",
+  "greedy-add",
+  "lama-first",
+  "greedy-cea",
+  "wastar-ff-3",
+  "wastar-lmcut-2",
+] as const;
+
+type StrategyId = typeof VALID_STRATEGY_IDS[number];
 
 export const visualizerRouter = router({
   /**
@@ -151,14 +166,16 @@ export const visualizerRouter = router({
         domainContent: z.string(),
         problemContent: z.string(),
         domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"]),
+        searchStrategy: z.enum(VALID_STRATEGY_IDS).optional().default("lazy-greedy-ff"),
       })
     )
     .mutation(async ({ input }) => {
       console.log('[uploadAndGenerate] Starting with domain:', input.domainName);
+      console.log('[uploadAndGenerate] Search strategy:', input.searchStrategy);
       console.log('[uploadAndGenerate] Problem content length:', input.problemContent.length);
       
-      let domainPath: string | undefined;
-      let problemPath: string | undefined;
+      let domainPath: string = "";
+      let problemPath: string = "";
       
       try {
         // Create uploads directory
@@ -185,13 +202,15 @@ export const visualizerRouter = router({
         problemPath = path.join(uploadsDir, `problem_${timestamp}.pddl`);
         await writeFile(problemPath, input.problemContent, "utf-8");
 
-        // Run Python pipeline with planner
+        // Run Python pipeline with planner and search strategy
         const pythonScript = path.join(PLANNER_DIR, "visualizer_api.py");
 
         console.log('[uploadAndGenerate] Running Python script...');
         console.log('[uploadAndGenerate] Using Python command:', PYTHON_CMD);
+        
+        // Pass search strategy as 4th argument
         const { stdout, stderr } = await execAsync(
-          `"${PYTHON_CMD}" "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}"`,
+          `"${PYTHON_CMD}" "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}" "${input.searchStrategy}"`,
           {
             maxBuffer: 10 * 1024 * 1024,
             timeout: 2400000, // 40 minute timeout for planner (Python default is 1800s/30min + buffer)
@@ -244,6 +263,7 @@ export const visualizerRouter = router({
           states: data.states,
           used_planner: data.used_planner,
           planner_info: data.planner_info,
+          search_strategy: data.search_strategy,
         };
       } catch (error) {
         // Clean up files even on error
@@ -276,6 +296,64 @@ export const visualizerRouter = router({
       name: config.name,
       description: config.description,
     }));
+  }),
+
+  /**
+   * Get list of available search strategies
+   */
+  listStrategies: publicProcedure.query(async () => {
+    try {
+      const pythonScript = path.join(PLANNER_DIR, "visualizer_api.py");
+      const { stdout } = await execAsync(
+        `"${PYTHON_CMD}" "${pythonScript}" list-strategies`,
+        {
+          timeout: 10000,
+          env: {
+            ...process.env,
+            PYTHONPATH: '',
+            PYTHONHOME: '',
+          },
+        }
+      );
+      
+      const data = JSON.parse(stdout);
+      if (data.success) {
+        return data.strategies;
+      }
+      throw new Error("Failed to get strategies");
+    } catch (error) {
+      console.error('[listStrategies] Error:', error);
+      // Return hardcoded fallback if Python fails
+      return [
+        {
+          id: "lazy-greedy-ff",
+          name: "Lazy Greedy + FF (Very Fast)",
+          description: "Lazy evaluation greedy search - fastest option",
+          isOptimal: false,
+          speed: "fast",
+          whenToUse: "When speed is the priority and plan quality is secondary",
+          warning: null,
+        },
+        {
+          id: "greedy-ff",
+          name: "Greedy Best-First + FF (Fast)",
+          description: "Fast satisficing search using FF heuristic",
+          isOptimal: false,
+          speed: "fast",
+          whenToUse: "Best for quick results on medium to large problems",
+          warning: null,
+        },
+        {
+          id: "astar-lmcut",
+          name: "A* + LM-cut (Optimal)",
+          description: "Optimal search using A* with landmark-cut heuristic",
+          isOptimal: true,
+          speed: "slow",
+          whenToUse: "When you need the shortest possible plan and can wait",
+          warning: "⚠️ Optimal search can be very slow for large problems (10+ objects). Consider using a satisficing strategy for faster results.",
+        },
+      ];
+    }
   }),
 
   /**
