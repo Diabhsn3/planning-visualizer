@@ -57,8 +57,9 @@ const PYTHON_CMD = getPythonCommand();
 console.log('[Python Detection] Using Python command:', PYTHON_CMD);
 
 // Domain configurations - use absolute paths based on file location
-const PLANNER_DIR = path.join(__dirname, "../planner");
-const PLANNING_TOOLS_DIR = path.join(__dirname, "../planning-tools");
+// When running from dist folder, we need to go up two levels: dist -> api -> backend
+const PLANNER_DIR = path.join(__dirname, "../../planner");
+const PLANNING_TOOLS_DIR = path.join(__dirname, "../../../planning-tools");
 
 console.log('[Path Resolution] __dirname:', __dirname);
 console.log('[Path Resolution] PLANNER_DIR:', PLANNER_DIR);

@@ -240,7 +240,7 @@ export default function Visualizer() {
         uploadMutation.mutate({
           domainContent: "",
           problemContent: content,
-          domainName: selectedDomain as any,
+          domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers",
           searchStrategy: selectedStrategy as any,
         });
       };
@@ -258,7 +258,7 @@ export default function Visualizer() {
       uploadMutation.mutate({
         domainContent: "",
         problemContent: getDefaultProblem(selectedDomain),
-        domainName: selectedDomain as any,
+        domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers",
         searchStrategy: selectedStrategy as any,
       });
     }
