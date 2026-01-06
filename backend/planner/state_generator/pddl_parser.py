@@ -355,6 +355,7 @@ class PDDLParser:
     def _parse_objects(self, tokens: List[str], start: int) -> int:
         """Parse (:objects ...) section."""
         i = start + 2  # Skip '(' and ':objects'
+        last_type_end = start + 2  # Track where the last type assignment ended
         
         while i < len(tokens):
             if tokens[i].startswith('?'):
@@ -362,17 +363,19 @@ class PDDLParser:
             elif tokens[i] == '-':
                 # Type specification
                 obj_type = tokens[i + 1]
-                # Go back and assign type to previous objects
+                # Go back and assign type to previous objects (only back to last_type_end)
                 j = i - 1
-                while j >= start + 2 and tokens[j] not in ['(', ')', '-']:
+                while j >= last_type_end and tokens[j] not in ['(', ')', '-']:
                     if not tokens[j].startswith(':'):
                         self.objects[tokens[j]] = obj_type
                     j -= 1
+                # Update last_type_end to skip past the type name
+                last_type_end = i + 2
                 i += 2
             elif tokens[i] == ')':
-                # Assign default type to remaining objects
+                # Assign default type to remaining objects (only back to last_type_end)
                 j = i - 1
-                while j >= start + 2 and tokens[j] not in ['(', ')', '-']:
+                while j >= last_type_end and tokens[j] not in ['(', ')', '-']:
                     if tokens[j] not in self.objects and not tokens[j].startswith(':'):
                         self.objects[tokens[j]] = 'object'
                     j -= 1
