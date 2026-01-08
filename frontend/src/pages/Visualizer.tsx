@@ -36,6 +36,16 @@ export default function Visualizer() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // Error modal state
+  const [errorModal, setErrorModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    errorType?: string;
+    suggestedDomain?: string;
+    suggestedDomainName?: string;
+  }>({ show: false, title: "", message: "" });
 
   // Fetch search strategies from backend
   const strategiesQuery = trpc.visualizer.listStrategies.useQuery();
@@ -207,15 +217,53 @@ export default function Visualizer() {
         strategy: data.search_strategy
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       setIsProcessing(false);
-      let errorMessage = error.message;
-      if (errorMessage.toLowerCase().includes("timed out")) {
+      
+      // Try to parse the error for domain mismatch info
+      let errorMessage = error.message || "An unknown error occurred";
+      let errorType = "general";
+      let suggestedDomain: string | undefined;
+      let suggestedDomainName: string | undefined;
+      let title = "Error";
+      
+      // Check if the error contains domain mismatch info (from tRPC error data)
+      try {
+        // tRPC errors sometimes include additional data
+        const errorData = error.data?.error || error.data;
+        if (errorData?.error_type === "domain_mismatch" || errorData?.error_type === "possible_domain_mismatch") {
+          errorType = errorData.error_type;
+          suggestedDomain = errorData.suggested_domain;
+          suggestedDomainName = errorData.suggested_domain_name;
+          errorMessage = errorData.error;
+          title = "Domain Mismatch Detected";
+        }
+      } catch {
+        // Ignore parsing errors
+      }
+      
+      // Check message content for domain mismatch indicators
+      if (errorMessage.toLowerCase().includes("different domain") || 
+          errorMessage.toLowerCase().includes("domain mismatch")) {
+        title = "Domain Mismatch Detected";
+        errorType = "domain_mismatch";
+      } else if (errorMessage.toLowerCase().includes("timed out")) {
+        title = "Request Timed Out";
         if (currentStrategy?.isOptimal) {
           errorMessage += "\n\nTip: Try using a faster satisficing strategy like 'Lazy Greedy + FF' for quicker results.";
         }
+      } else if (errorMessage.toLowerCase().includes("no solution")) {
+        title = "No Solution Found";
       }
-      alert(`Error: ${errorMessage}`);
+      
+      setErrorModal({
+        show: true,
+        title,
+        message: errorMessage,
+        errorType,
+        suggestedDomain,
+        suggestedDomainName,
+      });
     },
   });
 
@@ -822,6 +870,75 @@ export default function Visualizer() {
           </p>
         </div>
       </footer>
+
+      {/* Error Modal */}
+      {errorModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Modal Header */}
+            <div className={`px-6 py-4 border-b ${
+              errorModal.errorType === "domain_mismatch" || errorModal.errorType === "possible_domain_mismatch"
+                ? "bg-amber-50 border-amber-200"
+                : "bg-red-50 border-red-200"
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  errorModal.errorType === "domain_mismatch" || errorModal.errorType === "possible_domain_mismatch"
+                    ? "bg-amber-100"
+                    : "bg-red-100"
+                }`}>
+                  <AlertTriangle className={`w-5 h-5 ${
+                    errorModal.errorType === "domain_mismatch" || errorModal.errorType === "possible_domain_mismatch"
+                      ? "text-amber-600"
+                      : "text-red-600"
+                  }`} />
+                </div>
+                <h3 className={`text-lg font-semibold ${
+                  errorModal.errorType === "domain_mismatch" || errorModal.errorType === "possible_domain_mismatch"
+                    ? "text-amber-900"
+                    : "text-red-900"
+                }`}>
+                  {errorModal.title}
+                </h3>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-5">
+              <p className="text-slate-700 whitespace-pre-wrap">{errorModal.message}</p>
+              
+              {/* Domain suggestion */}
+              {errorModal.suggestedDomain && errorModal.suggestedDomainName && (
+                <div className="mt-4 p-4 bg-indigo-50 rounded-xl border border-indigo-200">
+                  <p className="text-sm text-indigo-900 font-medium mb-3">
+                    Would you like to switch to the suggested domain?
+                  </p>
+                  <button
+                    onClick={() => {
+                      setSelectedDomain(errorModal.suggestedDomain!);
+                      setErrorModal({ show: false, title: "", message: "" });
+                    }}
+                    className="w-full px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span>Switch to {errorModal.suggestedDomainName}</span>
+                    <span className="text-indigo-200">→</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setErrorModal({ show: false, title: "", message: "" })}
+                className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

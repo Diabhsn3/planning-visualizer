@@ -28,6 +28,7 @@ from search_strategies import (
     validate_strategy,
     get_strategies_for_api
 )
+from domain_detector import check_domain_mismatch, detect_domain, DOMAIN_SIGNATURES
 
 
 def visualize_plan(
@@ -62,16 +63,73 @@ def visualize_plan(
             strategy_id = get_default_strategy_id()
         strategy = get_strategy(strategy_id)
         
+        # Step 0: Check for domain mismatch BEFORE running planner
+        if domain_name:
+            try:
+                with open(problem_path, 'r') as f:
+                    problem_content = f.read()
+                
+                is_match, suggested_domain, mismatch_message = check_domain_mismatch(
+                    problem_content, domain_name
+                )
+                
+                if not is_match and suggested_domain:
+                    # Get the suggested domain's display name
+                    suggested_name = DOMAIN_SIGNATURES.get(suggested_domain, {}).get("name", suggested_domain)
+                    selected_name = DOMAIN_SIGNATURES.get(domain_name, {}).get("name", domain_name)
+                    
+                    return {
+                        "success": False,
+                        "error": mismatch_message,
+                        "error_type": "domain_mismatch",
+                        "selected_domain": domain_name,
+                        "selected_domain_name": selected_name,
+                        "suggested_domain": suggested_domain,
+                        "suggested_domain_name": suggested_name,
+                    }
+            except Exception as detect_error:
+                # If domain detection fails, continue with planner
+                # (don't block the user due to detection issues)
+                pass
+        
         # Step 1: Solve the problem using Fast Downward (or fallback)
         plan, used_planner, strategy_name = solve_problem(
             domain_path, problem_path, domain_name, strategy_id
         )
         
         if not plan:
-            return {
+            # If no solution found, try to detect the correct domain
+            error_response = {
                 "success": False,
-                "error": "No solution found for the problem"
+                "error": "No solution found for the problem",
+                "error_type": "no_solution",
             }
+            
+            # Try to suggest the correct domain
+            if domain_name:
+                try:
+                    with open(problem_path, 'r') as f:
+                        problem_content = f.read()
+                    
+                    detected_domain, ranked_matches, explanation = detect_domain(problem_content)
+                    
+                    if detected_domain and detected_domain != domain_name:
+                        suggested_name = DOMAIN_SIGNATURES.get(detected_domain, {}).get("name", detected_domain)
+                        selected_name = DOMAIN_SIGNATURES.get(domain_name, {}).get("name", domain_name)
+                        
+                        error_response["error"] = (
+                            f"No solution found. It seems your problem might belong to a different domain. "
+                            f"You selected '{selected_name}', but the problem appears to be for '{suggested_name}'."
+                        )
+                        error_response["error_type"] = "possible_domain_mismatch"
+                        error_response["selected_domain"] = domain_name
+                        error_response["selected_domain_name"] = selected_name
+                        error_response["suggested_domain"] = detected_domain
+                        error_response["suggested_domain_name"] = suggested_name
+                except Exception:
+                    pass
+            
+            return error_response
         
         # Step 2: Generate states
         sg = StateGenerator(domain_path, problem_path)
@@ -104,9 +162,11 @@ def visualize_plan(
     except Exception as e:
         import traceback
         error_msg = str(e)
+        error_type = "general_error"
         
         # Check if it's a timeout error and provide helpful suggestion
         if "timed out" in error_msg.lower():
+            error_type = "timeout"
             strategy = get_strategy(strategy_id) if strategy_id else None
             if strategy and strategy.is_optimal:
                 error_msg += "\n\nSuggestion: Try using a faster satisficing strategy like 'lazy-greedy-ff' or 'greedy-ff'."
@@ -114,6 +174,7 @@ def visualize_plan(
         return {
             "success": False,
             "error": error_msg,
+            "error_type": error_type,
             "traceback": traceback.format_exc()
         }
 
