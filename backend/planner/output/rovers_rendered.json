@@ -30,36 +30,15 @@
           }
         },
         {
-          "id": "rover",
-          "type": "waypoint",
-          "label": "rover",
-          "properties": {
-            "status": "unknown"
-          }
-        },
-        {
           "id": "t1",
           "type": "target",
           "label": "t1",
           "properties": {
             "status": "unknown"
           }
-        },
-        {
-          "id": "waypoint",
-          "type": "target",
-          "label": "waypoint",
-          "properties": {
-            "status": "unknown"
-          }
         }
       ],
       "relations": [
-        {
-          "type": "connected",
-          "source": "w1",
-          "target": "w2"
-        },
         {
           "type": "connected",
           "source": "w2",
@@ -73,6 +52,11 @@
         {
           "type": "at-target",
           "source": "t1",
+          "target": "w2"
+        },
+        {
+          "type": "connected",
+          "source": "w1",
           "target": "w2"
         }
       ],
@@ -108,25 +92,9 @@
           }
         },
         {
-          "id": "rover",
-          "type": "waypoint",
-          "label": "rover",
-          "properties": {
-            "status": "unknown"
-          }
-        },
-        {
           "id": "t1",
           "type": "target",
           "label": "t1",
-          "properties": {
-            "status": "unknown"
-          }
-        },
-        {
-          "id": "waypoint",
-          "type": "target",
-          "label": "waypoint",
           "properties": {
             "status": "unknown"
           }
@@ -134,8 +102,12 @@
       ],
       "relations": [
         {
-          "type": "at-target",
-          "source": "t1",
+          "type": "calibrated",
+          "source": "r1"
+        },
+        {
+          "type": "connected",
+          "source": "w1",
           "target": "w2"
         },
         {
@@ -144,12 +116,8 @@
           "target": "w1"
         },
         {
-          "type": "calibrated",
-          "source": "r1"
-        },
-        {
-          "type": "connected",
-          "source": "w1",
+          "type": "at-target",
+          "source": "t1",
           "target": "w2"
         },
         {
@@ -191,36 +159,15 @@
           }
         },
         {
-          "id": "rover",
-          "type": "waypoint",
-          "label": "rover",
-          "properties": {
-            "status": "unknown"
-          }
-        },
-        {
           "id": "t1",
           "type": "target",
           "label": "t1",
           "properties": {
             "status": "unknown"
           }
-        },
-        {
-          "id": "waypoint",
-          "type": "target",
-          "label": "waypoint",
-          "properties": {
-            "status": "unknown"
-          }
         }
       ],
       "relations": [
-        {
-          "type": "at-target",
-          "source": "t1",
-          "target": "w2"
-        },
         {
           "type": "calibrated",
           "source": "r1"
@@ -233,6 +180,11 @@
         {
           "type": "at-rover",
           "source": "r1",
+          "target": "w2"
+        },
+        {
+          "type": "at-target",
+          "source": "t1",
           "target": "w2"
         },
         {
@@ -274,41 +226,15 @@
           }
         },
         {
-          "id": "rover",
-          "type": "waypoint",
-          "label": "rover",
-          "properties": {
-            "status": "unknown"
-          }
-        },
-        {
           "id": "t1",
           "type": "target",
           "label": "t1",
           "properties": {
             "status": "unknown"
           }
-        },
-        {
-          "id": "waypoint",
-          "type": "target",
-          "label": "waypoint",
-          "properties": {
-            "status": "unknown"
-          }
         }
       ],
       "relations": [
-        {
-          "type": "connected",
-          "source": "w2",
-          "target": "w1"
-        },
-        {
-          "type": "at-target",
-          "source": "t1",
-          "target": "w2"
-        },
         {
           "type": "calibrated",
           "source": "r1"
@@ -319,14 +245,24 @@
           "target": "w2"
         },
         {
+          "type": "have-image",
+          "source": "r1",
+          "target": "t1"
+        },
+        {
           "type": "at-rover",
           "source": "r1",
           "target": "w2"
         },
         {
-          "type": "have-image",
-          "source": "r1",
-          "target": "t1"
+          "type": "at-target",
+          "source": "t1",
+          "target": "w2"
+        },
+        {
+          "type": "connected",
+          "source": "w2",
+          "target": "w1"
         }
       ],
       "metadata": {
@@ -362,25 +298,9 @@
           }
         },
         {
-          "id": "rover",
-          "type": "waypoint",
-          "label": "rover",
-          "properties": {
-            "status": "unknown"
-          }
-        },
-        {
           "id": "t1",
           "type": "target",
           "label": "t1",
-          "properties": {
-            "status": "unknown"
-          }
-        },
-        {
-          "id": "waypoint",
-          "type": "target",
-          "label": "waypoint",
           "properties": {
             "status": "unknown"
           }
@@ -388,27 +308,16 @@
       ],
       "relations": [
         {
-          "type": "connected",
-          "source": "w2",
-          "target": "w1"
-        },
-        {
-          "type": "at-target",
-          "source": "t1",
-          "target": "w2"
-        },
-        {
           "type": "calibrated",
           "source": "r1"
         },
         {
-          "type": "connected",
-          "source": "w1",
-          "target": "w2"
+          "type": "communicated",
+          "source": "t1"
         },
         {
-          "type": "at-rover",
-          "source": "r1",
+          "type": "connected",
+          "source": "w1",
           "target": "w2"
         },
         {
@@ -417,8 +326,19 @@
           "target": "t1"
         },
         {
-          "type": "communicated",
-          "source": "t1"
+          "type": "at-rover",
+          "source": "r1",
+          "target": "w2"
+        },
+        {
+          "type": "at-target",
+          "source": "t1",
+          "target": "w2"
+        },
+        {
+          "type": "connected",
+          "source": "w2",
+          "target": "w1"
         }
       ],
       "metadata": {

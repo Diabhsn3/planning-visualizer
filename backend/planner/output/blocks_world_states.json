@@ -1,29 +1,85 @@
 {
   "domain": "blocks-world",
   "problem": "bw-1",
+  "objects": {
+    "c": "block",
+    "b": "block",
+    "a": "block"
+  },
   "plan": [
     "(pick-up b)",
     "(stack b c)",
     "(pick-up a)",
     "(stack a b)"
   ],
+  "num_states": 5,
   "states": [
     {
-      "clear": [
-        [
-          "b"
-        ],
+      "ontable": [
         [
           "c"
         ],
         [
           "a"
+        ],
+        [
+          "b"
+        ]
+      ],
+      "clear": [
+        [
+          "a"
+        ],
+        [
+          "b"
+        ],
+        [
+          "c"
+        ]
+      ],
+      "handempty": [
+        []
+      ]
+    },
+    {
+      "clear": [
+        [
+          "a"
+        ],
+        [
+          "c"
         ]
       ],
       "ontable": [
         [
-          "b"
+          "a"
         ],
+        [
+          "c"
+        ]
+      ],
+      "holding": [
+        [
+          "b"
+        ]
+      ]
+    },
+    {
+      "on": [
+        [
+          "b",
+          "c"
+        ]
+      ],
+      "clear": [
+        [
+          "a"
+        ],
+        [
+          "b"
+        ]
+      ],
+      "ontable": [
         [
           "a"
         ],
@@ -36,67 +92,6 @@
       ]
     },
     {
-      "holding": [
-        [
-          "b"
-        ]
-      ],
-      "clear": [
-        [
-          "c"
-        ],
-        [
-          "a"
-        ]
-      ],
-      "ontable": [
-        [
-          "a"
-        ],
-        [
-          "c"
-        ]
-      ]
-    },
-    {
-      "clear": [
-        [
-          "b"
-        ],
-        [
-          "a"
-        ]
-      ],
-      "on": [
-        [
-          "b",
-          "c"
-        ]
-      ],
-      "handempty": [
-        []
-      ],
-      "ontable": [
-        [
-          "a"
-        ],
-        [
-          "c"
-        ]
-      ]
-    },
-    {
-      "clear": [
-        [
-          "b"
-        ]
-      ],
-      "on": [
-        [
-          "b",
-          "c"
-        ]
-      ],
       "ontable": [
         [
           "c"
@@ -106,17 +101,33 @@
         [
           "a"
         ]
-      ]
-    },
-    {
+      ],
+      "clear": [
+        [
+          "b"
+        ]
+      ],
       "on": [
         [
           "b",
           "c"
-        ],
+        ]
+      ]
+    },
+    {
+      "on": [
         [
           "a",
           "b"
+        ],
+        [
+          "b",
+          "c"
+        ]
+      ],
+      "clear": [
+        [
+          "a"
         ]
       ],
       "handempty": [
@@ -125,11 +136,6 @@
       "ontable": [
         [
           "c"
-        ]
-      ],
-      "clear": [
-        [
-          "a"
         ]
       ]
     }

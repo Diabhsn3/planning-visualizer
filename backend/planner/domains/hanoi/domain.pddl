@@ -1,22 +1,36 @@
 (define (domain hanoi)
-  (:requirements :strips :typing)
-  (:types disk peg)
+  (:requirements :strips :typing :equality)
+
+  (:types
+    place
+    disk peg - place
+  )
 
   (:predicates
-    (on ?d - disk ?x - (either disk peg))  ; disk is on a disk or a peg
-    (clear ?x - (either disk peg))        ; nothing is on top of x
-    (smaller ?d1 - disk ?d2 - disk)       ; d1 is smaller than d2
+    (on ?d - disk ?x - place)
+    (clear ?x - place)
+    (smaller ?d1 - disk ?d2 - disk)
+
+    ;; explicit "type tests" as predicates (FD-friendly)
+    (is-disk ?x - place)
+    (is-peg  ?x - place)
   )
 
   (:action move
-    :parameters (?d - disk ?from - (either disk peg) ?to - (either disk peg))
+    :parameters (?d - disk ?from - place ?to - place)
     :precondition (and
       (on ?d ?from)
       (clear ?d)
       (clear ?to)
       (not (= ?from ?to))
-      ;; if destination is a disk, it must be larger than ?d
-      (or (not (disk ?to)) (smaller ?d ?to))
+
+      ;; allowed destinations:
+      ;; - any peg
+      ;; - or a larger disk
+      (or
+        (is-peg ?to)
+        (and (is-disk ?to) (smaller ?d ?to))
+      )
     )
     :effect (and
       (not (on ?d ?from))

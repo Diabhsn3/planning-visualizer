@@ -159,25 +159,40 @@ export default function Visualizer() {
     }
 
     if (domain === "hanoi") {
-      return `(define (problem hanoi-default)
+      return `(define (problem hanoi-2-disks)
   (:domain hanoi)
+
   (:objects
-    d1 d2 d3 - disk
-    p1 p2 p3 - peg
+    d1 d2 - disk
+    a b c - peg
   )
+
   (:init
-    (on d1 p1)
-    (on d2 p1)
-    (on d3 p1)
+    ;; mark places
+    (is-disk d1) (is-disk d2)
+    (is-peg a) (is-peg b) (is-peg c)
+
+    ;; size
+    (smaller d1 d2)
+
+    ;; initial stack: d1 on d2 on a
+    (on d2 a)
+    (on d1 d2)
+
+    ;; clear facts
+    (clear d1)
+    (clear b)
+    (clear c)
   )
+
   (:goal
     (and
-      (on d1 p3)
-      (on d2 p3)
-      (on d3 p3)
+      (on d2 c)
+      (on d1 d2)
     )
   )
-)`;
+)
+`;
     }
 
     if (domain === "rovers") {
