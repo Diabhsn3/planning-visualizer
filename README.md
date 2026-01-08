@@ -294,12 +294,6 @@ Large problems with optimal strategies (A* + LM-cut) can take a very long time. 
 
 ---
 
-## License
-
-This project is licensed under the MIT License.
-
----
-
 ## Acknowledgments
 
 - [Fast Downward](https://www.fast-downward.org/) – The classical planning system powering this application.
