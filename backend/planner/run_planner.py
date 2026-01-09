@@ -105,9 +105,11 @@ def run_fast_downward(
     
     try:
         # Build command with strategy-specific arguments
+        # Use --log-level warning to suppress verbose search logs (reduces output by 90%+)
         cmd = [
             sys.executable,
             str(FD_PATH),
+            "--log-level", "warning",  # Suppress verbose logs to prevent stdout buffer overflow
             "--plan-file", str(plan_file),
             domain_path,
             problem_path,

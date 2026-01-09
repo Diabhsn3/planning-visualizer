@@ -236,7 +236,7 @@ export const visualizerRouter = router({
         const { stdout, stderr } = await execAsync(
           `"${PYTHON_CMD}" "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}" "${input.searchStrategy}"`,
           {
-            maxBuffer: 10 * 1024 * 1024,
+            maxBuffer: 50 * 1024 * 1024, // 50 MB to handle large plans (1000+ actions)
             timeout: 2400000, // 40 minute timeout for planner (Python default is 1800s/30min + buffer)
             env: {
               ...process.env,
