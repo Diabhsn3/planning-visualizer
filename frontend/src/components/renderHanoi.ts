@@ -71,7 +71,6 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
     .filter((o) => o.type === "disk" && o.id !== "peg" && o.id !== "disk")
     .sort((a, b) => numFromId(a.id) - numFromId(b.id)); // d1 smallest
 
-  const pegIds = new Set(pegs.map((p) => p.id));
   const diskIds = new Set(disks.map((d) => d.id));
 
   // ---------- Reconstruct stacks from "on" relations ----------
