@@ -1,11 +1,16 @@
 // src/components/renderRovers.ts
-// Enhanced Rovers Domain Visualization
-// Each action has clear visual feedback for viewer-first design
+// Enhanced Rovers Domain Visualization - PURE RENDERER
 // 
+// CRITICAL: This renderer is a PURE FUNCTION.
+// - All visuals are derived ONLY from the current state's predicates
+// - NO global mutable state that persists across renders
+// - Stepping backward/forward shows EXACTLY what that state contains
+// - Animations are keyed to step number and cleared on step change
+//
 // Visual Design:
-// - Targets NOT communicated: Orange crosshair (pending)
+// - Targets NOT communicated: Orange dashed crosshair (pending)
+// - Targets IMAGED: Blue solid crosshair (image captured)
 // - Targets COMMUNICATED: Green filled circle with satellite icon (completed/sent)
-// - The difference should be unmistakable at a glance
 
 // ================= TYPES =================
 export interface VisualObject {
@@ -29,29 +34,44 @@ export interface RenderedState {
   metadata?: Record<string, any>;
 }
 
-// ================= IMAGE CACHE =================
+// ================= IMAGE CACHE (static, not state) =================
 const roverImg = new Image();
 roverImg.src = "/rover.png";
 
 // ================= ANIMATION STATE =================
-// Track temporary visual effects for actions
-interface ActionEffect {
-  type: 'calibrate' | 'take-image' | 'communicate';
-  targetId: string;
+// Animation state is keyed by step number - when step changes, animations reset
+interface AnimationState {
+  step: number;
   startTime: number;
-  duration: number;
 }
 
-let activeEffects: ActionEffect[] = [];
-let lastAction: string | null = null;
-let lastStep: number = -1;
+// Single animation state tracker - resets when step changes
+let animationState: AnimationState | null = null;
 
-// Effect durations in milliseconds
-const EFFECT_DURATION = {
-  calibrate: 1500,
-  'take-image': 1200,
-  communicate: 2000,
-};
+// Animation duration in milliseconds
+const ANIMATION_DURATION = 1500;
+
+// Check if animation should be active for current step
+function isAnimationActive(currentStep: number): boolean {
+  if (!animationState) return false;
+  if (animationState.step !== currentStep) {
+    // Step changed - reset animation state
+    animationState = null;
+    return false;
+  }
+  const elapsed = Date.now() - animationState.startTime;
+  return elapsed < ANIMATION_DURATION;
+}
+
+// Start animation for a new step
+function startAnimationForStep(step: number): void {
+  if (!animationState || animationState.step !== step) {
+    animationState = {
+      step,
+      startTime: Date.now()
+    };
+  }
+}
 
 // ================= HELPER FUNCTIONS =================
 function parseAction(action: string | null): { name: string; params: string[] } | null {
@@ -64,7 +84,6 @@ function parseAction(action: string | null): { name: string; params: string[] } 
 }
 
 function drawCalibrationBadge(ctx: CanvasRenderingContext2D, x: number, y: number, isAnimating: boolean) {
-  // Draw a gear/calibration icon badge on the rover
   const badgeX = x + 16;
   const badgeY = y - 16;
   const radius = 10;
@@ -89,14 +108,12 @@ function drawCalibrationBadge(ctx: CanvasRenderingContext2D, x: number, y: numbe
   ctx.arc(badgeX, badgeY, radius, 0, Math.PI * 2);
   ctx.fill();
 
-  // Gear icon (simplified)
+  // Gear icon
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  // Inner circle
   ctx.arc(badgeX, badgeY, 4, 0, Math.PI * 2);
   ctx.stroke();
-  // Gear teeth (6 lines radiating out)
   for (let i = 0; i < 6; i++) {
     const angle = (i / 6) * Math.PI * 2;
     ctx.beginPath();
@@ -107,20 +124,18 @@ function drawCalibrationBadge(ctx: CanvasRenderingContext2D, x: number, y: numbe
 }
 
 function drawImageBadge(ctx: CanvasRenderingContext2D, x: number, y: number, count: number, isAnimating: boolean) {
-  // Draw a camera/image icon showing rover has captured images
   const badgeX = x - 20;
   const badgeY = y - 16;
   const width = 18;
   const height = 14;
 
-  // Flash effect when taking image
+  // Flash effect when taking image (only during animation)
   if (isAnimating) {
     ctx.save();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     ctx.restore();
     
-    // Camera flash burst
     ctx.save();
     ctx.shadowColor = '#FFD700';
     ctx.shadowBlur = 30;
@@ -161,8 +176,7 @@ function drawImageBadge(ctx: CanvasRenderingContext2D, x: number, y: number, cou
   }
 }
 
-// ================= ENHANCED TARGET MARKER =================
-// CRITICAL: Make communicated state UNMISTAKABLY different from pending state
+// ================= TARGET MARKER (3 distinct states) =================
 function drawTargetMarker(
   ctx: CanvasRenderingContext2D, 
   x: number, 
@@ -177,10 +191,9 @@ function drawTargetMarker(
   if (isCommunicated) {
     // ============================================
     // COMMUNICATED STATE: Green filled circle with satellite icon
-    // Looks "completed" and "final"
     // ============================================
     
-    // Animation: Signal waves expanding outward
+    // Animation: Signal waves
     if (isAnimating) {
       const time = Date.now() % 2000;
       const progress = time / 2000;
@@ -204,7 +217,7 @@ function drawTargetMarker(
     ctx.shadowColor = '#4CAF50';
     ctx.shadowBlur = 12;
     
-    // Filled green circle background
+    // Filled green circle
     ctx.fillStyle = '#4CAF50';
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -218,17 +231,15 @@ function drawTargetMarker(
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Satellite/antenna icon (white)
+    // Satellite icon
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = '#fff';
     ctx.lineWidth = 2;
     
-    // Satellite dish (arc)
     ctx.beginPath();
     ctx.arc(x - 2, y - 2, 10, -Math.PI * 0.8, -Math.PI * 0.2);
     ctx.stroke();
     
-    // Signal waves from dish
     ctx.lineWidth = 1.5;
     for (let i = 1; i <= 3; i++) {
       ctx.beginPath();
@@ -236,7 +247,6 @@ function drawTargetMarker(
       ctx.stroke();
     }
     
-    // Antenna base
     ctx.beginPath();
     ctx.moveTo(x - 6, y + 8);
     ctx.lineTo(x, y);
@@ -250,43 +260,36 @@ function drawTargetMarker(
     ctx.textBaseline = 'top';
     ctx.fillText('✓ SENT', x, y + size + 4);
     
-    // Target ID below
     ctx.fillStyle = '#666';
     ctx.font = 'bold 10px Arial';
     ctx.fillText(label.toUpperCase(), x, y + size + 16);
 
   } else if (hasImage) {
     // ============================================
-    // HAS IMAGE STATE: Blue crosshair (image captured, not yet sent)
+    // HAS IMAGE STATE: Blue solid crosshair
     // ============================================
     
-    // Blue filled background
     ctx.fillStyle = 'rgba(33, 150, 243, 0.2)';
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.fill();
     
-    // Blue crosshair
     ctx.strokeStyle = '#2196F3';
     ctx.lineWidth = 2.5;
     
-    // Outer circle
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.stroke();
     
-    // Inner circle
     ctx.beginPath();
     ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
     ctx.stroke();
     
-    // Center dot
     ctx.fillStyle = '#2196F3';
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Crosshair lines
     ctx.beginPath();
     ctx.moveTo(x - size - 6, y);
     ctx.lineTo(x - size + 8, y);
@@ -298,7 +301,7 @@ function drawTargetMarker(
     ctx.lineTo(x, y + size + 6);
     ctx.stroke();
     
-    // Camera icon badge
+    // Camera badge
     ctx.fillStyle = '#2196F3';
     ctx.beginPath();
     ctx.arc(x + size - 4, y - size + 4, 8, 0, Math.PI * 2);
@@ -308,46 +311,39 @@ function drawTargetMarker(
     ctx.arc(x + size - 4, y - size + 4, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    // "IMAGED" label
     ctx.fillStyle = '#1565C0';
     ctx.font = 'bold 9px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('IMAGED', x, y + size + 4);
     
-    // Target ID below
     ctx.fillStyle = '#666';
     ctx.font = 'bold 10px Arial';
     ctx.fillText(label.toUpperCase(), x, y + size + 16);
 
   } else {
     // ============================================
-    // PENDING STATE: Orange crosshair (not yet imaged)
+    // PENDING STATE: Orange dashed crosshair
     // ============================================
     
-    // Orange crosshair
     ctx.strokeStyle = '#FF9800';
     ctx.lineWidth = 2;
     
-    // Outer circle (dashed to show "incomplete")
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     
-    // Inner circle
     ctx.beginPath();
     ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
     ctx.stroke();
     
-    // Center dot
     ctx.fillStyle = '#FF9800';
     ctx.beginPath();
     ctx.arc(x, y, 3, 0, Math.PI * 2);
     ctx.fill();
 
-    // Crosshair lines
     ctx.beginPath();
     ctx.moveTo(x - size - 4, y);
     ctx.lineTo(x - size + 6, y);
@@ -359,7 +355,6 @@ function drawTargetMarker(
     ctx.lineTo(x, y + size + 4);
     ctx.stroke();
 
-    // Target ID
     ctx.fillStyle = '#666';
     ctx.font = 'bold 10px Arial';
     ctx.textAlign = 'center';
@@ -369,7 +364,6 @@ function drawTargetMarker(
 }
 
 function drawCalibrationRing(ctx: CanvasRenderingContext2D, x: number, y: number) {
-  // Draw an animated calibration ring around the rover
   const time = Date.now() % 2000;
   const rotation = (time / 2000) * Math.PI * 2;
   
@@ -377,7 +371,6 @@ function drawCalibrationRing(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.translate(x, y);
   ctx.rotate(rotation);
   
-  // Dashed rotating ring
   ctx.strokeStyle = '#4CAF50';
   ctx.lineWidth = 3;
   ctx.setLineDash([8, 8]);
@@ -386,7 +379,6 @@ function drawCalibrationRing(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.stroke();
   ctx.setLineDash([]);
   
-  // Calibration markers (4 points)
   ctx.fillStyle = '#4CAF50';
   for (let i = 0; i < 4; i++) {
     const angle = (i / 4) * Math.PI * 2;
@@ -398,7 +390,7 @@ function drawCalibrationRing(ctx: CanvasRenderingContext2D, x: number, y: number
   ctx.restore();
 }
 
-// ================= MAIN RENDER FUNCTION =================
+// ================= MAIN RENDER FUNCTION (PURE) =================
 export function renderRovers(
   ctx: CanvasRenderingContext2D,
   state: RenderedState
@@ -416,7 +408,6 @@ export function renderRovers(
   ctx.fillStyle = '#f8f9fa';
   ctx.fillRect(0, 0, W, H);
 
-  // Subtle grid
   ctx.strokeStyle = 'rgba(0,0,0,0.06)';
   ctx.lineWidth = 1;
   for (let y = 0; y < rows; y++) {
@@ -430,49 +421,22 @@ export function renderRovers(
   const pathColor = '#B0BEC5';
   const textColor = '#444';
 
-  // ================= PROCESS ACTION FOR EFFECTS =================
+  // ================= GET CURRENT STEP AND ACTION =================
   const currentStep = state.metadata?.step ?? 0;
   const action = state.metadata?.action ?? null;
-  const now = Date.now();
 
-  // Detect new action and create effect
-  if (action && (action !== lastAction || currentStep !== lastStep)) {
-    const parsed = parseAction(action);
-    if (parsed) {
-      let effectType: ActionEffect['type'] | null = null;
-      let targetId = '';
-
-      if (parsed.name === 'calibrate') {
-        effectType = 'calibrate';
-        targetId = parsed.params[0] || ''; // rover id
-      } else if (parsed.name === 'take-image') {
-        effectType = 'take-image';
-        targetId = parsed.params[0] || ''; // rover id
-      } else if (parsed.name === 'communicate') {
-        effectType = 'communicate';
-        targetId = parsed.params[1] || ''; // target id
-      }
-
-      if (effectType && targetId) {
-        activeEffects.push({
-          type: effectType,
-          targetId,
-          startTime: now,
-          duration: EFFECT_DURATION[effectType],
-        });
-      }
-    }
-    lastAction = action;
-    lastStep = currentStep;
+  // Start animation only when we arrive at a new step with an action
+  if (action && currentStep > 0) {
+    startAnimationForStep(currentStep);
   }
 
-  // Clean up expired effects
-  activeEffects = activeEffects.filter(e => now - e.startTime < e.duration);
+  // Check if animation is active for THIS step
+  const showAnimation = isAnimationActive(currentStep);
 
-  // Check if specific effects are active
-  const isEffectActive = (type: ActionEffect['type'], targetId: string) => {
-    return activeEffects.some(e => e.type === type && e.targetId === targetId);
-  };
+  // Parse action to determine what type of animation to show
+  const parsedAction = parseAction(action);
+  const actionType = parsedAction?.name ?? '';
+  const actionParams = parsedAction?.params ?? [];
 
   // ================= FILTER OBJECTS =================
   const waypoints = state.objects.filter(o => {
@@ -489,19 +453,21 @@ export function renderRovers(
     return true;
   });
 
-  const targets = state.objects.filter(o => {
-    if (o.type !== 'target') return false;
-    const id = (o.id ?? '').toLowerCase();
-    if (id === 'rover' || id === 'waypoint' || id === 'target') return false;
-    return true;
-  });
+  // Note: targets are rendered based on at-target relations, not the objects array
 
-  // ================= BUILD have-image SET =================
-  // Check which targets have been imaged by any rover
+  // ================= BUILD STATE FROM RELATIONS (PURE) =================
+  // These are derived ONLY from the current state's relations
   const imagedTargets = new Set<string>();
   for (const rel of state.relations) {
     if (rel.type === 'have-image' && rel.target) {
       imagedTargets.add(rel.target);
+    }
+  }
+
+  const communicatedTargets = new Set<string>();
+  for (const rel of state.relations) {
+    if (rel.type === 'communicated') {
+      communicatedTargets.add(rel.source);
     }
   }
 
@@ -552,24 +518,20 @@ export function renderRovers(
     const p = wpPos[w.id];
     if (!p) continue;
 
-    // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.1)';
     ctx.beginPath();
     ctx.arc(p.x + 2, p.y + 2, 20, 0, Math.PI * 2);
     ctx.fill();
 
-    // Waypoint circle
     ctx.fillStyle = waypointColor;
     ctx.beginPath();
     ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
     ctx.fill();
 
-    // Border
     ctx.strokeStyle = '#43A047';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Label
     ctx.fillStyle = textColor;
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'center';
@@ -582,13 +544,15 @@ export function renderRovers(
     const p = wpPos[t.target!];
     if (!p) continue;
 
-    // Find target object to check communicated status
-    const targetObj = targets.find(to => to.id === t.source);
-    const isCommunicated = targetObj?.properties?.communicated === true;
+    // Get state from the CURRENT state's data only
+    const isCommunicated = communicatedTargets.has(t.source);
     const hasImage = imagedTargets.has(t.source);
-    const isAnimating = isEffectActive('communicate', t.source);
+    
+    // Animation only for the specific target being communicated in THIS action
+    const isAnimating = showAnimation && 
+                        actionType === 'communicate' && 
+                        actionParams[1] === t.source;
 
-    // Position target offset from waypoint
     const tx = p.x + 40;
     const ty = p.y + 40;
 
@@ -600,7 +564,7 @@ export function renderRovers(
     const p = wpPos[r.target!];
     if (!p) continue;
 
-    // Find rover object to get properties
+    // Get rover properties from the CURRENT state only
     const roverObj = rovers.find(ro => ro.id === r.source);
     const isCalibrated = roverObj?.properties?.calibrated === true;
     const images = roverObj?.properties?.images || [];
@@ -609,20 +573,24 @@ export function renderRovers(
     const rx = p.x;
     const ry = p.y;
 
-    // Calibration animation ring (when calibrating)
-    const isCalibrateAnimating = isEffectActive('calibrate', r.source);
+    // Animation only for the specific rover being calibrated in THIS action
+    const isCalibrateAnimating = showAnimation && 
+                                  actionType === 'calibrate' && 
+                                  actionParams[0] === r.source;
+    
+    const isTakeImageAnimating = showAnimation && 
+                                  actionType === 'take-image' && 
+                                  actionParams[0] === r.source;
+
+    // Calibration ring animation
     if (isCalibrateAnimating) {
       drawCalibrationRing(ctx, rx, ry);
     }
-
-    // Take-image flash effect
-    const isTakeImageAnimating = isEffectActive('take-image', r.source);
 
     // Draw rover image
     if (roverImg.complete) {
       ctx.drawImage(roverImg, rx - 24, ry - 24, 48, 48);
     } else {
-      // Fallback: draw a simple rover shape
       ctx.fillStyle = '#FF6B6B';
       ctx.beginPath();
       ctx.arc(rx, ry, 20, 0, Math.PI * 2);
@@ -636,13 +604,13 @@ export function renderRovers(
     ctx.textBaseline = 'middle';
     ctx.fillText(r.source.toUpperCase(), rx + 30, ry);
 
-    // Calibration badge (persistent when calibrated)
+    // Calibration badge (ONLY if calibrated in THIS state)
     if (isCalibrated) {
       drawCalibrationBadge(ctx, rx, ry, isCalibrateAnimating);
     }
 
-    // Image badge (shows count of captured images)
-    if (imageCount > 0 || isTakeImageAnimating) {
+    // Image badge (ONLY if has images in THIS state)
+    if (imageCount > 0) {
       drawImageBadge(ctx, rx, ry, imageCount, isTakeImageAnimating);
     }
   }
@@ -663,7 +631,7 @@ export function renderRovers(
   ctx.textBaseline = 'middle';
   ctx.fillText('LEGEND', legendX, legendY + 5);
 
-  // Calibrated indicator (green gear)
+  // Calibrated
   ctx.fillStyle = '#4CAF50';
   ctx.beginPath();
   ctx.arc(legendX + 8, legendY + 24, 6, 0, Math.PI * 2);
@@ -672,7 +640,7 @@ export function renderRovers(
   ctx.font = '9px Arial';
   ctx.fillText('Rover Calibrated', legendX + 20, legendY + 24);
 
-  // Has image indicator (blue camera)
+  // Has image
   ctx.fillStyle = '#2196F3';
   ctx.beginPath();
   ctx.roundRect(legendX + 2, legendY + 38, 12, 10, 2);
@@ -680,7 +648,7 @@ export function renderRovers(
   ctx.fillStyle = '#666';
   ctx.fillText('Rover Has Image', legendX + 20, legendY + 43);
 
-  // Target pending (orange dashed)
+  // Target pending
   ctx.strokeStyle = '#FF9800';
   ctx.lineWidth = 2;
   ctx.setLineDash([3, 3]);
@@ -691,7 +659,7 @@ export function renderRovers(
   ctx.fillStyle = '#666';
   ctx.fillText('Target (Pending)', legendX + 20, legendY + 62);
 
-  // Target imaged (blue solid)
+  // Target imaged
   ctx.strokeStyle = '#2196F3';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -700,7 +668,7 @@ export function renderRovers(
   ctx.fillStyle = '#666';
   ctx.fillText('Target (Imaged)', legendX + 20, legendY + 80);
 
-  // Target communicated (green filled)
+  // Target communicated
   ctx.fillStyle = '#4CAF50';
   ctx.beginPath();
   ctx.arc(legendX + 8, legendY + 98, 6, 0, Math.PI * 2);
