@@ -82,9 +82,10 @@ export function renderDepot(
   const cols = Math.max(8, maxX + 2);
   const rows = Math.max(5, maxY + 2);
 
-  const scale = ctx.getTransform().a || 1;
-  const viewW = ctx.canvas.width / scale;
-  const viewH = ctx.canvas.height / scale;
+  // FIXED world dimensions - canvas transform handles zoom
+  // DO NOT divide by scale - that causes the "resize objects" bug
+  const viewW = 800;
+  const viewH = 600;
 
   const startX = Math.max(PADDING, (viewW - cols * GRID) / 2);
   const startY = Math.max(PADDING, (viewH - rows * GRID) / 2);

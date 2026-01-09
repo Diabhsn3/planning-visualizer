@@ -1,4 +1,8 @@
 // src/components/renderHanoi.ts
+// 
+// CAMERA-BASED ZOOM: This renderer uses FIXED world-unit sizes.
+// The canvas transform (scale + translate) handles zoom/pan.
+// DO NOT read or compensate for the scale - just draw at fixed sizes.
 
 // ================= TYPES =================
 export interface VisualObject {
@@ -23,14 +27,18 @@ export interface RenderedState {
 
 // ================= MAIN =================
 export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState) {
-  // ---------- Canvas ----------
-  const scale = ctx.getTransform().a || 1;
-  const viewW = ctx.canvas.width / scale;
-  const viewH = ctx.canvas.height / scale;
+  // ---------- FIXED World Dimensions ----------
+  // These are in "world units" - the canvas transform handles zoom
+  // DO NOT divide by scale - that causes the "resize objects" bug
+  const WORLD_WIDTH = 800;
+  const WORLD_HEIGHT = 600;
 
-  ctx.clearRect(0, 0, viewW, viewH);
+  // Clear the world area (in world coordinates)
+  ctx.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  
+  // Background
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, viewW, viewH);
+  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
   // ---------- Colors ----------
   const pegColor = "#8B5A2B";
@@ -62,21 +70,17 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
   };
 
   // ---------- Extract pegs & disks ----------
-  // (the "o.id !== 'peg'" filters are unnecessary, but keeping your guardrails)
   const pegs = state.objects
     .filter((o) => o.type === "peg" && o.id !== "peg" && o.id !== "disk")
     .sort((a, b) => numFromId(a.id) - numFromId(b.id));
 
   const disks = state.objects
     .filter((o) => o.type === "disk" && o.id !== "peg" && o.id !== "disk")
-    .sort((a, b) => numFromId(a.id) - numFromId(b.id)); // d1 smallest
+    .sort((a, b) => numFromId(a.id) - numFromId(b.id));
 
   const diskIds = new Set(disks.map((d) => d.id));
 
   // ---------- Reconstruct stacks from "on" relations ----------
-  // We expect relations like:
-  //   (on d1 d2)  and (on d2 a)
-  // Build: supportToDisk["a"] = "d2", supportToDisk["d2"] = "d1"
   const supportToDisk = new Map<string, string>();
   const diskToSupport = new Map<string, string>();
 
@@ -87,10 +91,8 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
     const disk = rel.source;
     const support = rel.target;
 
-    // Defensive: only consider "on" where source is actually a disk object
     if (!diskIds.has(disk)) continue;
 
-    // In valid Hanoi, each disk has exactly one support, and each support has at most one disk on it.
     diskToSupport.set(disk, support);
     supportToDisk.set(support, disk);
   }
@@ -100,36 +102,30 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
   for (const peg of pegs) {
     const stack: string[] = [];
     let support: string = peg.id;
-
-    // Prevent infinite loops if state is inconsistent
     const seen = new Set<string>();
 
     while (supportToDisk.has(support)) {
       const d = supportToDisk.get(support)!;
       if (seen.has(d)) break;
       seen.add(d);
-
       stack.push(d);
-      support = d; // next disk sits on this disk
+      support = d;
     }
 
-    // stack is bottom->top already by construction
     stacks.set(peg.id, stack);
   }
 
-  // Optional: detect floating disks (inconsistent states)
-  // We'll ignore them in drawing to avoid random junk, but you could draw them aside if you want.
-  // const rendered = new Set<string>();
-  // for (const arr of stacks.values()) arr.forEach((d) => rendered.add(d));
-
-  // ---------- Layout ----------
+  // ---------- FIXED Layout (world units) ----------
   const pegCount = Math.max(1, pegs.length);
-  const spacing = viewW / (pegCount + 1);
-  const pegBaseY = viewH * 0.7;
+  const spacing = WORLD_WIDTH / (pegCount + 1);
+  const pegBaseY = WORLD_HEIGHT * 0.7;
 
+  // Fixed sizes in world units
   const pegHeight = 150;
   const poleWidth = 10;
   const diskHeight = 18;
+  const baseWidth = 120;
+  const baseHeight = 12;
 
   // ---------- Draw pegs ----------
   const pegCenters: Record<string, number> = {};
@@ -137,9 +133,9 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
     const cx = spacing * (i + 1);
     pegCenters[peg.id] = cx;
 
-    // Base
+    // Base shadow
     ctx.fillStyle = baseColor;
-    roundRect(cx - 60, pegBaseY + 6, 120, 12, 6);
+    roundRect(cx - baseWidth/2, pegBaseY + 6, baseWidth, baseHeight, 6);
     ctx.fill();
 
     // Pole
@@ -164,11 +160,11 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
 
     let currentY = pegBaseY;
 
-    // Draw bottom->top (diskStack is already bottom->top)
     for (const diskId of diskStack) {
-      const rank = numFromId(diskId) || 1; // assumes ids like d1,d2,...
+      const rank = numFromId(diskId) || 1;
       const t = (rank - 1) / Math.max(1, totalDisks - 1);
 
+      // Fixed disk sizes in world units
       const minW = 50;
       const maxW = 140;
       const w = minW + (maxW - minW) * t;
@@ -196,4 +192,15 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
       currentY = y;
     }
   }
+
+  // ---------- Title ----------
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 20px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText("Tower of Hanoi", WORLD_WIDTH / 2, 20);
+  
+  ctx.font = "14px Arial";
+  ctx.fillStyle = "#666";
+  ctx.fillText(`${disks.length} disk${disks.length !== 1 ? 's' : ''}`, WORLD_WIDTH / 2, 45);
 }

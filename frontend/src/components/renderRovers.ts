@@ -395,9 +395,10 @@ export function renderRovers(
   ctx: CanvasRenderingContext2D,
   state: RenderedState
 ) {
-  const scale = ctx.getTransform().a || 1;
-  const W = ctx.canvas.width / scale;
-  const H = ctx.canvas.height / scale;
+  // FIXED world dimensions - canvas transform handles zoom
+  // DO NOT divide by scale - that causes the "resize objects" bug
+  const W = 800;
+  const H = 600;
 
   // ================= GRID BACKGROUND =================
   const GRID = 100;
