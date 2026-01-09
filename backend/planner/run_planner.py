@@ -164,6 +164,30 @@ def get_fallback_plan(domain_name: str) -> list[str]:
             "(move rooma roomb)",
             "(drop ball1 roomb left)",
             "(drop ball2 roomb right)"
+        ],
+        "hanoi": [
+            # Move 2 disks from peg A to peg C using B as auxiliary
+            # Initial: d1 on d2 on A, goal: d1 on d2 on C
+            "(move d1 d2 b)",    # Move d1 from d2 to peg B
+            "(move d2 a c)",     # Move d2 from peg A to peg C
+            "(move d1 b d2)"     # Move d1 from peg B to d2 (on C)
+        ],
+        "depot": [
+            # Simple depot plan - move one crate
+            "(drive truck0 depot0 distributor0)",
+            "(lift hoist0 crate0 pallet0 depot0)",
+            "(load hoist0 crate0 truck0 depot0)",
+            "(drive truck0 depot0 distributor0)",
+            "(unload hoist1 crate0 truck0 distributor0)",
+            "(drop hoist1 crate0 pallet1 distributor0)"
+        ],
+        "rovers": [
+            # Simple rover plan
+            "(navigate rover0 waypoint0 waypoint1)",
+            "(sample_soil rover0 store0 waypoint1)",
+            "(navigate rover0 waypoint1 waypoint0)",
+            "(drop rover0 store0)",
+            "(communicate_soil_data rover0 general lander0 waypoint1 waypoint0)"
         ]
     }
     

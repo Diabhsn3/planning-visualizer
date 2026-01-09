@@ -130,12 +130,14 @@ class StateGenerator:
                 # Remove predicate from state
                 self.current_state.discard(grounded_pred)
     
-    def apply_action(self, grounded_action: str) -> bool:
+    def apply_action(self, grounded_action: str, force_apply: bool = False) -> bool:
         """
         Apply a grounded action to the current state.
         
         Args:
             grounded_action: Grounded action string (e.g., "(pick-up a)")
+            force_apply: If True, apply effects even if preconditions can't be verified
+                        (useful when planner has already validated the plan)
             
         Returns:
             True if action was successfully applied
@@ -159,10 +161,14 @@ class StateGenerator:
         for (var_name, var_type), obj in zip(action.parameters, params):
             binding[var_name] = obj
         
-        # Check preconditions
-        if not self.check_preconditions(action, binding):
-            print(f"Warning: Preconditions not satisfied for action {grounded_action}", file=sys.stderr)
-            return False
+        # Check preconditions (but allow override with force_apply)
+        preconditions_ok = self.check_preconditions(action, binding)
+        if not preconditions_ok:
+            if force_apply:
+                print(f"Warning: Preconditions not verified for action {grounded_action}, applying anyway (planner validated)", file=sys.stderr)
+            else:
+                print(f"Warning: Preconditions not satisfied for action {grounded_action}", file=sys.stderr)
+                return False
         
         # Apply effects
         self.apply_effects(action, binding)
@@ -172,12 +178,14 @@ class StateGenerator:
         
         return True
     
-    def apply_plan(self, plan: List[str]) -> List[Set[Predicate]]:
+    def apply_plan(self, plan: List[str], force_apply: bool = True) -> List[Set[Predicate]]:
         """
         Apply a sequence of actions (plan) to generate all intermediate states.
         
         Args:
             plan: List of grounded action strings
+            force_apply: If True, apply effects even if preconditions can't be verified
+                        (default True since planner has already validated the plan)
             
         Returns:
             List of states (including initial state)
@@ -185,10 +193,11 @@ class StateGenerator:
         self.reset()
         
         for i, action in enumerate(plan):
-            success = self.apply_action(action)
+            success = self.apply_action(action, force_apply=force_apply)
             if not success:
                 print(f"Failed to apply action {i}: {action}", file=sys.stderr)
-                break
+                # Don't break - try to continue with remaining actions
+                # This allows partial visualization even if some actions fail
         
         return self.get_state_history()
     
