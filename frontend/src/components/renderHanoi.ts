@@ -53,6 +53,10 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
     "#A8D8EA",
     "#F38181",
     "#FCBAD3",
+    "#B5EAD7",
+    "#C7CEEA",
+    "#FFDAC1",
+    "#E2F0CB",
   ];
 
   // ---------- Helpers ----------
@@ -79,6 +83,7 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
     .sort((a, b) => numFromId(a.id) - numFromId(b.id));
 
   const diskIds = new Set(disks.map((d) => d.id));
+  const totalDisks = disks.length;
 
   // ---------- Reconstruct stacks from "on" relations ----------
   const supportToDisk = new Map<string, string>();
@@ -115,17 +120,37 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
     stacks.set(peg.id, stack);
   }
 
-  // ---------- FIXED Layout (world units) ----------
+  // ---------- DYNAMIC Layout based on disk count ----------
   const pegCount = Math.max(1, pegs.length);
   const spacing = WORLD_WIDTH / (pegCount + 1);
-  const pegBaseY = WORLD_HEIGHT * 0.7;
-
+  
   // Fixed sizes in world units
-  const pegHeight = 150;
   const poleWidth = 10;
-  const diskHeight = 18;
   const baseWidth = 120;
   const baseHeight = 12;
+  
+  // DYNAMIC disk height - smaller disks for more disks
+  // Scale from 18px (3 disks) down to 10px (15+ disks)
+  const diskHeight = Math.max(10, Math.min(18, 24 - totalDisks));
+  
+  // DYNAMIC peg height - must accommodate all disks stacked
+  // Add padding for visual breathing room (20% extra + minimum 80px)
+  const minPegHeight = 100;
+  const maxStackHeight = totalDisks * diskHeight;
+  const pegHeight = Math.max(minPegHeight, maxStackHeight * 1.3 + 30);
+  
+  // DYNAMIC base Y position - adjust based on peg height to keep layout centered
+  // Keep some margin from bottom (at least 80px) and top (at least 100px for title)
+  const topMargin = 80;
+  const bottomMargin = 60;
+  const availableHeight = WORLD_HEIGHT - topMargin - bottomMargin;
+  
+  // If peg is taller than available space, scale everything down
+  const scaleFactor = pegHeight > availableHeight ? availableHeight / pegHeight : 1;
+  const effectivePegHeight = pegHeight * scaleFactor;
+  const effectiveDiskHeight = diskHeight * scaleFactor;
+  
+  const pegBaseY = WORLD_HEIGHT - bottomMargin;
 
   // ---------- Draw pegs ----------
   const pegCenters: Record<string, number> = {};
@@ -138,9 +163,9 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
     roundRect(cx - baseWidth/2, pegBaseY + 6, baseWidth, baseHeight, 6);
     ctx.fill();
 
-    // Pole
+    // Pole - now with dynamic height
     ctx.fillStyle = pegColor;
-    roundRect(cx - poleWidth / 2, pegBaseY - pegHeight, poleWidth, pegHeight, 4);
+    roundRect(cx - poleWidth / 2, pegBaseY - effectivePegHeight, poleWidth, effectivePegHeight, 4);
     ctx.fill();
 
     // Label
@@ -148,12 +173,10 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
     ctx.font = "bold 14px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText(peg.id.toUpperCase(), cx, pegBaseY - pegHeight - 10);
+    ctx.fillText(peg.id.toUpperCase(), cx, pegBaseY - effectivePegHeight - 10);
   });
 
   // ---------- Draw disks ----------
-  const totalDisks = Math.max(1, disks.length);
-
   for (const [pegId, diskStack] of stacks.entries()) {
     const cx = pegCenters[pegId];
     if (cx === undefined) continue;
@@ -164,30 +187,33 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
       const rank = numFromId(diskId) || 1;
       const t = (rank - 1) / Math.max(1, totalDisks - 1);
 
-      // Fixed disk sizes in world units
-      const minW = 50;
-      const maxW = 140;
+      // Dynamic disk width based on rank
+      // Smaller disks for more total disks to fit within peg spacing
+      const minW = Math.max(30, 60 - totalDisks * 2);
+      const maxW = Math.min(spacing * 0.9, 160 - totalDisks * 3);
       const w = minW + (maxW - minW) * t;
 
       const x = cx - w / 2;
-      const y = currentY - diskHeight;
+      const y = currentY - effectiveDiskHeight;
 
       // Shadow
       ctx.fillStyle = "rgba(0,0,0,0.12)";
-      roundRect(x + 2, y + 2, w, diskHeight, 8);
+      roundRect(x + 2, y + 2, w, effectiveDiskHeight, 6);
       ctx.fill();
 
       // Disk
       ctx.fillStyle = diskColors[(rank - 1) % diskColors.length];
-      roundRect(x, y, w, diskHeight, 8);
+      roundRect(x, y, w, effectiveDiskHeight, 6);
       ctx.fill();
 
-      // Label
-      ctx.fillStyle = "rgba(0,0,0,0.75)";
-      ctx.font = "bold 11px Arial";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(`D${rank}`, x + w / 2, y + diskHeight / 2);
+      // Label - only show if disk is tall enough
+      if (effectiveDiskHeight >= 12) {
+        ctx.fillStyle = "rgba(0,0,0,0.75)";
+        ctx.font = `bold ${Math.max(8, Math.min(11, effectiveDiskHeight - 4))}px Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`D${rank}`, x + w / 2, y + effectiveDiskHeight / 2);
+      }
 
       currentY = y;
     }
