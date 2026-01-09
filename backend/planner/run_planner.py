@@ -30,18 +30,21 @@ def get_planner_timeout() -> int:
         return DEFAULT_PLANNER_TIMEOUT
 
 # Path to Fast Downward - try multiple possible locations
-# This handles both local development and Manus environment
-SCRIPT_DIR = Path(__file__).resolve().parent  # python_modules/
-WEB_APP_DIR = SCRIPT_DIR.parent  # web-app/
+# This handles local development (Mac/Windows), server deployment, and Manus sandbox
+SCRIPT_DIR = Path(__file__).resolve().parent  # backend/planner/
+BACKEND_DIR = SCRIPT_DIR.parent  # backend/
+PROJECT_ROOT = BACKEND_DIR.parent  # planning-visualizer/
 
 # Try multiple possible locations for Fast Downward
 POSSIBLE_FD_PATHS = [
-    # Location 1: Sibling to web-app directory (local development)
-    WEB_APP_DIR.parent / "planning-tools" / "downward" / "fast-downward.py",
-    # Location 2: In parent's planning-visualizer directory (Manus environment)
-    WEB_APP_DIR.parent.parent / "planning-visualizer" / "planning-tools" / "downward" / "fast-downward.py",
-    # Location 3: Absolute path in Manus environment
+    # Location 1: Project root (standard structure - works for local & server)
+    PROJECT_ROOT / "planning-tools" / "downward" / "fast-downward.py",
+    # Location 2: Server deployment path (/home/user/)
+    Path("/home/user/planning-visualizer/planning-tools/downward/fast-downward.py"),
+    # Location 3: Manus sandbox path (/home/ubuntu/)
     Path("/home/ubuntu/planning-visualizer/planning-tools/downward/fast-downward.py"),
+    # Location 4: User's home directory (macOS/Linux local development)
+    Path.home() / "planning-visualizer" / "planning-tools" / "downward" / "fast-downward.py",
 ]
 
 # Find the first path that exists
