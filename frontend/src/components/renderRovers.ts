@@ -435,8 +435,8 @@ export function renderRovers(
   }
 
   // ================= CALCULATE WAYPOINT RADII =================
-  const BASE_WAYPOINT_RADIUS = 32;
-  const ROVER_SLOT_SIZE = 45;  // Space per rover when multiple
+  const BASE_WAYPOINT_RADIUS = 45;  // Larger base size
+  const ROVER_SLOT_SIZE = 60;  // More space per rover when multiple
   const SHADOW_OFFSET = 2;
 
   const waypointRadii: Record<string, number> = {};
@@ -453,12 +453,23 @@ export function renderRovers(
   // ================= DYNAMIC LAYOUT WITH FORCE-BASED SPACING =================
   waypoints.sort((a, b) => a.id.localeCompare(b.id));
 
-  // Initial grid layout
-  const colsWp = Math.ceil(Math.sqrt(waypoints.length));
-  const BASE_CELL_X = 180;
-  const BASE_CELL_Y = 140;
-  const startX = 120;
-  const startY = 100;
+  // Calculate layout to use full canvas
+  const numWaypoints = waypoints.length;
+  const colsWp = Math.ceil(Math.sqrt(numWaypoints));
+  const rowsWp = Math.ceil(numWaypoints / colsWp);
+  
+  // Use most of the canvas, leaving margins
+  const MARGIN_X = 100;
+  const MARGIN_Y = 80;
+  const MARGIN_BOTTOM = 150; // Extra space for legend
+  const usableW = W - 2 * MARGIN_X;
+  const usableH = H - MARGIN_Y - MARGIN_BOTTOM;
+  
+  // Calculate spacing based on number of waypoints
+  const BASE_CELL_X = colsWp > 1 ? usableW / (colsWp - 1) : usableW;
+  const BASE_CELL_Y = rowsWp > 1 ? usableH / (rowsWp - 1) : usableH;
+  const startX = MARGIN_X;
+  const startY = MARGIN_Y;
 
   interface WaypointPos {
     x: number;
@@ -468,20 +479,31 @@ export function renderRovers(
 
   const wpPos: Record<string, WaypointPos> = {};
 
-  // Initial positions
+  // Initial positions - spread across full canvas
   waypoints.forEach((w, i) => {
     const col = i % colsWp;
     const row = Math.floor(i / colsWp);
+    
+    // Center single column/row
+    let x = startX + col * BASE_CELL_X;
+    let y = startY + row * BASE_CELL_Y;
+    
+    // For single waypoint, center it
+    if (numWaypoints === 1) {
+      x = W / 2;
+      y = H / 2 - 50;
+    }
+    
     wpPos[w.id] = {
-      x: startX + col * BASE_CELL_X,
-      y: startY + row * BASE_CELL_Y,
+      x,
+      y,
       radius: waypointRadii[w.id]
     };
   });
 
   // Apply force-based repulsion to prevent overlaps
   // Run a few iterations to push apart overlapping waypoints
-  const MIN_GAP = 30; // Minimum gap between waypoint edges
+  const MIN_GAP = 50; // Minimum gap between waypoint edges
   
   for (let iteration = 0; iteration < 10; iteration++) {
     let moved = false;
@@ -596,7 +618,7 @@ export function renderRovers(
     roverIds.sort();
 
     // Calculate rover size based on count
-    const roverImgSize = roverCount > 1 ? 40 : 70;
+    const roverImgSize = roverCount > 1 ? 55 : 85;
     const spacing = roverCount > 1 ? ROVER_SLOT_SIZE : 0;
     const totalWidth = (roverCount - 1) * spacing;
     const startRoverX = p.x - totalWidth / 2;
