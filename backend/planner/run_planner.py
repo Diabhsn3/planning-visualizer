@@ -7,8 +7,9 @@ import sys
 import subprocess
 import tempfile
 import os
+import re
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Set
 
 # Import search strategies
 from search_strategies import (
@@ -57,6 +58,99 @@ for path in POSSIBLE_FD_PATHS:
 # If no path found, use the first one (will fail later with clear error)
 if FD_PATH is None:
     FD_PATH = POSSIBLE_FD_PATHS[0]
+
+
+def extract_objects_from_problem(problem_path: str) -> Set[str]:
+    """
+    Extract object names from a PDDL problem file.
+    
+    Args:
+        problem_path: Path to problem PDDL file
+        
+    Returns:
+        Set of object names defined in the problem
+    """
+    objects = set()
+    try:
+        with open(problem_path, 'r') as f:
+            content = f.read().lower()
+        
+        # Find :objects section
+        objects_match = re.search(r'\(:objects\s+(.*?)\)', content, re.DOTALL)
+        if objects_match:
+            objects_text = objects_match.group(1)
+            # Remove type annotations (- type)
+            objects_text = re.sub(r'-\s*\w+', '', objects_text)
+            # Extract individual object names
+            for word in objects_text.split():
+                word = word.strip()
+                if word and not word.startswith('(') and not word.startswith(')'):
+                    objects.add(word)
+    except Exception:
+        pass
+    
+    return objects
+
+
+def extract_objects_from_plan(plan: List[str]) -> Set[str]:
+    """
+    Extract object names referenced in a plan.
+    
+    Args:
+        plan: List of action strings
+        
+    Returns:
+        Set of object names used in the plan
+    """
+    objects = set()
+    for action in plan:
+        # Parse action: (action-name arg1 arg2 ...)
+        action = action.strip().lower()
+        if action.startswith('(') and action.endswith(')'):
+            action = action[1:-1]
+        parts = action.split()
+        if len(parts) > 1:
+            # Skip the action name, collect arguments
+            for arg in parts[1:]:
+                objects.add(arg)
+    return objects
+
+
+def validate_plan_matches_problem(plan: List[str], problem_path: str) -> Tuple[bool, str]:
+    """
+    Validate that a plan's objects match the problem's objects.
+    
+    This catches the case where a fallback plan is used that doesn't
+    match the actual problem being solved.
+    
+    Args:
+        plan: List of action strings
+        problem_path: Path to problem PDDL file
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not plan:
+        return True, ""  # Empty plan is valid (unsolvable or trivial)
+    
+    problem_objects = extract_objects_from_problem(problem_path)
+    plan_objects = extract_objects_from_plan(plan)
+    
+    if not problem_objects:
+        # Couldn't parse problem, skip validation
+        return True, ""
+    
+    # Check if plan objects are a subset of problem objects
+    unknown_objects = plan_objects - problem_objects
+    
+    if unknown_objects:
+        return False, (
+            f"Plan references objects not in the problem: {', '.join(sorted(unknown_objects))}. "
+            f"Problem objects: {', '.join(sorted(problem_objects))}. "
+            f"This usually means the planner failed and a fallback plan was incorrectly used."
+        )
+    
+    return True, ""
 
 
 def run_fast_downward(
@@ -147,6 +241,9 @@ def get_fallback_plan(domain_name: str) -> list[str]:
     """
     Get a predefined plan for testing when Fast Downward is not available.
     
+    NOTE: These fallback plans are ONLY valid for the built-in default problems.
+    They should NOT be used for custom user problems.
+    
     Args:
         domain_name: Name of the domain
         
@@ -184,12 +281,11 @@ def get_fallback_plan(domain_name: str) -> list[str]:
             "(drop hoist1 crate0 pallet1 distributor0)"
         ],
         "rovers": [
-            # Simple rover plan
+            # Simple rover plan - navigate, calibrate, take-image, communicate
             "(navigate rover0 waypoint0 waypoint1)",
-            "(sample_soil rover0 store0 waypoint1)",
-            "(navigate rover0 waypoint1 waypoint0)",
-            "(drop rover0 store0)",
-            "(communicate_soil_data rover0 general lander0 waypoint1 waypoint0)"
+            "(calibrate rover0 waypoint1)",
+            "(take-image rover0 target0 waypoint1)",
+            "(communicate rover0 target0)"
         ]
     }
     
@@ -201,7 +297,8 @@ def solve_problem(
     problem_path: str, 
     domain_name: str = None, 
     strategy_id: str = None,
-    timeout: int = None
+    timeout: int = None,
+    allow_fallback: bool = True
 ) -> Tuple[List[str], bool, str]:
     """
     Solve a planning problem using Fast Downward or fallback to predefined plan.
@@ -212,6 +309,7 @@ def solve_problem(
         domain_name: Optional domain name for fallback
         strategy_id: Search strategy ID (from whitelist)
         timeout: Optional timeout in seconds (default: from environment or 1800s)
+        allow_fallback: If False, raise error instead of using fallback plan
         
     Returns:
         Tuple of (plan actions, used_planner, strategy_name)
@@ -247,10 +345,28 @@ def solve_problem(
             output=f"Fast Downward timed out after {timeout_used} seconds using {strategy_name}.{suggestion}"
         )
     except (FileNotFoundError, RuntimeError) as e:
+        # Check if fallback is allowed
+        if not allow_fallback:
+            raise RuntimeError(
+                f"Fast Downward planner is not available: {e}. "
+                f"Please ensure Fast Downward is installed and accessible."
+            )
+        
         # Fall back to predefined plan
         print(f"Warning: Could not run Fast Downward ({e}). Using fallback plan.", file=sys.stderr)
         if domain_name:
             actions = get_fallback_plan(domain_name)
+            
+            # CRITICAL: Validate that fallback plan matches the problem
+            is_valid, error_msg = validate_plan_matches_problem(actions, problem_path)
+            if not is_valid:
+                raise RuntimeError(
+                    f"Fast Downward is not available and the fallback plan does not match your problem. "
+                    f"{error_msg}\n\n"
+                    f"To solve custom problems, Fast Downward must be installed. "
+                    f"The fallback plans only work with the built-in default examples."
+                )
+            
             return actions, False, "Fallback (predefined plan)"
         else:
             raise RuntimeError("Fast Downward not available and no domain name provided for fallback")

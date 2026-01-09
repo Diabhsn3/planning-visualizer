@@ -171,6 +171,16 @@ def visualize_plan(
             if strategy and strategy.is_optimal:
                 error_msg += "\n\nSuggestion: Try using a faster satisficing strategy like 'lazy-greedy-ff' or 'greedy-ff'."
         
+        # Check if it's a planner unavailable / fallback mismatch error
+        elif "fallback plan does not match" in error_msg.lower() or "fast downward is not available" in error_msg.lower():
+            error_type = "planner_unavailable"
+            # Provide a cleaner user-facing message
+            error_msg = (
+                "The Fast Downward planner is not available or failed to run. "
+                "Custom problems require the planner to be properly installed. "
+                "Please contact the system administrator to ensure Fast Downward is configured correctly."
+            )
+        
         return {
             "success": False,
             "error": error_msg,
