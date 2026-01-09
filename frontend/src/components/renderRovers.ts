@@ -11,6 +11,7 @@
 // - Targets NOT communicated: Orange dashed crosshair (pending)
 // - Targets IMAGED: Blue solid crosshair (image captured)
 // - Targets COMMUNICATED: Green filled circle with satellite icon (completed/sent)
+// - Multiple rovers at same waypoint: Spread in a row, waypoint expands
 
 // ================= TYPES =================
 export interface VisualObject {
@@ -355,48 +356,44 @@ function drawTargetMarker(
     ctx.lineTo(x, y + size + 4);
     ctx.stroke();
 
-    ctx.fillStyle = '#666';
-    ctx.font = 'bold 10px Arial';
+    ctx.fillStyle = '#E65100';
+    ctx.font = 'bold 9px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText(label.toUpperCase(), x, y + size + 6);
+    ctx.fillText('PENDING', x, y + size + 4);
+    
+    ctx.fillStyle = '#666';
+    ctx.font = 'bold 10px Arial';
+    ctx.fillText(label.toUpperCase(), x, y + size + 16);
   }
 }
 
+// ================= CALIBRATION RING ANIMATION =================
 function drawCalibrationRing(ctx: CanvasRenderingContext2D, x: number, y: number) {
   const time = Date.now() % 2000;
-  const rotation = (time / 2000) * Math.PI * 2;
+  const progress = time / 2000;
   
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rotation);
-  
-  ctx.strokeStyle = '#4CAF50';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([8, 8]);
-  ctx.beginPath();
-  ctx.arc(0, 0, 35, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  
-  ctx.fillStyle = '#4CAF50';
-  for (let i = 0; i < 4; i++) {
-    const angle = (i / 4) * Math.PI * 2;
+  for (let i = 0; i < 3; i++) {
+    const ringProgress = (progress + i * 0.33) % 1;
+    const radius = 30 + ringProgress * 30;
+    const alpha = 1 - ringProgress;
+    
+    ctx.strokeStyle = `rgba(76, 175, 80, ${alpha})`;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(Math.cos(angle) * 35, Math.sin(angle) * 35, 4, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.stroke();
   }
-  
   ctx.restore();
 }
 
-// ================= MAIN RENDER FUNCTION (PURE) =================
+// ================= MAIN RENDER FUNCTION =================
 export function renderRovers(
   ctx: CanvasRenderingContext2D,
   state: RenderedState
-) {
-  // FIXED world dimensions - canvas transform handles zoom
-  // DO NOT divide by scale - that causes the "resize objects" bug
+): void {
+  // Fixed world-unit dimensions (camera zoom is handled by canvas transform)
   const W = 800;
   const H = 600;
 
@@ -477,6 +474,21 @@ export function renderRovers(
   const atRovers = state.relations.filter(r => r.type === 'at-rover');
   const atTargets = state.relations.filter(r => r.type === 'at-target');
 
+  // ================= COUNT ROVERS PER WAYPOINT =================
+  // This is needed to:
+  // 1. Dynamically size waypoints based on rover count
+  // 2. Spread rovers horizontally when multiple are at the same waypoint
+  const roversAtWaypoint: Record<string, string[]> = {};
+  for (const r of atRovers) {
+    const wp = r.target;
+    if (wp) {
+      if (!roversAtWaypoint[wp]) {
+        roversAtWaypoint[wp] = [];
+      }
+      roversAtWaypoint[wp].push(r.source);
+    }
+  }
+
   // ================= LAYOUT =================
   waypoints.sort((a, b) => a.id.localeCompare(b.id));
 
@@ -515,45 +527,58 @@ export function renderRovers(
   }
 
   // ================= DRAW WAYPOINTS =================
-  const WAYPOINT_RADIUS = 32;   // was 20 → now 64px diameter
+  const BASE_WAYPOINT_RADIUS = 32;   // Base radius for 0-1 rovers
+  const ROVER_SIZE = 50;             // Space needed per rover (reduced from 96)
   const SHADOW_OFFSET = 2;
+
   for (const w of waypoints) {
-  const p = wpPos[w.id];
-  if (!p) continue;
+    const p = wpPos[w.id];
+    if (!p) continue;
 
-  // shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.1)';
-  ctx.beginPath();
-  ctx.arc(
-    p.x + SHADOW_OFFSET,
-    p.y + SHADOW_OFFSET,
-    WAYPOINT_RADIUS,
-    0,
-    Math.PI * 2
-  );
-  ctx.fill();
+    // Calculate dynamic radius based on rover count
+    const roverCount = roversAtWaypoint[w.id]?.length || 0;
+    let waypointRadius = BASE_WAYPOINT_RADIUS;
+    
+    if (roverCount > 1) {
+      // Expand waypoint to fit all rovers in a row
+      // Each rover needs ROVER_SIZE width, plus some padding
+      const totalRoverWidth = roverCount * ROVER_SIZE;
+      waypointRadius = Math.max(BASE_WAYPOINT_RADIUS, totalRoverWidth / 2 + 10);
+    }
 
-  // main circle
-  ctx.fillStyle = waypointColor;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, WAYPOINT_RADIUS, 0, Math.PI * 2);
-  ctx.fill();
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.beginPath();
+    ctx.arc(
+      p.x + SHADOW_OFFSET,
+      p.y + SHADOW_OFFSET,
+      waypointRadius,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
 
-  ctx.strokeStyle = '#43A047';
-  ctx.lineWidth = 2;
-  ctx.stroke();
+    // main circle
+    ctx.fillStyle = waypointColor;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, waypointRadius, 0, Math.PI * 2);
+    ctx.fill();
 
-  // label
-  ctx.fillStyle = textColor;
-  ctx.font = 'bold 12px Arial';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillText(
-    w.id.toUpperCase(),
-    p.x,
-    p.y + WAYPOINT_RADIUS + 6
-  );
-}
+    ctx.strokeStyle = '#43A047';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // label
+    ctx.fillStyle = textColor;
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(
+      w.id.toUpperCase(),
+      p.x,
+      p.y + waypointRadius + 6
+    );
+  }
 
   // ================= DRAW TARGETS =================
   for (const t of atTargets) {
@@ -569,66 +594,97 @@ export function renderRovers(
                         actionType === 'communicate' && 
                         actionParams[1] === t.source;
 
-    const tx = p.x + 50;
-    const ty = p.y + 50;
+    // Calculate waypoint radius for target offset
+    const roverCount = roversAtWaypoint[t.target!]?.length || 0;
+    let waypointRadius = BASE_WAYPOINT_RADIUS;
+    if (roverCount > 1) {
+      const totalRoverWidth = roverCount * ROVER_SIZE;
+      waypointRadius = Math.max(BASE_WAYPOINT_RADIUS, totalRoverWidth / 2 + 10);
+    }
+
+    // Position target outside the waypoint
+    const tx = p.x + waypointRadius + 30;
+    const ty = p.y + 30;
 
     drawTargetMarker(ctx, tx, ty, t.source, isCommunicated, hasImage, isAnimating);
   }
 
   // ================= DRAW ROVERS =================
-  for (const r of atRovers) {
-    const p = wpPos[r.target!];
+  // Group rovers by waypoint for proper spreading
+  for (const wpId of Object.keys(roversAtWaypoint)) {
+    const roverIds = roversAtWaypoint[wpId];
+    const p = wpPos[wpId];
     if (!p) continue;
 
-    // Get rover properties from the CURRENT state only
-    const roverObj = rovers.find(ro => ro.id === r.source);
-    const isCalibrated = roverObj?.properties?.calibrated === true;
-    const images = roverObj?.properties?.images || [];
-    const imageCount = images.length;
-
-    const rx = p.x;
-    const ry = p.y;
-
-    // Animation only for the specific rover being calibrated in THIS action
-    const isCalibrateAnimating = showAnimation && 
-                                  actionType === 'calibrate' && 
-                                  actionParams[0] === r.source;
+    const roverCount = roverIds.length;
     
-    const isTakeImageAnimating = showAnimation && 
-                                  actionType === 'take-image' && 
-                                  actionParams[0] === r.source;
+    // Calculate positions for each rover at this waypoint
+    // Spread them horizontally, centered on the waypoint
+    const spacing = ROVER_SIZE;
+    const totalWidth = (roverCount - 1) * spacing;
+    const startX = p.x - totalWidth / 2;
 
-    // Calibration ring animation
-    if (isCalibrateAnimating) {
-      drawCalibrationRing(ctx, rx, ry);
-    }
+    roverIds.sort(); // Sort for consistent ordering
 
-    // Draw rover image
-    if (roverImg.complete) {
-      ctx.drawImage(roverImg, rx - 48, ry - 48, 96, 96);
-    } else {
-      ctx.fillStyle = '#FF6B6B';
-      ctx.beginPath();
-      ctx.arc(rx, ry, 20, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    roverIds.forEach((roverId, index) => {
+      // Find the at-rover relation for this rover
+      const roverRel = atRovers.find(r => r.source === roverId && r.target === wpId);
+      if (!roverRel) return;
 
-    // Rover label
-    ctx.fillStyle = textColor;
-    ctx.font = 'bold 11px Arial';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(r.source.toUpperCase(), rx + 10, ry);
+      // Get rover properties from the CURRENT state only
+      const roverObj = rovers.find(ro => ro.id === roverId);
+      const isCalibrated = roverObj?.properties?.calibrated === true;
+      const images = roverObj?.properties?.images || [];
+      const imageCount = images.length;
 
-    // Calibration badge (ONLY if calibrated in THIS state)
-    if (isCalibrated) {
-      drawCalibrationBadge(ctx, rx, ry, isCalibrateAnimating);
-    }
+      // Calculate this rover's position
+      const rx = startX + index * spacing;
+      const ry = p.y;
 
-    // Image badge (ONLY if has images in THIS state)
-    if (imageCount > 0) {
-      drawImageBadge(ctx, rx, ry, imageCount, isTakeImageAnimating);
-    }
+      // Animation only for the specific rover being calibrated in THIS action
+      const isCalibrateAnimating = showAnimation && 
+                                    actionType === 'calibrate' && 
+                                    actionParams[0] === roverId;
+      
+      const isTakeImageAnimating = showAnimation && 
+                                    actionType === 'take-image' && 
+                                    actionParams[0] === roverId;
+
+      // Calibration ring animation
+      if (isCalibrateAnimating) {
+        drawCalibrationRing(ctx, rx, ry);
+      }
+
+      // Draw rover image (smaller when multiple rovers)
+      const roverImgSize = roverCount > 1 ? 48 : 96;
+      const roverImgOffset = roverImgSize / 2;
+      
+      if (roverImg.complete) {
+        ctx.drawImage(roverImg, rx - roverImgOffset, ry - roverImgOffset, roverImgSize, roverImgSize);
+      } else {
+        ctx.fillStyle = '#FF6B6B';
+        ctx.beginPath();
+        ctx.arc(rx, ry, roverImgSize / 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Rover label (positioned below the rover)
+      ctx.fillStyle = textColor;
+      ctx.font = 'bold 11px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(roverId.toUpperCase(), rx, ry + roverImgOffset + 2);
+
+      // Calibration badge (ONLY if calibrated in THIS state)
+      if (isCalibrated) {
+        drawCalibrationBadge(ctx, rx, ry - roverImgOffset/2, isCalibrateAnimating);
+      }
+
+      // Image badge (ONLY if has images in THIS state)
+      if (imageCount > 0) {
+        drawImageBadge(ctx, rx, ry - roverImgOffset/2, imageCount, isTakeImageAnimating);
+      }
+    });
   }
 
   // ================= LEGEND =================
