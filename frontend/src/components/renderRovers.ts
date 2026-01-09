@@ -665,11 +665,11 @@ export function renderRovers(
       
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.beginPath();
-      ctx.roundRect(rx - labelWidth/2, labelY - 1, labelWidth, roverCount > 1 ? 11 : 14, 3);
+      ctx.roundRect(rx - labelWidth/2 +10, labelY + 15, labelWidth, roverCount > 1 ? 11 : 14, 3);
       ctx.fill();
       
       ctx.fillStyle = '#fff';
-      ctx.fillText(labelText, rx, labelY);
+      ctx.fillText(labelText, rx+10 , labelY+15);
 
       // Badges
       if (isCalibrated) {
