@@ -271,45 +271,6 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
           {Math.round(scale * 100)}%
         </span>
       </div>
-      
-      {/* Rovers Legend - Fixed position overlay */}
-      {state.domain === "rovers" && (
-        <div style={{
-          position: "absolute",
-          bottom: "10px",
-          left: "10px",
-          background: "rgba(255, 255, 255, 0.95)",
-          padding: "10px 12px",
-          borderRadius: "6px",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          border: "1px solid #ddd",
-          fontSize: "11px",
-          lineHeight: "1.6",
-          zIndex: 10
-        }}>
-          <div style={{ fontWeight: "bold", marginBottom: "6px", color: "#666" }}>LEGEND</div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-            <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#4CAF50" }} />
-            <span style={{ color: "#666" }}>Rover Calibrated</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-            <div style={{ width: "12px", height: "10px", borderRadius: "2px", background: "#2196F3" }} />
-            <span style={{ color: "#666" }}>Rover Has Image</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-            <div style={{ width: "12px", height: "12px", borderRadius: "50%", border: "2px dashed #FF9800", boxSizing: "border-box" }} />
-            <span style={{ color: "#666" }}>Target (Pending)</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-            <div style={{ width: "12px", height: "12px", borderRadius: "50%", border: "2px solid #2196F3", boxSizing: "border-box" }} />
-            <span style={{ color: "#666" }}>Target (Imaged)</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#4CAF50", border: "1px solid #fff", boxSizing: "border-box" }} />
-            <span style={{ color: "#666" }}>Target (Sent ✓)</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
