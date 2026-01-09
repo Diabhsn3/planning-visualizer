@@ -57,9 +57,34 @@ const PYTHON_CMD = getPythonCommand();
 console.log('[Python Detection] Using Python command:', PYTHON_CMD);
 
 // Domain configurations - use absolute paths based on file location
-// When running from dist folder, we need to go up two levels: dist -> api -> backend
-const PLANNER_DIR = path.join(__dirname, "../../planner");
-const PLANNING_TOOLS_DIR = path.join(__dirname, "../../../planning-tools");
+// Handle both development (running from source) and production (running from dist)
+function resolvePlannerDir(): string {
+  // __dirname will be:
+  // - Development: /path/to/planning-visualizer/backend/api
+  // - Production: /path/to/planning-visualizer/backend/api/dist
+  
+  // Check if we're in dist folder
+  if (__dirname.endsWith('/dist') || __dirname.endsWith('\\dist')) {
+    // Production: go up from dist -> api -> backend -> planner
+    return path.join(__dirname, '../../../planner');
+  } else {
+    // Development: go up from api -> backend -> planner
+    return path.join(__dirname, '../planner');
+  }
+}
+
+function resolvePlanningToolsDir(): string {
+  if (__dirname.endsWith('/dist') || __dirname.endsWith('\\dist')) {
+    // Production: go up from dist -> api -> backend -> project root -> planning-tools
+    return path.join(__dirname, '../../../../planning-tools');
+  } else {
+    // Development: go up from api -> backend -> project root -> planning-tools
+    return path.join(__dirname, '../../planning-tools');
+  }
+}
+
+const PLANNER_DIR = resolvePlannerDir();
+const PLANNING_TOOLS_DIR = resolvePlanningToolsDir();
 
 console.log('[Path Resolution] __dirname:', __dirname);
 console.log('[Path Resolution] PLANNER_DIR:', PLANNER_DIR);
