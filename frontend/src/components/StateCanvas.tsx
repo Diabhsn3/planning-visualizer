@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { renderDepot } from "@/components/renderDepot";
 import {renderHanoi} from "@/components/renderHanoi";
 import {renderRovers} from "@/components/renderRovers";
@@ -10,6 +10,17 @@ robotImage.src = "/rooboot.png"; // served from /public
 let robotImageLoaded = false;
 robotImage.onload = () => {
   robotImageLoaded = true;
+};
+
+// ============================================
+// PERSISTENT VIEW STATE (survives re-renders and re-mounts)
+// ============================================
+// Store view state outside of React to ensure it persists
+// across step navigation, play/pause, and component re-mounts
+const persistentViewState = {
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
 };
 
 interface VisualObject {
@@ -53,11 +64,29 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Zoom and pan state
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  // Initialize state from persistent storage to survive re-mounts
+  const [scale, setScaleState] = useState(persistentViewState.scale);
+  const [offset, setOffsetState] = useState({ 
+    x: persistentViewState.offsetX, 
+    y: persistentViewState.offsetY 
+  });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  
+  // Wrapper functions that update both React state and persistent storage
+  const setScale = useCallback((newScale: number | ((prev: number) => number)) => {
+    setScaleState(prev => {
+      const nextScale = typeof newScale === 'function' ? newScale(prev) : newScale;
+      persistentViewState.scale = nextScale;
+      return nextScale;
+    });
+  }, []);
+  
+  const setOffset = useCallback((newOffset: { x: number; y: number }) => {
+    persistentViewState.offsetX = newOffset.x;
+    persistentViewState.offsetY = newOffset.y;
+    setOffsetState(newOffset);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -151,10 +180,13 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
   };
 
   // Reset zoom and pan
-  const handleReset = () => {
-    setScale(1);
-    setOffset({ x: 0, y: 0 });
-  };
+  const handleReset = useCallback(() => {
+    persistentViewState.scale = 1;
+    persistentViewState.offsetX = 0;
+    persistentViewState.offsetY = 0;
+    setScaleState(1);
+    setOffsetState({ x: 0, y: 0 });
+  }, []);
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
