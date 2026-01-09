@@ -65,20 +65,21 @@ function resolvePlannerDir(): string {
   
   // Check if we're in dist folder
   if (__dirname.endsWith('/dist') || __dirname.endsWith('\\dist')) {
-    // Production: go up from dist -> api -> backend -> planner
-    return path.join(__dirname, '../../../planner');
+    // Production: dist -> api -> planner (within backend)
+    // dist is inside api, so go up twice to get to backend, then into planner
+    return path.join(__dirname, '../../planner');
   } else {
-    // Development: go up from api -> backend -> planner
+    // Development: api -> planner (within backend)
     return path.join(__dirname, '../planner');
   }
 }
 
 function resolvePlanningToolsDir(): string {
   if (__dirname.endsWith('/dist') || __dirname.endsWith('\\dist')) {
-    // Production: go up from dist -> api -> backend -> project root -> planning-tools
-    return path.join(__dirname, '../../../../planning-tools');
+    // Production: dist -> api -> backend -> project root -> planning-tools
+    return path.join(__dirname, '../../../planning-tools');
   } else {
-    // Development: go up from api -> backend -> project root -> planning-tools
+    // Development: api -> backend -> project root -> planning-tools
     return path.join(__dirname, '../../planning-tools');
   }
 }
