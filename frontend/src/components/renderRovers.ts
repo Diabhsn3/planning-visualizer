@@ -12,6 +12,8 @@
 // - Targets IMAGED: Blue solid crosshair (image captured)
 // - Targets COMMUNICATED: Green filled circle with satellite icon (completed/sent)
 // - Multiple rovers at same waypoint: Spread in a row, waypoint expands
+// - Connection lines connect to waypoint edges (not centers)
+// - Waypoints dynamically space apart based on their sizes
 
 // ================= TYPES =================
 export interface VisualObject {
@@ -40,23 +42,17 @@ const roverImg = new Image();
 roverImg.src = "/rover.png";
 
 // ================= ANIMATION STATE =================
-// Animation state is keyed by step number - when step changes, animations reset
 interface AnimationState {
   step: number;
   startTime: number;
 }
 
-// Single animation state tracker - resets when step changes
 let animationState: AnimationState | null = null;
-
-// Animation duration in milliseconds
 const ANIMATION_DURATION = 1500;
 
-// Check if animation should be active for current step
 function isAnimationActive(currentStep: number): boolean {
   if (!animationState) return false;
   if (animationState.step !== currentStep) {
-    // Step changed - reset animation state
     animationState = null;
     return false;
   }
@@ -64,13 +60,9 @@ function isAnimationActive(currentStep: number): boolean {
   return elapsed < ANIMATION_DURATION;
 }
 
-// Start animation for a new step
 function startAnimationForStep(step: number): void {
   if (!animationState || animationState.step !== step) {
-    animationState = {
-      step,
-      startTime: Date.now()
-    };
+    animationState = { step, startTime: Date.now() };
   }
 }
 
@@ -84,12 +76,20 @@ function parseAction(action: string | null): { name: string; params: string[] } 
   return { name: parts[0], params: parts.slice(1) };
 }
 
-function drawCalibrationBadge(ctx: CanvasRenderingContext2D, x: number, y: number, isAnimating: boolean) {
-  const badgeX = x + 16;
-  const badgeY = y - 16;
-  const radius = 10;
+// Calculate point on circle edge given center, radius, and angle to target point
+function getEdgePoint(cx: number, cy: number, radius: number, tx: number, ty: number): { x: number; y: number } {
+  const angle = Math.atan2(ty - cy, tx - cx);
+  return {
+    x: cx + Math.cos(angle) * radius,
+    y: cy + Math.sin(angle) * radius
+  };
+}
 
-  // Animated glow effect
+function drawCalibrationBadge(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, isAnimating: boolean) {
+  const badgeX = x + size * 0.3;
+  const badgeY = y - size * 0.3;
+  const radius = 8;
+
   if (isAnimating) {
     const time = Date.now() % 1000;
     const pulse = Math.sin((time / 1000) * Math.PI * 2) * 0.3 + 0.7;
@@ -103,34 +103,31 @@ function drawCalibrationBadge(ctx: CanvasRenderingContext2D, x: number, y: numbe
     ctx.restore();
   }
 
-  // Badge background
   ctx.fillStyle = '#4CAF50';
   ctx.beginPath();
   ctx.arc(badgeX, badgeY, radius, 0, Math.PI * 2);
   ctx.fill();
 
-  // Gear icon
   ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(badgeX, badgeY, 4, 0, Math.PI * 2);
+  ctx.arc(badgeX, badgeY, 3, 0, Math.PI * 2);
   ctx.stroke();
   for (let i = 0; i < 6; i++) {
     const angle = (i / 6) * Math.PI * 2;
     ctx.beginPath();
-    ctx.moveTo(badgeX + Math.cos(angle) * 4, badgeY + Math.sin(angle) * 4);
-    ctx.lineTo(badgeX + Math.cos(angle) * 8, badgeY + Math.sin(angle) * 8);
+    ctx.moveTo(badgeX + Math.cos(angle) * 3, badgeY + Math.sin(angle) * 3);
+    ctx.lineTo(badgeX + Math.cos(angle) * 6, badgeY + Math.sin(angle) * 6);
     ctx.stroke();
   }
 }
 
-function drawImageBadge(ctx: CanvasRenderingContext2D, x: number, y: number, count: number, isAnimating: boolean) {
-  const badgeX = x - 20;
-  const badgeY = y - 16;
-  const width = 18;
-  const height = 14;
+function drawImageBadge(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, count: number, isAnimating: boolean) {
+  const badgeX = x - size * 0.3;
+  const badgeY = y - size * 0.3;
+  const width = 14;
+  const height = 11;
 
-  // Flash effect when taking image (only during animation)
   if (isAnimating) {
     ctx.save();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
@@ -147,37 +144,34 @@ function drawImageBadge(ctx: CanvasRenderingContext2D, x: number, y: number, cou
     ctx.restore();
   }
 
-  // Badge background
   ctx.fillStyle = '#2196F3';
   ctx.beginPath();
-  ctx.roundRect(badgeX - width/2, badgeY - height/2, width, height, 3);
+  ctx.roundRect(badgeX - width/2, badgeY - height/2, width, height, 2);
   ctx.fill();
 
-  // Camera lens
   ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.arc(badgeX, badgeY, 4, 0, Math.PI * 2);
+  ctx.arc(badgeX, badgeY, 3, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#2196F3';
   ctx.beginPath();
-  ctx.arc(badgeX, badgeY, 2, 0, Math.PI * 2);
+  ctx.arc(badgeX, badgeY, 1.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Image count badge
   if (count > 0) {
     ctx.fillStyle = '#FF5722';
     ctx.beginPath();
-    ctx.arc(badgeX + 10, badgeY - 8, 7, 0, Math.PI * 2);
+    ctx.arc(badgeX + 8, badgeY - 6, 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 9px Arial';
+    ctx.font = 'bold 8px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(count.toString(), badgeX + 10, badgeY - 8);
+    ctx.fillText(count.toString(), badgeX + 8, badgeY - 6);
   }
 }
 
-// ================= TARGET MARKER (3 distinct states) =================
+// ================= TARGET MARKER =================
 function drawTargetMarker(
   ctx: CanvasRenderingContext2D, 
   x: number, 
@@ -190,15 +184,9 @@ function drawTargetMarker(
   const size = 22;
 
   if (isCommunicated) {
-    // ============================================
-    // COMMUNICATED STATE: Green filled circle with satellite icon
-    // ============================================
-    
-    // Animation: Signal waves
     if (isAnimating) {
       const time = Date.now() % 2000;
       const progress = time / 2000;
-      
       ctx.save();
       for (let i = 0; i < 3; i++) {
         const waveProgress = (progress + i * 0.33) % 1;
@@ -213,63 +201,49 @@ function drawTargetMarker(
       ctx.restore();
     }
 
-    // Outer glow
     ctx.save();
     ctx.shadowColor = '#4CAF50';
     ctx.shadowBlur = 12;
-    
-    // Filled green circle
     ctx.fillStyle = '#4CAF50';
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     
-    // White border
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Satellite icon
     ctx.strokeStyle = '#fff';
     ctx.fillStyle = '#fff';
     ctx.lineWidth = 2;
-    
     ctx.beginPath();
     ctx.arc(x - 2, y - 2, 10, -Math.PI * 0.8, -Math.PI * 0.2);
     ctx.stroke();
-    
     ctx.lineWidth = 1.5;
     for (let i = 1; i <= 3; i++) {
       ctx.beginPath();
       ctx.arc(x + 6, y - 6, i * 4, Math.PI * 0.6, Math.PI * 1.1);
       ctx.stroke();
     }
-    
     ctx.beginPath();
     ctx.moveTo(x - 6, y + 8);
     ctx.lineTo(x, y);
     ctx.lineTo(x + 6, y + 8);
     ctx.stroke();
 
-    // "SENT" label
     ctx.fillStyle = '#2E7D32';
     ctx.font = 'bold 9px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('✓ SENT', x, y + size + 4);
-    
     ctx.fillStyle = '#666';
     ctx.font = 'bold 10px Arial';
     ctx.fillText(label.toUpperCase(), x, y + size + 16);
 
   } else if (hasImage) {
-    // ============================================
-    // HAS IMAGE STATE: Blue solid crosshair
-    // ============================================
-    
     ctx.fillStyle = 'rgba(33, 150, 243, 0.2)';
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -277,11 +251,9 @@ function drawTargetMarker(
     
     ctx.strokeStyle = '#2196F3';
     ctx.lineWidth = 2.5;
-    
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.stroke();
-    
     ctx.beginPath();
     ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
     ctx.stroke();
@@ -302,7 +274,6 @@ function drawTargetMarker(
     ctx.lineTo(x, y + size + 6);
     ctx.stroke();
     
-    // Camera badge
     ctx.fillStyle = '#2196F3';
     ctx.beginPath();
     ctx.arc(x + size - 4, y - size + 4, 8, 0, Math.PI * 2);
@@ -317,19 +288,13 @@ function drawTargetMarker(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('IMAGED', x, y + size + 4);
-    
     ctx.fillStyle = '#666';
     ctx.font = 'bold 10px Arial';
     ctx.fillText(label.toUpperCase(), x, y + size + 16);
 
   } else {
-    // ============================================
-    // PENDING STATE: Orange dashed crosshair
-    // ============================================
-    
     ctx.strokeStyle = '#FF9800';
     ctx.lineWidth = 2;
-    
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -361,14 +326,12 @@ function drawTargetMarker(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText('PENDING', x, y + size + 4);
-    
     ctx.fillStyle = '#666';
     ctx.font = 'bold 10px Arial';
     ctx.fillText(label.toUpperCase(), x, y + size + 16);
   }
 }
 
-// ================= CALIBRATION RING ANIMATION =================
 function drawCalibrationRing(ctx: CanvasRenderingContext2D, x: number, y: number) {
   const time = Date.now() % 2000;
   const progress = time / 2000;
@@ -378,7 +341,6 @@ function drawCalibrationRing(ctx: CanvasRenderingContext2D, x: number, y: number
     const ringProgress = (progress + i * 0.33) % 1;
     const radius = 30 + ringProgress * 30;
     const alpha = 1 - ringProgress;
-    
     ctx.strokeStyle = `rgba(76, 175, 80, ${alpha})`;
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -393,45 +355,35 @@ export function renderRovers(
   ctx: CanvasRenderingContext2D,
   state: RenderedState
 ): void {
-  // Fixed world-unit dimensions (camera zoom is handled by canvas transform)
   const W = 800;
   const H = 600;
-
-  // ================= GRID BACKGROUND =================
   const GRID = 100;
-  const cols = Math.ceil(W / GRID);
-  const rows = Math.ceil(H / GRID);
 
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#f8f9fa';
   ctx.fillRect(0, 0, W, H);
 
+  // Grid background
   ctx.strokeStyle = 'rgba(0,0,0,0.06)';
   ctx.lineWidth = 1;
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
+  for (let y = 0; y < Math.ceil(H / GRID); y++) {
+    for (let x = 0; x < Math.ceil(W / GRID); x++) {
       ctx.strokeRect(x * GRID, y * GRID, GRID, GRID);
     }
   }
 
-  // ================= COLORS =================
   const waypointColor = '#66BB6A';
   const pathColor = '#B0BEC5';
   const textColor = '#444';
 
-  // ================= GET CURRENT STEP AND ACTION =================
   const currentStep = state.metadata?.step ?? 0;
   const action = state.metadata?.action ?? null;
 
-  // Start animation only when we arrive at a new step with an action
   if (action && currentStep > 0) {
     startAnimationForStep(currentStep);
   }
 
-  // Check if animation is active for THIS step
   const showAnimation = isAnimationActive(currentStep);
-
-  // Parse action to determine what type of animation to show
   const parsedAction = parseAction(action);
   const actionType = parsedAction?.name ?? '';
   const actionParams = parsedAction?.params ?? [];
@@ -451,10 +403,7 @@ export function renderRovers(
     return true;
   });
 
-  // Note: targets are rendered based on at-target relations, not the objects array
-
-  // ================= BUILD STATE FROM RELATIONS (PURE) =================
-  // These are derived ONLY from the current state's relations
+  // ================= BUILD STATE FROM RELATIONS =================
   const imagedTargets = new Set<string>();
   for (const rel of state.relations) {
     if (rel.type === 'have-image' && rel.target) {
@@ -469,15 +418,11 @@ export function renderRovers(
     }
   }
 
-  // ================= RELATIONS =================
   const connected = state.relations.filter(r => r.type === 'connected');
   const atRovers = state.relations.filter(r => r.type === 'at-rover');
   const atTargets = state.relations.filter(r => r.type === 'at-target');
 
   // ================= COUNT ROVERS PER WAYPOINT =================
-  // This is needed to:
-  // 1. Dynamically size waypoints based on rover count
-  // 2. Spread rovers horizontally when multiple are at the same waypoint
   const roversAtWaypoint: Record<string, string[]> = {};
   for (const r of atRovers) {
     const wp = r.target;
@@ -489,28 +434,94 @@ export function renderRovers(
     }
   }
 
-  // ================= LAYOUT =================
+  // ================= CALCULATE WAYPOINT RADII =================
+  const BASE_WAYPOINT_RADIUS = 32;
+  const ROVER_SLOT_SIZE = 45;  // Space per rover when multiple
+  const SHADOW_OFFSET = 2;
+
+  const waypointRadii: Record<string, number> = {};
+  for (const w of waypoints) {
+    const roverCount = roversAtWaypoint[w.id]?.length || 0;
+    if (roverCount > 1) {
+      const totalRoverWidth = roverCount * ROVER_SLOT_SIZE;
+      waypointRadii[w.id] = Math.max(BASE_WAYPOINT_RADIUS, totalRoverWidth / 2 + 15);
+    } else {
+      waypointRadii[w.id] = BASE_WAYPOINT_RADIUS;
+    }
+  }
+
+  // ================= DYNAMIC LAYOUT WITH FORCE-BASED SPACING =================
   waypoints.sort((a, b) => a.id.localeCompare(b.id));
 
-  const wpPos: Record<string, { col: number; row: number; x: number; y: number }> = {};
+  // Initial grid layout
   const colsWp = Math.ceil(Math.sqrt(waypoints.length));
-  const CELL_STEP_X = 3;
-  const CELL_STEP_Y = 2;
-  const startCol = 1;
-  const startRow = 1;
+  const BASE_CELL_X = 180;
+  const BASE_CELL_Y = 140;
+  const startX = 120;
+  const startY = 100;
 
+  interface WaypointPos {
+    x: number;
+    y: number;
+    radius: number;
+  }
+
+  const wpPos: Record<string, WaypointPos> = {};
+
+  // Initial positions
   waypoints.forEach((w, i) => {
-    const col = startCol + (i % colsWp) * CELL_STEP_X;
-    const row = startRow + Math.floor(i / colsWp) * CELL_STEP_Y;
+    const col = i % colsWp;
+    const row = Math.floor(i / colsWp);
     wpPos[w.id] = {
-      col,
-      row,
-      x: col * GRID + GRID / 2,
-      y: row * GRID + GRID / 2,
+      x: startX + col * BASE_CELL_X,
+      y: startY + row * BASE_CELL_Y,
+      radius: waypointRadii[w.id]
     };
   });
 
-  // ================= DRAW PATHS =================
+  // Apply force-based repulsion to prevent overlaps
+  // Run a few iterations to push apart overlapping waypoints
+  const MIN_GAP = 30; // Minimum gap between waypoint edges
+  
+  for (let iteration = 0; iteration < 10; iteration++) {
+    let moved = false;
+    
+    for (let i = 0; i < waypoints.length; i++) {
+      for (let j = i + 1; j < waypoints.length; j++) {
+        const wp1 = wpPos[waypoints[i].id];
+        const wp2 = wpPos[waypoints[j].id];
+        
+        const dx = wp2.x - wp1.x;
+        const dy = wp2.y - wp1.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const minDist = wp1.radius + wp2.radius + MIN_GAP;
+        
+        if (dist < minDist && dist > 0) {
+          // Push apart
+          const overlap = minDist - dist;
+          const pushX = (dx / dist) * overlap * 0.5;
+          const pushY = (dy / dist) * overlap * 0.5;
+          
+          wp1.x -= pushX;
+          wp1.y -= pushY;
+          wp2.x += pushX;
+          wp2.y += pushY;
+          
+          // Keep within bounds
+          wp1.x = Math.max(wp1.radius + 20, Math.min(W - wp1.radius - 20, wp1.x));
+          wp1.y = Math.max(wp1.radius + 20, Math.min(H - wp1.radius - 60, wp1.y));
+          wp2.x = Math.max(wp2.radius + 20, Math.min(W - wp2.radius - 20, wp2.x));
+          wp2.y = Math.max(wp2.radius + 20, Math.min(H - wp2.radius - 60, wp2.y));
+          
+          moved = true;
+        }
+      }
+    }
+    
+    if (!moved) break;
+  }
+
+  // ================= DRAW PATHS (connecting to edges) =================
   ctx.strokeStyle = pathColor;
   ctx.lineWidth = 4;
   ctx.lineCap = 'round';
@@ -520,64 +531,43 @@ export function renderRovers(
     const b = r.target ? wpPos[r.target] : null;
     if (!a || !b) continue;
 
+    // Calculate edge points
+    const edgeA = getEdgePoint(a.x, a.y, a.radius, b.x, b.y);
+    const edgeB = getEdgePoint(b.x, b.y, b.radius, a.x, a.y);
+
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+    ctx.moveTo(edgeA.x, edgeA.y);
+    ctx.lineTo(edgeB.x, edgeB.y);
     ctx.stroke();
   }
 
   // ================= DRAW WAYPOINTS =================
-  const BASE_WAYPOINT_RADIUS = 32;   // Base radius for 0-1 rovers
-  const ROVER_SIZE = 50;             // Space needed per rover (reduced from 96)
-  const SHADOW_OFFSET = 2;
-
   for (const w of waypoints) {
     const p = wpPos[w.id];
     if (!p) continue;
 
-    // Calculate dynamic radius based on rover count
-    const roverCount = roversAtWaypoint[w.id]?.length || 0;
-    let waypointRadius = BASE_WAYPOINT_RADIUS;
-    
-    if (roverCount > 1) {
-      // Expand waypoint to fit all rovers in a row
-      // Each rover needs ROVER_SIZE width, plus some padding
-      const totalRoverWidth = roverCount * ROVER_SIZE;
-      waypointRadius = Math.max(BASE_WAYPOINT_RADIUS, totalRoverWidth / 2 + 10);
-    }
-
-    // shadow
+    // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.1)';
     ctx.beginPath();
-    ctx.arc(
-      p.x + SHADOW_OFFSET,
-      p.y + SHADOW_OFFSET,
-      waypointRadius,
-      0,
-      Math.PI * 2
-    );
+    ctx.arc(p.x + SHADOW_OFFSET, p.y + SHADOW_OFFSET, p.radius, 0, Math.PI * 2);
     ctx.fill();
 
-    // main circle
+    // Main circle
     ctx.fillStyle = waypointColor;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, waypointRadius, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = '#43A047';
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // label
+    // Label below waypoint
     ctx.fillStyle = textColor;
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText(
-      w.id.toUpperCase(),
-      p.x,
-      p.y + waypointRadius + 6
-    );
+    ctx.fillText(w.id.toUpperCase(), p.x, p.y + p.radius + 6);
   }
 
   // ================= DRAW TARGETS =================
@@ -585,104 +575,86 @@ export function renderRovers(
     const p = wpPos[t.target!];
     if (!p) continue;
 
-    // Get state from the CURRENT state's data only
     const isCommunicated = communicatedTargets.has(t.source);
     const hasImage = imagedTargets.has(t.source);
-    
-    // Animation only for the specific target being communicated in THIS action
-    const isAnimating = showAnimation && 
-                        actionType === 'communicate' && 
-                        actionParams[1] === t.source;
+    const isAnimating = showAnimation && actionType === 'communicate' && actionParams[1] === t.source;
 
-    // Calculate waypoint radius for target offset
-    const roverCount = roversAtWaypoint[t.target!]?.length || 0;
-    let waypointRadius = BASE_WAYPOINT_RADIUS;
-    if (roverCount > 1) {
-      const totalRoverWidth = roverCount * ROVER_SIZE;
-      waypointRadius = Math.max(BASE_WAYPOINT_RADIUS, totalRoverWidth / 2 + 10);
-    }
-
-    // Position target outside the waypoint
-    const tx = p.x + waypointRadius + 30;
-    const ty = p.y + 30;
+    // Position target outside waypoint (to the right and down)
+    const tx = p.x + p.radius + 35;
+    const ty = p.y + 25;
 
     drawTargetMarker(ctx, tx, ty, t.source, isCommunicated, hasImage, isAnimating);
   }
 
   // ================= DRAW ROVERS =================
-  // Group rovers by waypoint for proper spreading
   for (const wpId of Object.keys(roversAtWaypoint)) {
     const roverIds = roversAtWaypoint[wpId];
     const p = wpPos[wpId];
     if (!p) continue;
 
     const roverCount = roverIds.length;
-    
-    // Calculate positions for each rover at this waypoint
-    // Spread them horizontally, centered on the waypoint
-    const spacing = ROVER_SIZE;
-    const totalWidth = (roverCount - 1) * spacing;
-    const startX = p.x - totalWidth / 2;
+    roverIds.sort();
 
-    roverIds.sort(); // Sort for consistent ordering
+    // Calculate rover size based on count
+    const roverImgSize = roverCount > 1 ? 40 : 70;
+    const spacing = roverCount > 1 ? ROVER_SLOT_SIZE : 0;
+    const totalWidth = (roverCount - 1) * spacing;
+    const startRoverX = p.x - totalWidth / 2;
 
     roverIds.forEach((roverId, index) => {
-      // Find the at-rover relation for this rover
-      const roverRel = atRovers.find(r => r.source === roverId && r.target === wpId);
-      if (!roverRel) return;
-
-      // Get rover properties from the CURRENT state only
       const roverObj = rovers.find(ro => ro.id === roverId);
       const isCalibrated = roverObj?.properties?.calibrated === true;
       const images = roverObj?.properties?.images || [];
       const imageCount = images.length;
 
-      // Calculate this rover's position
-      const rx = startX + index * spacing;
+      const rx = startRoverX + index * spacing;
       const ry = p.y;
 
-      // Animation only for the specific rover being calibrated in THIS action
-      const isCalibrateAnimating = showAnimation && 
-                                    actionType === 'calibrate' && 
-                                    actionParams[0] === roverId;
-      
-      const isTakeImageAnimating = showAnimation && 
-                                    actionType === 'take-image' && 
-                                    actionParams[0] === roverId;
+      const isCalibrateAnimating = showAnimation && actionType === 'calibrate' && actionParams[0] === roverId;
+      const isTakeImageAnimating = showAnimation && actionType === 'take-image' && actionParams[0] === roverId;
 
-      // Calibration ring animation
       if (isCalibrateAnimating) {
         drawCalibrationRing(ctx, rx, ry);
       }
 
-      // Draw rover image (smaller when multiple rovers)
-      const roverImgSize = roverCount > 1 ? 48 : 96;
-      const roverImgOffset = roverImgSize / 2;
-      
+      // Draw rover image
+      const halfSize = roverImgSize / 2;
       if (roverImg.complete) {
-        ctx.drawImage(roverImg, rx - roverImgOffset, ry - roverImgOffset, roverImgSize, roverImgSize);
+        ctx.drawImage(roverImg, rx - halfSize, ry - halfSize, roverImgSize, roverImgSize);
       } else {
         ctx.fillStyle = '#FF6B6B';
         ctx.beginPath();
-        ctx.arc(rx, ry, roverImgSize / 4, 0, Math.PI * 2);
+        ctx.arc(rx, ry, halfSize / 2, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Rover label (positioned below the rover)
-      ctx.fillStyle = textColor;
-      ctx.font = 'bold 11px Arial';
+      // Rover label INSIDE at the TOP of the rover image
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.font = `bold ${roverCount > 1 ? 9 : 11}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(roverId.toUpperCase(), rx, ry + roverImgOffset + 2);
+      
+      // Draw label background for better visibility
+      const labelY = ry - halfSize + 3;
+      const labelText = roverId.toUpperCase();
+      const labelWidth = ctx.measureText(labelText).width + 6;
+      
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.beginPath();
+      ctx.roundRect(rx - labelWidth/2, labelY - 1, labelWidth, roverCount > 1 ? 11 : 14, 3);
+      ctx.fill();
+      
+      ctx.fillStyle = '#fff';
+      ctx.fillText(labelText, rx, labelY);
 
-      // Calibration badge (ONLY if calibrated in THIS state)
+      // Badges
       if (isCalibrated) {
-        drawCalibrationBadge(ctx, rx, ry - roverImgOffset/2, isCalibrateAnimating);
+        drawCalibrationBadge(ctx, rx, ry, halfSize, isCalibrateAnimating);
       }
-
-      // Image badge (ONLY if has images in THIS state)
       if (imageCount > 0) {
-        drawImageBadge(ctx, rx, ry - roverImgOffset/2, imageCount, isTakeImageAnimating);
+        drawImageBadge(ctx, rx, ry, halfSize, imageCount, isTakeImageAnimating);
       }
     });
   }
@@ -703,7 +675,6 @@ export function renderRovers(
   ctx.textBaseline = 'middle';
   ctx.fillText('LEGEND', legendX, legendY + 5);
 
-  // Calibrated
   ctx.fillStyle = '#4CAF50';
   ctx.beginPath();
   ctx.arc(legendX + 8, legendY + 24, 6, 0, Math.PI * 2);
@@ -712,7 +683,6 @@ export function renderRovers(
   ctx.font = '9px Arial';
   ctx.fillText('Rover Calibrated', legendX + 20, legendY + 24);
 
-  // Has image
   ctx.fillStyle = '#2196F3';
   ctx.beginPath();
   ctx.roundRect(legendX + 2, legendY + 38, 12, 10, 2);
@@ -720,7 +690,6 @@ export function renderRovers(
   ctx.fillStyle = '#666';
   ctx.fillText('Rover Has Image', legendX + 20, legendY + 43);
 
-  // Target pending
   ctx.strokeStyle = '#FF9800';
   ctx.lineWidth = 2;
   ctx.setLineDash([3, 3]);
@@ -731,7 +700,6 @@ export function renderRovers(
   ctx.fillStyle = '#666';
   ctx.fillText('Target (Pending)', legendX + 20, legendY + 62);
 
-  // Target imaged
   ctx.strokeStyle = '#2196F3';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -740,7 +708,6 @@ export function renderRovers(
   ctx.fillStyle = '#666';
   ctx.fillText('Target (Imaged)', legendX + 20, legendY + 80);
 
-  // Target communicated
   ctx.fillStyle = '#4CAF50';
   ctx.beginPath();
   ctx.arc(legendX + 8, legendY + 98, 6, 0, Math.PI * 2);
