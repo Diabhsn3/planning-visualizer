@@ -515,30 +515,45 @@ export function renderRovers(
   }
 
   // ================= DRAW WAYPOINTS =================
+  const WAYPOINT_RADIUS = 32;   // was 20 → now 64px diameter
+  const SHADOW_OFFSET = 2;
   for (const w of waypoints) {
-    const p = wpPos[w.id];
-    if (!p) continue;
+  const p = wpPos[w.id];
+  if (!p) continue;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.1)';
-    ctx.beginPath();
-    ctx.arc(p.x + 2, p.y + 2, 20, 0, Math.PI * 2);
-    ctx.fill();
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  ctx.beginPath();
+  ctx.arc(
+    p.x + SHADOW_OFFSET,
+    p.y + SHADOW_OFFSET,
+    WAYPOINT_RADIUS,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
 
-    ctx.fillStyle = waypointColor;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
-    ctx.fill();
+  // main circle
+  ctx.fillStyle = waypointColor;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, WAYPOINT_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
 
-    ctx.strokeStyle = '#43A047';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+  ctx.strokeStyle = '#43A047';
+  ctx.lineWidth = 2;
+  ctx.stroke();
 
-    ctx.fillStyle = textColor;
-    ctx.font = 'bold 12px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(w.id.toUpperCase(), p.x, p.y + 26);
-  }
+  // label
+  ctx.fillStyle = textColor;
+  ctx.font = 'bold 12px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(
+    w.id.toUpperCase(),
+    p.x,
+    p.y + WAYPOINT_RADIUS + 6
+  );
+}
 
   // ================= DRAW TARGETS =================
   for (const t of atTargets) {
@@ -554,8 +569,8 @@ export function renderRovers(
                         actionType === 'communicate' && 
                         actionParams[1] === t.source;
 
-    const tx = p.x + 40;
-    const ty = p.y + 40;
+    const tx = p.x + 50;
+    const ty = p.y + 50;
 
     drawTargetMarker(ctx, tx, ty, t.source, isCommunicated, hasImage, isAnimating);
   }
@@ -590,7 +605,7 @@ export function renderRovers(
 
     // Draw rover image
     if (roverImg.complete) {
-      ctx.drawImage(roverImg, rx - 24, ry - 24, 48, 48);
+      ctx.drawImage(roverImg, rx - 48, ry - 48, 96, 96);
     } else {
       ctx.fillStyle = '#FF6B6B';
       ctx.beginPath();
@@ -603,7 +618,7 @@ export function renderRovers(
     ctx.font = 'bold 11px Arial';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(r.source.toUpperCase(), rx + 30, ry);
+    ctx.fillText(r.source.toUpperCase(), rx + 10, ry);
 
     // Calibration badge (ONLY if calibrated in THIS state)
     if (isCalibrated) {
