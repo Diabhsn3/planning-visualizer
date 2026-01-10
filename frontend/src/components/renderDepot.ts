@@ -41,6 +41,7 @@ export function renderDepot(
   // ---------- EXTRACT RELATIONS ----------
   const truckAt = new Map<string, string>();       // truck -> depot
   const craneAt = new Map<string, string>();       // crane -> depot
+  const pileAt = new Map<string, string>();        // pile -> depot
   const packageOnPile = new Map<string, string>(); // package -> pile
   const packageOn = new Map<string, string>();     // package -> package (stacking)
   const packageInTruck = new Map<string, string>(); // package -> truck
@@ -51,6 +52,8 @@ export function renderDepot(
       truckAt.set(r.source, r.target);
     } else if (r.type === "at-crane" && r.target) {
       craneAt.set(r.source, r.target);
+    } else if (r.type === "at-pile" && r.target) {
+      pileAt.set(r.source, r.target);
     } else if (r.type === "on-pile" && r.target) {
       packageOnPile.set(r.source, r.target);
     } else if (r.type === "on" && r.target) {
@@ -68,12 +71,14 @@ export function renderDepot(
   const PILE_HEIGHT = 10;
   const PILE_PADDING = 8;
   const MIN_PILE_WIDTH = 60;
-  const DEPOT_PADDING = 15;
-  const TRUCK_W = 80;
-  const TRUCK_H = 45;
-  const BOTTOM_AREA_HEIGHT = 100; // Height for truck + piles area at bottom
-  const CRANE_AREA_HEIGHT = 90;   // Height for crane area at top
-  const DEPOT_SPACING = 30;
+  const DEPOT_PADDING = 20;
+  const TRUCK_W = 70;
+  const TRUCK_H = 40;
+  const TRUCK_SPACING = 10;
+  const PILE_SPACING = 15;
+  const BOTTOM_AREA_HEIGHT = 90;
+  const CRANE_AREA_HEIGHT = 90;
+  const DEPOT_SPACING = 80; // Bigger gap between depots
 
   // ---------- ASSIGN PILES TO DEPOTS ----------
   const pilesPerDepot = new Map<string, VisualObject[]>();
@@ -81,11 +86,31 @@ export function renderDepot(
     pilesPerDepot.set(depot.id, []);
   }
   
+  // Use at-pile relation if available, otherwise distribute evenly
   piles.forEach((pile, index) => {
-    const depotIndex = index % depots.length;
-    const depot = depots[depotIndex];
-    if (depot) {
-      pilesPerDepot.get(depot.id)?.push(pile);
+    const assignedDepot = pileAt.get(pile.id);
+    if (assignedDepot && pilesPerDepot.has(assignedDepot)) {
+      pilesPerDepot.get(assignedDepot)?.push(pile);
+    } else {
+      // Fallback: distribute evenly
+      const depotIndex = index % depots.length;
+      const depot = depots[depotIndex];
+      if (depot) {
+        pilesPerDepot.get(depot.id)?.push(pile);
+      }
+    }
+  });
+
+  // ---------- ASSIGN TRUCKS TO DEPOTS ----------
+  const trucksPerDepot = new Map<string, VisualObject[]>();
+  for (const depot of depots) {
+    trucksPerDepot.set(depot.id, []);
+  }
+  
+  trucks.forEach((truck) => {
+    const assignedDepot = truckAt.get(truck.id);
+    if (assignedDepot && trucksPerDepot.has(assignedDepot)) {
+      trucksPerDepot.get(assignedDepot)?.push(truck);
     }
   });
 
@@ -136,20 +161,30 @@ export function renderDepot(
   
   for (const depot of depots) {
     const depotPilesList = pilesPerDepot.get(depot.id) || [];
+    const depotTrucksList = trucksPerDepot.get(depot.id) || [];
     
-    // Calculate total width needed for piles (side by side at bottom)
+    // Calculate total width needed for trucks
+    const trucksWidth = depotTrucksList.length > 0 
+      ? depotTrucksList.length * TRUCK_W + (depotTrucksList.length - 1) * TRUCK_SPACING
+      : 0;
+    
+    // Calculate total width needed for piles
     let totalPilesWidth = 0;
     let maxStackHeight = 0;
     
     for (const pile of depotPilesList) {
-      totalPilesWidth += getPileWidth(pile.id) + 10; // 10px spacing between piles
+      totalPilesWidth += getPileWidth(pile.id);
       const stackHeight = getMaxStackHeightOnPile(pile.id);
       maxStackHeight = Math.max(maxStackHeight, stackHeight);
     }
+    if (depotPilesList.length > 1) {
+      totalPilesWidth += (depotPilesList.length - 1) * PILE_SPACING;
+    }
     
-    // Depot width: truck + piles + padding
-    const bottomContentWidth = TRUCK_W + 20 + totalPilesWidth;
-    const depotWidth = Math.max(160, bottomContentWidth + DEPOT_PADDING * 2);
+    // Depot width: trucks + piles + padding + spacing between them
+    const spacingBetween = (trucksWidth > 0 && totalPilesWidth > 0) ? 20 : 0;
+    const bottomContentWidth = trucksWidth + spacingBetween + totalPilesWidth;
+    const depotWidth = Math.max(180, bottomContentWidth + DEPOT_PADDING * 2);
     
     // Depot height: crane area + space for stacked packages + bottom area
     const stackSpace = maxStackHeight * CONTAINER_H + 20;
@@ -293,23 +328,42 @@ export function renderDepot(
       }
     });
 
-    // === BOTTOM AREA: TRUCK (left) + PILES (right) ===
-    const bottomY = depotY + depotHeight - BOTTOM_AREA_HEIGHT;
+    // === BOTTOM AREA: TRUCKS (left) + PILES (right) ===
+    const depotTrucksList = trucksPerDepot.get(depot.id) || [];
+    const depotPilesList = pilesPerDepot.get(depot.id) || [];
     
-    // --- TRUCK at left bottom ---
-    const depotTrucks = trucks.filter(t => truckAt.get(t.id) === depot.id);
-    let truckEndX = depotX + DEPOT_PADDING;
+    // Calculate trucks total width
+    const trucksWidth = depotTrucksList.length > 0 
+      ? depotTrucksList.length * TRUCK_W + (depotTrucksList.length - 1) * TRUCK_SPACING
+      : 0;
     
-    depotTrucks.forEach((truck, truckIndex) => {
-      const truckX = depotX + DEPOT_PADDING + truckIndex * (TRUCK_W + 10);
-      const truckY = depotY + depotHeight - TRUCK_H - 20;
+    // Calculate piles total width
+    let totalPilesWidth = 0;
+    for (const pile of depotPilesList) {
+      totalPilesWidth += getPileWidth(pile.id);
+    }
+    if (depotPilesList.length > 1) {
+      totalPilesWidth += (depotPilesList.length - 1) * PILE_SPACING;
+    }
+    
+    // Calculate starting positions to center content
+    const spacingBetween = (trucksWidth > 0 && totalPilesWidth > 0) ? 20 : 0;
+    const totalContentWidth = trucksWidth + spacingBetween + totalPilesWidth;
+    const contentStartX = depotX + (depotWidth - totalContentWidth) / 2;
+    
+    // --- TRUCKS at left ---
+    let truckCurrentX = contentStartX;
+    
+    depotTrucksList.forEach((truck) => {
+      const truckX = truckCurrentX;
+      const truckY = depotY + depotHeight - TRUCK_H - 25;
 
       if (truckImg.complete && truckImg.naturalWidth > 0) {
         ctx.drawImage(truckImg, truckX, truckY, TRUCK_W, TRUCK_H);
       } else {
         ctx.fillStyle = "#607D8B";
-        ctx.fillRect(truckX, truckY + 12, 50, 23);
-        ctx.fillRect(truckX + 50, truckY + 15, 22, 20);
+        ctx.fillRect(truckX, truckY + 10, 45, 20);
+        ctx.fillRect(truckX + 45, truckY + 13, 18, 17);
       }
 
       ctx.fillStyle = "#37474F";
@@ -319,30 +373,24 @@ export function renderDepot(
 
       // Draw packages in truck
       const packagesInThisTruck = packages.filter(p => packageInTruck.get(p.id) === truck.id);
-      const flatbedCenterX = truckX + 20;
-      const flatbedTopY = truckY + 5;
+      const flatbedCenterX = truckX + 18;
+      const flatbedTopY = truckY + 3;
       
       packagesInThisTruck.forEach((pkg, pkgIndex) => {
-        const containerY = flatbedTopY - pkgIndex * CONTAINER_H;
-        drawContainer(ctx, flatbedCenterX, containerY, CONTAINER_W - 5, CONTAINER_H - 3, pkg.label, false);
+        const containerY = flatbedTopY - pkgIndex * (CONTAINER_H - 5);
+        drawContainer(ctx, flatbedCenterX, containerY, CONTAINER_W - 8, CONTAINER_H - 5, pkg.label, false);
       });
       
-      truckEndX = truckX + TRUCK_W + 20;
+      truckCurrentX += TRUCK_W + TRUCK_SPACING;
     });
 
-    // If no trucks, start piles from left padding
-    if (depotTrucks.length === 0) {
-      truckEndX = depotX + DEPOT_PADDING;
-    }
-
-    // --- PILES at right bottom (beside truck) ---
-    const depotPilesList = pilesPerDepot.get(depot.id) || [];
-    let pileStartX = truckEndX;
+    // --- PILES at right (beside trucks) ---
+    let pileStartX = contentStartX + trucksWidth + spacingBetween;
     
     depotPilesList.forEach((pile) => {
       const pileWidth = getPileWidth(pile.id);
       const pileX = pileStartX;
-      const pileBaseY = depotY + depotHeight - 35; // Bottom of depot with some margin
+      const pileBaseY = depotY + depotHeight - 30;
 
       // === DRAW PILE PLATFORM ===
       ctx.fillStyle = "#8D6E63";
@@ -376,7 +424,7 @@ export function renderDepot(
         drawStackedPackages(ctx, pkg, containerX, containerY - CONTAINER_H, packageOn, packages, CONTAINER_W, CONTAINER_H);
       });
       
-      pileStartX += pileWidth + 10; // Move to next pile position
+      pileStartX += pileWidth + PILE_SPACING;
     });
 
     // Move to next depot position
