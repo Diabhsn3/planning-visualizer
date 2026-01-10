@@ -357,7 +357,6 @@ export function renderRovers(
 ): void {
   const W = 800;
   const H = 600;
-  const GRID = 100;
 
   // ctx.clearRect(0, 0, W, H);
   // ctx.fillStyle = '#f8f9fa';
