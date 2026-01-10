@@ -23,12 +23,6 @@ export interface RenderedState {
 const truckImg = new Image();
 truckImg.src = "/truck.png";
 
-const packageImg = new Image();
-packageImg.src = "/package.png";
-
-const craneImg = new Image();
-craneImg.src = "/crane.png";
-
 // ================= MAIN =================
 export function renderDepot(
   ctx: CanvasRenderingContext2D,
@@ -36,7 +30,6 @@ export function renderDepot(
 ) {
   const W = 800;
   const H = 600;
-  const MARGIN = 60;
 
   // ---------- EXTRACT OBJECTS ----------
   const depots = state.objects.filter(o => o.type === "depot");
@@ -46,9 +39,9 @@ export function renderDepot(
   const packages = state.objects.filter(o => o.type === "package");
 
   // ---------- EXTRACT RELATIONS ----------
-  const truckAt = new Map<string, string>();      // truck -> depot
-  const craneAt = new Map<string, string>();      // crane -> depot
-  const pileAt = new Map<string, string>();       // pile -> depot
+  const truckAt = new Map<string, string>();       // truck -> depot
+  const craneAt = new Map<string, string>();       // crane -> depot
+  const pileAt = new Map<string, string>();        // pile -> depot
   const packageOnPile = new Map<string, string>(); // package -> pile
   const packageOn = new Map<string, string>();     // package -> package (stacking)
   const packageInTruck = new Map<string, string>(); // package -> truck
@@ -72,214 +65,290 @@ export function renderDepot(
     }
   }
 
-  // ---------- LAYOUT DEPOTS ----------
+  // ---------- LAYOUT ----------
+  // Each depot area: depot box + pile beside it + crane hanging + truck below
   const numDepots = depots.length;
-  const depotWidth = 200;
-  const depotHeight = 350;
-  const depotSpacing = (W - 2 * MARGIN - numDepots * depotWidth) / (numDepots + 1);
-  
-  const depotPositions = new Map<string, { x: number; y: number }>();
+  const DEPOT_WIDTH = 120;
+  const DEPOT_HEIGHT = 100;
+  const PILE_WIDTH = 60;
+  const AREA_WIDTH = DEPOT_WIDTH + PILE_WIDTH + 40; // depot + pile + spacing
+  const TOTAL_WIDTH = numDepots * AREA_WIDTH;
+  const START_X = (W - TOTAL_WIDTH) / 2;
+  const DEPOT_Y = 80;
+
+  // Store positions for each depot area
+  const depotAreas = new Map<string, {
+    depotX: number;
+    depotY: number;
+    pileX: number;
+    pileY: number;
+    craneX: number;
+    craneY: number;
+    truckX: number;
+    truckY: number;
+  }>();
+
   depots.forEach((depot, i) => {
-    const x = MARGIN + depotSpacing * (i + 1) + depotWidth * i;
-    const y = MARGIN + 50;
-    depotPositions.set(depot.id, { x, y });
+    const areaX = START_X + i * AREA_WIDTH;
+    depotAreas.set(depot.id, {
+      depotX: areaX,
+      depotY: DEPOT_Y,
+      pileX: areaX + DEPOT_WIDTH + 20,
+      pileY: DEPOT_Y + DEPOT_HEIGHT - 20,
+      craneX: areaX + DEPOT_WIDTH / 2,
+      craneY: DEPOT_Y,
+      truckX: areaX + 20,
+      truckY: DEPOT_Y + DEPOT_HEIGHT + 80
+    });
   });
 
   // ---------- BACKGROUND ----------
-  ctx.fillStyle = "#f6f7fb";
+  ctx.fillStyle = "#f0f4f8";
   ctx.fillRect(0, 0, W, H);
 
-  // Draw grid
+  // Draw subtle grid
   ctx.strokeStyle = "rgba(0,0,0,0.05)";
-  for (let x = 0; x < W; x += 50) {
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, H);
     ctx.stroke();
   }
-  for (let y = 0; y < H; y += 50) {
+  for (let y = 0; y < H; y += 40) {
     ctx.beginPath();
     ctx.moveTo(0, y);
     ctx.lineTo(W, y);
     ctx.stroke();
   }
 
-  // ---------- DRAW DEPOTS ----------
+  // ---------- DRAW EACH DEPOT AREA ----------
   for (const depot of depots) {
-    const pos = depotPositions.get(depot.id);
-    if (!pos) continue;
+    const area = depotAreas.get(depot.id);
+    if (!area) continue;
 
-    // Depot background
-    ctx.fillStyle = "#E8E8E8";
-    ctx.fillRect(pos.x, pos.y, depotWidth, depotHeight);
-    ctx.strokeStyle = "#999";
+    // === DEPOT BOX ===
+    // Shadow
+    ctx.fillStyle = "rgba(0,0,0,0.1)";
+    ctx.fillRect(area.depotX + 4, area.depotY + 4, DEPOT_WIDTH, DEPOT_HEIGHT);
+    
+    // Main box
+    ctx.fillStyle = "#B0BEC5";
+    ctx.fillRect(area.depotX, area.depotY, DEPOT_WIDTH, DEPOT_HEIGHT);
+    ctx.strokeStyle = "#78909C";
     ctx.lineWidth = 2;
-    ctx.strokeRect(pos.x, pos.y, depotWidth, depotHeight);
+    ctx.strokeRect(area.depotX, area.depotY, DEPOT_WIDTH, DEPOT_HEIGHT);
 
     // Depot label
-    ctx.fillStyle = "#333";
-    ctx.font = "bold 16px Arial";
+    ctx.fillStyle = "#37474F";
+    ctx.font = "bold 14px Arial";
     ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.fillText(depot.label.toUpperCase(), pos.x + depotWidth / 2, pos.y + 8);
+    ctx.textBaseline = "middle";
+    ctx.fillText(depot.label.toUpperCase(), area.depotX + DEPOT_WIDTH / 2, area.depotY + DEPOT_HEIGHT / 2);
 
-    // Draw piles in this depot
-    const depotPiles = piles.filter(p => pileAt.get(p.id) === depot.id);
-    const pileWidth = 60;
-    const pileSpacing = (depotWidth - depotPiles.length * pileWidth) / (depotPiles.length + 1);
-    
-    depotPiles.forEach((pile, pileIndex) => {
-      const pileX = pos.x + pileSpacing * (pileIndex + 1) + pileWidth * pileIndex;
-      const pileY = pos.y + depotHeight - 80;
-
-      // Pile platform
-      ctx.fillStyle = "#8B4513";
-      ctx.fillRect(pileX, pileY + 50, pileWidth, 20);
-      
-      // Pile label
-      ctx.fillStyle = "#666";
-      ctx.font = "11px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(pile.label, pileX + pileWidth / 2, pileY + 75);
-
-      // Draw packages on this pile
-      const packagesOnThisPile = getPackageStack(pile.id, packageOnPile, packageOn, packages);
-      packagesOnThisPile.forEach((pkg, stackIndex) => {
-        const pkgY = pileY + 50 - (stackIndex + 1) * 35;
-        drawPackage(ctx, pileX + pileWidth / 2, pkgY, pkg.label);
-      });
-    });
-
-    // Draw crane in this depot
+    // === CRANE (Claw hanging from depot) ===
     const depotCranes = cranes.filter(c => craneAt.get(c.id) === depot.id);
     depotCranes.forEach((crane, craneIndex) => {
-      const craneX = pos.x + 30 + craneIndex * 80;
-      const craneY = pos.y + 40;
-
-      // Crane arm
-      ctx.strokeStyle = "#FF69B4";
+      const cx = area.craneX + (craneIndex - (depotCranes.length - 1) / 2) * 50;
+      const cy = area.craneY + DEPOT_HEIGHT;
+      
+      // Crane arm (vertical line from depot)
+      ctx.strokeStyle = "#455A64";
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(craneX, craneY);
-      ctx.lineTo(craneX, craneY + 80);
-      ctx.lineTo(craneX + 40, craneY + 80);
+      ctx.moveTo(cx, area.depotY + DEPOT_HEIGHT);
+      ctx.lineTo(cx, cy + 40);
       ctx.stroke();
 
-      // Crane hook
-      ctx.beginPath();
-      ctx.arc(craneX + 40, craneY + 90, 8, 0, Math.PI * 2);
-      ctx.fillStyle = "#FF69B4";
-      ctx.fill();
+      // Claw
+      drawClaw(ctx, cx, cy + 40, crane.label);
 
-      // Crane label
-      ctx.fillStyle = "#FF69B4";
-      ctx.font = "bold 12px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(crane.label, craneX + 20, craneY - 5);
-
-      // Draw held package
-      const heldPkg = craneHolding.get(crane.id);
-      if (heldPkg) {
-        const pkg = packages.find(p => p.id === heldPkg);
+      // If holding a package, draw it inside the claw
+      const heldPkgId = craneHolding.get(crane.id);
+      if (heldPkgId) {
+        const pkg = packages.find(p => p.id === heldPkgId);
         if (pkg) {
-          drawPackage(ctx, craneX + 40, craneY + 110, pkg.label, true);
+          drawContainer(ctx, cx, cy + 70, pkg.label, true);
         }
       }
     });
 
-    // Draw truck in this depot
+    // === PILE (beside depot) ===
+    const depotPiles = piles.filter(p => pileAt.get(p.id) === depot.id);
+    depotPiles.forEach((pile, pileIndex) => {
+      const px = area.pileX;
+      const py = area.pileY + pileIndex * 120;
+
+      // Pile platform
+      ctx.fillStyle = "#8D6E63";
+      ctx.fillRect(px - 5, py, PILE_WIDTH + 10, 15);
+      ctx.strokeStyle = "#5D4037";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px - 5, py, PILE_WIDTH + 10, 15);
+
+      // Pile label
+      ctx.fillStyle = "#5D4037";
+      ctx.font = "bold 11px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(pile.label, px + PILE_WIDTH / 2, py + 28);
+
+      // Draw packages stacked on this pile
+      const stackedPackages = getPackageStack(pile.id, packageOnPile, packageOn, packages);
+      stackedPackages.forEach((pkg, stackIndex) => {
+        const pkgY = py - (stackIndex + 1) * 35;
+        drawContainer(ctx, px + PILE_WIDTH / 2, pkgY, pkg.label, false);
+      });
+    });
+
+    // === TRUCK (below depot) ===
     const depotTrucks = trucks.filter(t => truckAt.get(t.id) === depot.id);
     depotTrucks.forEach((truck, truckIndex) => {
-      const truckX = pos.x + depotWidth - 80;
-      const truckY = pos.y + 80 + truckIndex * 100;
+      const tx = area.truckX + truckIndex * 120;
+      const ty = area.truckY;
 
-      // Truck body
-      ctx.fillStyle = "#00BFFF";
-      ctx.fillRect(truckX, truckY, 70, 45);
-      ctx.fillStyle = "#0099CC";
-      ctx.fillRect(truckX + 50, truckY + 5, 20, 35);
+      // Draw truck image
+      const truckW = 100;
+      const truckH = 60;
       
-      // Wheels
-      ctx.fillStyle = "#333";
-      ctx.beginPath();
-      ctx.arc(truckX + 15, truckY + 45, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(truckX + 45, truckY + 45, 8, 0, Math.PI * 2);
-      ctx.fill();
+      if (truckImg.complete && truckImg.naturalWidth > 0) {
+        ctx.drawImage(truckImg, tx, ty, truckW, truckH);
+      } else {
+        // Fallback: draw simple truck shape
+        ctx.fillStyle = "#607D8B";
+        ctx.fillRect(tx, ty + 15, 60, 30);
+        ctx.fillRect(tx + 60, ty + 20, 30, 25);
+        ctx.fillStyle = "#455A64";
+        ctx.beginPath();
+        ctx.arc(tx + 20, ty + 50, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(tx + 50, ty + 50, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
       // Truck label
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = "#37474F";
       ctx.font = "bold 12px Arial";
       ctx.textAlign = "center";
-      ctx.fillText(truck.label, truckX + 25, truckY + 25);
+      ctx.fillText(truck.label, tx + truckW / 2, ty + truckH + 15);
 
-      // Count packages in truck
+      // Draw packages in truck (stacked on the back/left part)
       const packagesInThisTruck = packages.filter(p => packageInTruck.get(p.id) === truck.id);
-      if (packagesInThisTruck.length > 0) {
-        // Badge
-        ctx.beginPath();
-        ctx.arc(truckX + 60, truckY - 5, 14, 0, Math.PI * 2);
-        ctx.fillStyle = "#E53935";
-        ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 12px Arial";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(String(packagesInThisTruck.length), truckX + 60, truckY - 5);
-      }
+      packagesInThisTruck.forEach((pkg, pkgIndex) => {
+        // Stack containers on the back of the truck (left side of the image)
+        const containerX = tx + 25;
+        const containerY = ty - 10 - pkgIndex * 30;
+        drawContainer(ctx, containerX, containerY, pkg.label, false, 0.8);
+      });
     });
   }
 
   // ---------- LEGEND ----------
-  const legendX = 15;
-  const legendY = H - 100;
-  
-  ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.fillRect(legendX - 5, legendY - 5, 130, 90);
-  ctx.strokeStyle = "#ddd";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(legendX - 5, legendY - 5, 130, 90);
-
-  ctx.font = "bold 10px Arial";
-  ctx.fillStyle = "#666";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText("LEGEND", legendX, legendY + 5);
-
-  // Depot
-  ctx.fillStyle = "#E8E8E8";
-  ctx.fillRect(legendX, legendY + 18, 14, 10);
-  ctx.strokeStyle = "#999";
-  ctx.strokeRect(legendX, legendY + 18, 14, 10);
-  ctx.fillStyle = "#666";
-  ctx.font = "9px Arial";
-  ctx.fillText("Depot", legendX + 20, legendY + 23);
-
-  // Crane
-  ctx.fillStyle = "#FF69B4";
-  ctx.beginPath();
-  ctx.arc(legendX + 7, legendY + 40, 6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#666";
-  ctx.fillText("Crane", legendX + 20, legendY + 40);
-
-  // Truck
-  ctx.fillStyle = "#00BFFF";
-  ctx.fillRect(legendX, legendY + 52, 14, 10);
-  ctx.fillStyle = "#666";
-  ctx.fillText("Truck", legendX + 20, legendY + 57);
-
-  // Package
-  ctx.fillStyle = "#FFD700";
-  ctx.fillRect(legendX, legendY + 68, 14, 10);
-  ctx.strokeStyle = "#DAA520";
-  ctx.strokeRect(legendX, legendY + 68, 14, 10);
-  ctx.fillStyle = "#666";
-  ctx.fillText("Package", legendX + 20, legendY + 73);
+  drawLegend(ctx, W, H);
 }
 
-// Helper: Get stack of packages on a pile
+// ================= HELPER FUNCTIONS =================
+
+// Draw a claw (crane gripper)
+function drawClaw(ctx: CanvasRenderingContext2D, x: number, y: number, label: string) {
+  // Claw body
+  ctx.fillStyle = "#FF7043";
+  ctx.strokeStyle = "#E64A19";
+  ctx.lineWidth = 2;
+
+  // Main claw housing
+  ctx.beginPath();
+  ctx.roundRect(x - 15, y - 10, 30, 20, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  // Left claw arm
+  ctx.beginPath();
+  ctx.moveTo(x - 12, y + 10);
+  ctx.lineTo(x - 18, y + 30);
+  ctx.lineTo(x - 8, y + 30);
+  ctx.lineTo(x - 5, y + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Right claw arm
+  ctx.beginPath();
+  ctx.moveTo(x + 12, y + 10);
+  ctx.lineTo(x + 18, y + 30);
+  ctx.lineTo(x + 8, y + 30);
+  ctx.lineTo(x + 5, y + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Claw label
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 9px Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, x, y);
+}
+
+// Draw a container/package
+function drawContainer(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  label: string,
+  isHeld: boolean = false,
+  scale: number = 1
+) {
+  const w = 45 * scale;
+  const h = 28 * scale;
+
+  // Container body
+  const gradient = ctx.createLinearGradient(cx - w/2, cy - h/2, cx - w/2, cy + h/2);
+  gradient.addColorStop(0, isHeld ? "#FFCA28" : "#FFC107");
+  gradient.addColorStop(1, isHeld ? "#FFB300" : "#FFA000");
+  
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.roundRect(cx - w/2, cy - h/2, w, h, 3);
+  ctx.fill();
+
+  // Container border
+  ctx.strokeStyle = isHeld ? "#FF8F00" : "#FF6F00";
+  ctx.lineWidth = isHeld ? 3 : 2;
+  ctx.stroke();
+
+  // Container ridges (shipping container look)
+  ctx.strokeStyle = "rgba(0,0,0,0.15)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 4; i++) {
+    const rx = cx - w/2 + (w * i / 4);
+    ctx.beginPath();
+    ctx.moveTo(rx, cy - h/2 + 3);
+    ctx.lineTo(rx, cy + h/2 - 3);
+    ctx.stroke();
+  }
+
+  // Label
+  ctx.fillStyle = "#5D4037";
+  ctx.font = `bold ${10 * scale}px Arial`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, cx, cy);
+
+  // Held indicator (glow effect)
+  if (isHeld) {
+    ctx.shadowColor = "#FFCA28";
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = "#FF8F00";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(cx - w/2 - 2, cy - h/2 - 2, w + 4, h + 4, 4);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+// Get stack of packages on a pile (bottom to top)
 function getPackageStack(
   pileId: string,
   packageOnPile: Map<string, string>,
@@ -287,7 +356,7 @@ function getPackageStack(
   packages: VisualObject[]
 ): VisualObject[] {
   const stack: VisualObject[] = [];
-  
+
   // Find bottom package (directly on pile)
   let bottomPkg: VisualObject | undefined;
   for (const pkg of packages) {
@@ -296,10 +365,10 @@ function getPackageStack(
       break;
     }
   }
-  
+
   if (!bottomPkg) return stack;
   stack.push(bottomPkg);
-  
+
   // Find packages stacked on top
   let currentPkg = bottomPkg;
   while (true) {
@@ -314,41 +383,61 @@ function getPackageStack(
     }
     if (!found) break;
   }
-  
+
   return stack;
 }
 
-// Helper: Draw a package
-function drawPackage(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  label: string,
-  isHeld: boolean = false
-) {
-  const w = 40;
-  const h = 30;
-  
-  // Package body
-  ctx.fillStyle = isHeld ? "#FFEB3B" : "#FFD700";
-  ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
-  ctx.strokeStyle = isHeld ? "#FFC107" : "#DAA520";
-  ctx.lineWidth = isHeld ? 3 : 2;
-  ctx.strokeRect(cx - w / 2, cy - h / 2, w, h);
-  
-  // Label
-  ctx.fillStyle = "#333";
+// Draw legend
+function drawLegend(ctx: CanvasRenderingContext2D, W: number, H: number) {
+  const legendX = 15;
+  const legendY = H - 110;
+
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.beginPath();
+  ctx.roundRect(legendX - 5, legendY - 5, 140, 100, 6);
+  ctx.fill();
+  ctx.strokeStyle = "#ddd";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
   ctx.font = "bold 11px Arial";
-  ctx.textAlign = "center";
+  ctx.fillStyle = "#455A64";
+  ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(label, cx, cy);
-  
-  // Held indicator
-  if (isHeld) {
-    ctx.setLineDash([3, 3]);
-    ctx.strokeStyle = "#FF69B4";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(cx - w / 2 - 3, cy - h / 2 - 3, w + 6, h + 6);
-    ctx.setLineDash([]);
-  }
+  ctx.fillText("LEGEND", legendX, legendY + 8);
+
+  // Depot
+  ctx.fillStyle = "#B0BEC5";
+  ctx.fillRect(legendX, legendY + 22, 16, 12);
+  ctx.strokeStyle = "#78909C";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(legendX, legendY + 22, 16, 12);
+  ctx.fillStyle = "#546E7A";
+  ctx.font = "10px Arial";
+  ctx.fillText("Depot", legendX + 22, legendY + 28);
+
+  // Crane
+  ctx.fillStyle = "#FF7043";
+  ctx.beginPath();
+  ctx.roundRect(legendX, legendY + 40, 16, 12, 2);
+  ctx.fill();
+  ctx.fillStyle = "#546E7A";
+  ctx.fillText("Crane", legendX + 22, legendY + 46);
+
+  // Pile
+  ctx.fillStyle = "#8D6E63";
+  ctx.fillRect(legendX, legendY + 58, 16, 8);
+  ctx.fillStyle = "#546E7A";
+  ctx.fillText("Pile", legendX + 22, legendY + 62);
+
+  // Container
+  ctx.fillStyle = "#FFC107";
+  ctx.beginPath();
+  ctx.roundRect(legendX, legendY + 74, 16, 10, 2);
+  ctx.fill();
+  ctx.strokeStyle = "#FF6F00";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "#546E7A";
+  ctx.fillText("Container", legendX + 22, legendY + 79);
 }
