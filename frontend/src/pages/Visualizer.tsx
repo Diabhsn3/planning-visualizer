@@ -565,17 +565,19 @@ export default function Visualizer() {
         )}
 
         <div className="grid lg:grid-cols-3 gap-8 relative">
-          {/* Sidebar Toggle Button */}
-          <button
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="fixed left-4 top-24 z-40 lg:absolute lg:left-0 lg:-top-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-3 shadow-lg transition-all flex items-center gap-2 font-medium"
-          >
-            <ChevronDown className={`w-5 h-5 transition-transform ${isSidebarCollapsed ? "rotate-90" : "-rotate-90"}`} />
-            <span className="text-sm">{isSidebarCollapsed ? "Show Options" : "Hide Options"}</span>
-          </button>
+          {/* Sidebar Column */}
+          <div className={`lg:col-span-1 transition-all duration-300 ${isSidebarCollapsed ? "" : ""}`}>
+            {/* Sidebar Toggle Button */}
+            <button
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="fixed left-4 top-20 z-40 lg:relative lg:left-0 lg:top-0 lg:mb-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-3 shadow-lg transition-all flex items-center gap-2 font-medium w-fit"
+            >
+              <ChevronDown className={`w-5 h-5 transition-transform ${isSidebarCollapsed ? "rotate-90" : "-rotate-90"}`} />
+              <span className="text-sm">{isSidebarCollapsed ? "Show Options" : "Hide Options"}</span>
+            </button>
 
-          {/* Configuration Panel */}
-          <div className={`lg:col-span-1 space-y-6 transition-all duration-300 ${isSidebarCollapsed ? "hidden" : ""}`}>
+            {/* Configuration Panel */}
+            <div className={`space-y-6 transition-all duration-300 ${isSidebarCollapsed ? "hidden" : ""}`}>
             {/* Domain Selection Card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <button
@@ -821,6 +823,7 @@ export default function Visualizer() {
                 Optimal search can take a while. Consider a satisficing strategy for faster results.
               </p>
             )}
+          </div>
           </div>
 
           {/* Visualization Panel */}
