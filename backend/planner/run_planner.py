@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Planner integration script - runs Fast Downward if available, otherwise uses predefined plans.
+Planner integration script - runs Fast Downward to solve planning problems.
+No fallback plans - if the planner fails, users get a clear error message.
 """
 
 import sys
 import subprocess
 import tempfile
 import os
-import re
 from pathlib import Path
-from typing import List, Optional, Tuple, Set
+from typing import List, Optional, Tuple
 
 # Import search strategies
 from search_strategies import (
@@ -60,97 +60,29 @@ if FD_PATH is None:
     FD_PATH = POSSIBLE_FD_PATHS[0]
 
 
-def extract_objects_from_problem(problem_path: str) -> Set[str]:
-    """
-    Extract object names from a PDDL problem file.
-    
-    Args:
-        problem_path: Path to problem PDDL file
-        
-    Returns:
-        Set of object names defined in the problem
-    """
-    objects = set()
-    try:
-        with open(problem_path, 'r') as f:
-            content = f.read().lower()
-        
-        # Find :objects section
-        objects_match = re.search(r'\(:objects\s+(.*?)\)', content, re.DOTALL)
-        if objects_match:
-            objects_text = objects_match.group(1)
-            # Remove type annotations (- type)
-            objects_text = re.sub(r'-\s*\w+', '', objects_text)
-            # Extract individual object names
-            for word in objects_text.split():
-                word = word.strip()
-                if word and not word.startswith('(') and not word.startswith(')'):
-                    objects.add(word)
-    except Exception:
-        pass
-    
-    return objects
+class PlannerError(Exception):
+    """Base exception for planner errors."""
+    pass
 
 
-def extract_objects_from_plan(plan: List[str]) -> Set[str]:
-    """
-    Extract object names referenced in a plan.
-    
-    Args:
-        plan: List of action strings
-        
-    Returns:
-        Set of object names used in the plan
-    """
-    objects = set()
-    for action in plan:
-        # Parse action: (action-name arg1 arg2 ...)
-        action = action.strip().lower()
-        if action.startswith('(') and action.endswith(')'):
-            action = action[1:-1]
-        parts = action.split()
-        if len(parts) > 1:
-            # Skip the action name, collect arguments
-            for arg in parts[1:]:
-                objects.add(arg)
-    return objects
+class PlannerNotFoundError(PlannerError):
+    """Raised when Fast Downward is not installed."""
+    pass
 
 
-def validate_plan_matches_problem(plan: List[str], problem_path: str) -> Tuple[bool, str]:
-    """
-    Validate that a plan's objects match the problem's objects.
-    
-    This catches the case where a fallback plan is used that doesn't
-    match the actual problem being solved.
-    
-    Args:
-        plan: List of action strings
-        problem_path: Path to problem PDDL file
-        
-    Returns:
-        Tuple of (is_valid, error_message)
-    """
-    if not plan:
-        return True, ""  # Empty plan is valid (unsolvable or trivial)
-    
-    problem_objects = extract_objects_from_problem(problem_path)
-    plan_objects = extract_objects_from_plan(plan)
-    
-    if not problem_objects:
-        # Couldn't parse problem, skip validation
-        return True, ""
-    
-    # Check if plan objects are a subset of problem objects
-    unknown_objects = plan_objects - problem_objects
-    
-    if unknown_objects:
-        return False, (
-            f"Plan references objects not in the problem: {', '.join(sorted(unknown_objects))}. "
-            f"Problem objects: {', '.join(sorted(problem_objects))}. "
-            f"This usually means the planner failed and a fallback plan was incorrectly used."
-        )
-    
-    return True, ""
+class PlannerTimeoutError(PlannerError):
+    """Raised when the planner times out."""
+    pass
+
+
+class UnsolvableProblemError(PlannerError):
+    """Raised when the problem has no solution."""
+    pass
+
+
+class InvalidProblemError(PlannerError):
+    """Raised when the problem or domain file is invalid."""
+    pass
 
 
 def run_fast_downward(
@@ -172,12 +104,20 @@ def run_fast_downward(
         Tuple of (list of action strings, strategy name used)
         
     Raises:
-        RuntimeError: If planner fails
-        subprocess.TimeoutExpired: If planner times out
-        ValueError: If strategy_id is invalid
+        PlannerNotFoundError: If Fast Downward is not installed
+        PlannerTimeoutError: If planner times out
+        UnsolvableProblemError: If the problem has no solution
+        InvalidProblemError: If the domain or problem file is invalid
+        PlannerError: For other planner failures
     """
     if not FD_PATH.exists():
-        raise FileNotFoundError(f"Fast Downward not found at {FD_PATH}")
+        raise PlannerNotFoundError(
+            f"Fast Downward planner is not installed.\n\n"
+            f"To use this application, you need to install Fast Downward:\n"
+            f"1. Clone: git clone https://github.com/aibasel/downward.git planning-tools/downward\n"
+            f"2. Build: cd planning-tools/downward && ./build.py\n\n"
+            f"Expected location: {FD_PATH}"
+        )
     
     # Get and validate search strategy
     if strategy_id is None:
@@ -216,12 +156,45 @@ def run_fast_downward(
             timeout=timeout
         )
         
+        # Check for specific error conditions
+        stdout = result.stdout.lower() if result.stdout else ""
+        stderr = result.stderr.lower() if result.stderr else ""
+        combined_output = stdout + stderr
+        
+        # Check for unsolvable problem
+        if "no solution" in combined_output or "unsolvable" in combined_output:
+            raise UnsolvableProblemError(
+                f"The problem has no solution.\n\n"
+                f"This could mean:\n"
+                f"1. The goal is impossible to achieve from the initial state\n"
+                f"2. There are missing predicates in the initial state\n"
+                f"3. The domain actions cannot connect the initial state to the goal\n\n"
+                f"Please check your problem definition."
+            )
+        
+        # Check for parsing errors
+        if "error" in combined_output and ("parsing" in combined_output or "syntax" in combined_output):
+            raise InvalidProblemError(
+                f"Failed to parse the domain or problem file.\n\n"
+                f"Please check for syntax errors in your PDDL files.\n\n"
+                f"Details: {result.stderr or result.stdout}"
+            )
+        
         if result.returncode != 0:
-            raise RuntimeError(f"Planner failed:\nSTDOUT: {result.stdout}\nSTDERR: {result.stderr}")
+            raise PlannerError(
+                f"The planner encountered an error.\n\n"
+                f"Exit code: {result.returncode}\n"
+                f"Output: {result.stderr or result.stdout}"
+            )
         
         # Read plan from file
         if not plan_file.exists():
-            return [], strategy.name
+            # No plan file means no solution found
+            raise UnsolvableProblemError(
+                f"The planner could not find a solution.\n\n"
+                f"The problem may be unsolvable or require more time.\n"
+                f"Try a different search strategy or simplify the problem."
+            )
         
         actions = []
         for line in plan_file.read_text().splitlines():
@@ -229,7 +202,25 @@ def run_fast_downward(
             if line and not line.startswith(";"):
                 actions.append(line)
         
+        if not actions:
+            raise UnsolvableProblemError(
+                f"The planner found an empty plan.\n\n"
+                f"This usually means the initial state already satisfies the goal,\n"
+                f"or the problem definition has an issue."
+            )
+        
         return actions, strategy.name
+        
+    except subprocess.TimeoutExpired:
+        suggestion = ""
+        if strategy and strategy.is_optimal:
+            suggestion = "\n\nTip: Try using a satisficing strategy like 'lazy-greedy-ff' for faster results."
+        
+        raise PlannerTimeoutError(
+            f"The planner timed out after {timeout} seconds.\n\n"
+            f"Strategy used: {strategy.name}\n"
+            f"The problem may be too complex or require a different approach.{suggestion}"
+        )
         
     finally:
         # Clean up temporary file
@@ -237,141 +228,47 @@ def run_fast_downward(
             plan_file.unlink()
 
 
-def get_fallback_plan(domain_name: str) -> list[str]:
-    """
-    Get a predefined plan for testing when Fast Downward is not available.
-    
-    NOTE: These fallback plans are ONLY valid for the built-in default problems.
-    They should NOT be used for custom user problems.
-    
-    Args:
-        domain_name: Name of the domain
-        
-    Returns:
-        List of action strings
-    """
-    fallback_plans = {
-        "blocks-world": [
-            "(pick-up b)",
-            "(stack b c)",
-            "(pick-up a)",
-            "(stack a b)"
-        ],
-        "gripper": [
-            "(pick ball1 rooma left)",
-            "(pick ball2 rooma right)",
-            "(move rooma roomb)",
-            "(drop ball1 roomb left)",
-            "(drop ball2 roomb right)"
-        ],
-        "hanoi": [
-            # Move 2 disks from peg A to peg C using B as auxiliary
-            # Initial: d1 on d2 on A, goal: d1 on d2 on C
-            "(move d1 d2 b)",    # Move d1 from d2 to peg B
-            "(move d2 a c)",     # Move d2 from peg A to peg C
-            "(move d1 b d2)"     # Move d1 from peg B to d2 (on C)
-        ],
-        "depot": [
-            # Move p2 from pile1 (d1) to pile2 (d2)
-            # Initial: p1 on p2, p2 on pile1, pile2 clear at d2
-            "(unstack c1 p1 p2 d1)",       # c1 picks p1 from p2 (c1 holds p1, p2 clear)
-            "(load c1 p1 t1 d1)",          # load p1 into truck (c1 empty)
-            "(lift c1 p2 pile1 d1)",       # c1 picks p2 from pile1 (c1 holds p2, pile1 clear)
-            "(load c1 p2 t1 d1)",          # load p2 into truck (c1 empty)
-            "(drive t1 d1 d2)",            # drive truck to d2
-            "(unload c2 p2 t1 d2)",        # c2 unloads p2 from truck (c2 holds p2)
-            "(drop c2 p2 pile2 d2)"        # c2 drops p2 on pile2 (goal achieved)
-        ],
-        "rovers": [
-            # Simple rover plan - navigate, calibrate, take-image, communicate
-            "(navigate rover0 waypoint0 waypoint1)",
-            "(calibrate rover0 waypoint1)",
-            "(take-image rover0 target0 waypoint1)",
-            "(communicate rover0 target0)"
-        ]
-    }
-    
-    return fallback_plans.get(domain_name, [])
-
-
 def solve_problem(
     domain_path: str, 
     problem_path: str, 
     domain_name: str = None, 
     strategy_id: str = None,
-    timeout: int = None,
-    allow_fallback: bool = True
+    timeout: int = None
 ) -> Tuple[List[str], bool, str]:
     """
-    Solve a planning problem using Fast Downward or fallback to predefined plan.
+    Solve a planning problem using Fast Downward.
     
     Args:
         domain_path: Path to domain PDDL file
         problem_path: Path to problem PDDL file
-        domain_name: Optional domain name for fallback
+        domain_name: Domain name (for logging purposes only)
         strategy_id: Search strategy ID (from whitelist)
         timeout: Optional timeout in seconds (default: from environment or 1800s)
-        allow_fallback: If False, raise error instead of using fallback plan
         
     Returns:
         Tuple of (plan actions, used_planner, strategy_name)
         - plan actions: List of action strings
-        - used_planner: True if Fast Downward was used, False if fallback
-        - strategy_name: Name of the strategy used (or "Fallback" if not using planner)
+        - used_planner: Always True (no fallback)
+        - strategy_name: Name of the strategy used
+        
+    Raises:
+        PlannerNotFoundError: If Fast Downward is not installed
+        PlannerTimeoutError: If planner times out
+        UnsolvableProblemError: If the problem has no solution
+        InvalidProblemError: If the domain or problem file is invalid
+        PlannerError: For other planner failures
     """
     # Get strategy for error messages
     if strategy_id is None:
         strategy_id = get_default_strategy_id()
     
     strategy = get_strategy(strategy_id)
-    strategy_name = strategy.name if strategy else "Unknown"
     
-    try:
-        # Try to run Fast Downward
-        actions, used_strategy = run_fast_downward(
-            domain_path, problem_path, strategy_id, timeout
-        )
-        return actions, True, used_strategy
-    except subprocess.TimeoutExpired as e:
-        # Re-raise timeout errors with more context
-        timeout_used = timeout if timeout else get_planner_timeout()
-        
-        # Build helpful suggestion based on strategy
-        suggestion = ""
-        if strategy and strategy.is_optimal:
-            suggestion = " Try using a satisficing strategy like 'lazy-greedy-ff' for faster results."
-        
-        raise subprocess.TimeoutExpired(
-            e.cmd, 
-            timeout_used,
-            output=f"Fast Downward timed out after {timeout_used} seconds using {strategy_name}.{suggestion}"
-        )
-    except (FileNotFoundError, RuntimeError) as e:
-        # Check if fallback is allowed
-        if not allow_fallback:
-            raise RuntimeError(
-                f"Fast Downward planner is not available: {e}. "
-                f"Please ensure Fast Downward is installed and accessible."
-            )
-        
-        # Fall back to predefined plan
-        print(f"Warning: Could not run Fast Downward ({e}). Using fallback plan.", file=sys.stderr)
-        if domain_name:
-            actions = get_fallback_plan(domain_name)
-            
-            # CRITICAL: Validate that fallback plan matches the problem
-            is_valid, error_msg = validate_plan_matches_problem(actions, problem_path)
-            if not is_valid:
-                raise RuntimeError(
-                    f"Fast Downward is not available and the fallback plan does not match your problem. "
-                    f"{error_msg}\n\n"
-                    f"To solve custom problems, Fast Downward must be installed. "
-                    f"The fallback plans only work with the built-in default examples."
-                )
-            
-            return actions, False, "Fallback (predefined plan)"
-        else:
-            raise RuntimeError("Fast Downward not available and no domain name provided for fallback")
+    # Run Fast Downward - no fallback, errors propagate to caller
+    actions, used_strategy = run_fast_downward(
+        domain_path, problem_path, strategy_id, timeout
+    )
+    return actions, True, used_strategy
 
 
 def main():
@@ -398,19 +295,25 @@ def main():
             domain_path, problem_path, domain_name, strategy_id, timeout
         )
         
-        print(f"Planner: {'Fast Downward' if used_planner else 'Fallback'}")
         print(f"Strategy: {strategy_name}")
-        print(f"Timeout: {timeout if timeout else get_planner_timeout()} seconds")
-        print(f"Plan length: {len(actions)}")
-        print("Actions:")
+        print(f"Plan ({len(actions)} actions):")
         for i, action in enumerate(actions, 1):
             print(f"  {i}. {action}")
             
-    except subprocess.TimeoutExpired as e:
-        print(f"Error: {e.output}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+    except PlannerNotFoundError as e:
+        print(f"ERROR: Planner not found\n{e}", file=sys.stderr)
+        sys.exit(2)
+    except PlannerTimeoutError as e:
+        print(f"ERROR: Planner timeout\n{e}", file=sys.stderr)
+        sys.exit(3)
+    except UnsolvableProblemError as e:
+        print(f"ERROR: Unsolvable problem\n{e}", file=sys.stderr)
+        sys.exit(4)
+    except InvalidProblemError as e:
+        print(f"ERROR: Invalid problem\n{e}", file=sys.stderr)
+        sys.exit(5)
+    except PlannerError as e:
+        print(f"ERROR: Planner error\n{e}", file=sys.stderr)
         sys.exit(1)
 
 
