@@ -108,16 +108,12 @@ export default function Visualizer() {
       const container = planStepsRef.current;
       const currentActionElement = container.children[currentStateIndex - 1] as HTMLElement;
       if (currentActionElement) {
-        // Calculate scroll position to center the current action in the container
-        const containerHeight = container.clientHeight;
-        const elementTop = currentActionElement.offsetTop;
-        const elementHeight = currentActionElement.clientHeight;
-        const scrollPosition = elementTop - (containerHeight / 2) + (elementHeight / 2);
-        
-        // Smooth scroll within the container only
-        container.scrollTo({
-          top: scrollPosition,
+        // Scroll element into view within its scrollable container
+        // Using 'nearest' keeps it in view without unnecessary scrolling
+        currentActionElement.scrollIntoView({
           behavior: "smooth",
+          block: "nearest",
+          inline: "nearest",
         });
       }
     }
