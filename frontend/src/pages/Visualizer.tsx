@@ -568,7 +568,7 @@ export default function Visualizer() {
           {/* Sidebar Toggle Button */}
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="fixed left-4 top-24 z-40 lg:absolute lg:left-0 lg:top-0 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-3 shadow-lg transition-all flex items-center gap-2 font-medium"
+            className="fixed left-4 top-24 z-40 lg:absolute lg:left-0 lg:-top-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-3 shadow-lg transition-all flex items-center gap-2 font-medium"
           >
             <ChevronDown className={`w-5 h-5 transition-transform ${isSidebarCollapsed ? "rotate-90" : "-rotate-90"}`} />
             <span className="text-sm">{isSidebarCollapsed ? "Show Options" : "Hide Options"}</span>
