@@ -272,13 +272,15 @@ def get_fallback_plan(domain_name: str) -> list[str]:
             "(move d1 b d2)"     # Move d1 from peg B to d2 (on C)
         ],
         "depot": [
-            # Simple depot plan - move one crate
-            "(drive truck0 depot0 distributor0)",
-            "(lift hoist0 crate0 pallet0 depot0)",
-            "(load hoist0 crate0 truck0 depot0)",
-            "(drive truck0 depot0 distributor0)",
-            "(unload hoist1 crate0 truck0 distributor0)",
-            "(drop hoist1 crate0 pallet1 distributor0)"
+            # Move p2 from pile1 (d1) to pile2 (d2)
+            # Initial: p1 on p2, p2 on pile1, pile2 clear at d2
+            "(unstack c1 p1 p2 d1)",       # c1 picks p1 from p2 (c1 holds p1, p2 clear)
+            "(load c1 p1 t1 d1)",          # load p1 into truck (c1 empty)
+            "(lift c1 p2 pile1 d1)",       # c1 picks p2 from pile1 (c1 holds p2, pile1 clear)
+            "(load c1 p2 t1 d1)",          # load p2 into truck (c1 empty)
+            "(drive t1 d1 d2)",            # drive truck to d2
+            "(unload c2 p2 t1 d2)",        # c2 unloads p2 from truck (c2 holds p2)
+            "(drop c2 p2 pile2 d2)"        # c2 drops p2 on pile2 (goal achieved)
         ],
         "rovers": [
             # Simple rover plan - navigate, calibrate, take-image, communicate

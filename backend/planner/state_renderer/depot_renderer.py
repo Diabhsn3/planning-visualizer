@@ -138,6 +138,16 @@ class DepotRenderer(BaseStateRenderer):
                     properties={"description": f"{pkg} in {truck}"}
                 ))
 
+            # --- Pile at depot ---
+            elif name == "at-pile":
+                pile, depot = params
+                visual_relations.append(VisualRelation(
+                    type="at-pile",
+                    source=pile,
+                    target=depot,
+                    properties={"description": f"{pile} at {depot}"}
+                ))
+
             # --- Crane holding package ---
             elif name == "holding":
                 crane, pkg = params

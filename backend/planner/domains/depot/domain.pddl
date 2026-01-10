@@ -13,6 +13,7 @@
       ;; locations
       (at-truck ?t - truck ?d - depot)
       (at-crane ?c - crane ?d - depot)
+      (at-pile ?pl - pile ?d - depot)
 
       ;; stacking relations
       (on ?p - package ?q - package)
@@ -45,6 +46,7 @@
     :parameters (?c - crane ?p - package ?pl - pile ?d - depot)
     :precondition (and
         (at-crane ?c ?d)
+        (at-pile ?pl ?d)
         (on-pile ?p ?pl)
         (clear ?p)
         (empty-crane ?c))
@@ -81,6 +83,7 @@
     :parameters (?c - crane ?p - package ?pl - pile ?d - depot)
     :precondition (and
         (at-crane ?c ?d)
+        (at-pile ?pl ?d)
         (holding ?c ?p)
         (clear ?pl))
     :effect (and
@@ -124,20 +127,18 @@
   )
 
   ;; --------------------
-  ;; Unload from truck
+  ;; Unload from truck (package goes to crane, not pile)
   ;; --------------------
   (:action unload
-    :parameters (?c - crane ?p - package ?t - truck ?pl - pile ?d - depot)
+    :parameters (?c - crane ?p - package ?t - truck ?d - depot)
     :precondition (and
         (at-crane ?c ?d)
         (at-truck ?t ?d)
         (in-truck ?p ?t)
-        (clear ?pl)
         (empty-crane ?c))
     :effect (and
         (holding ?c ?p)
         (not (in-truck ?p ?t))
-        (not (clear ?pl))
         (not (empty-crane ?c)))
   )
 )
