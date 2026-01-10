@@ -23,6 +23,9 @@
       (on-pile p2 pile1)
       (on p1 p2)
 
+      (at p1 d1)
+      (at p2 d1)
+
       (clear p1)
       (clear pile2)
   )

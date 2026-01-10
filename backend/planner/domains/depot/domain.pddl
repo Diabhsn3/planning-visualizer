@@ -1,6 +1,6 @@
 (define (domain depot)
   (:requirements :strips :typing)
-  
+
   (:types
       depot
       truck
@@ -13,6 +13,8 @@
       (at-truck ?t - truck ?d - depot)
       (at-crane ?c - crane ?d - depot)
       (at-pile ?pl - pile ?d - depot)
+
+      (at ?p - package ?d - depot)
 
       (on ?p - package ?q - package)
       (on-pile ?p - package ?pl - pile)
@@ -38,6 +40,7 @@
         (at-crane ?c ?d)
         (at-pile ?pl ?d)
         (on-pile ?p ?pl)
+        (at ?p ?d)
         (clear ?p)
         (empty-crane ?c))
     :effect (and
@@ -53,6 +56,8 @@
     :precondition (and
         (at-crane ?c ?d)
         (on ?p ?q)
+        (at ?p ?d)
+        (at ?q ?d)
         (clear ?p)
         (empty-crane ?c))
     :effect (and
@@ -71,6 +76,7 @@
         (holding ?c ?p))
     :effect (and
         (on-pile ?p ?pl)
+        (at ?p ?d)
         (clear ?p)
         (empty-crane ?c)
         (not (holding ?c ?p)))
@@ -81,9 +87,11 @@
     :precondition (and
         (at-crane ?c ?d)
         (holding ?c ?p)
-        (clear ?q))
+        (clear ?q)
+        (at ?q ?d))
     :effect (and
         (on ?p ?q)
+        (at ?p ?d)
         (clear ?p)
         (empty-crane ?c)
         (not (holding ?c ?p))
@@ -98,6 +106,7 @@
         (holding ?c ?p))
     :effect (and
         (in-truck ?p ?t)
+        (not (at ?p ?d))
         (empty-crane ?c)
         (not (holding ?c ?p)))
   )
@@ -111,6 +120,7 @@
         (empty-crane ?c))
     :effect (and
         (holding ?c ?p)
+        (at ?p ?d)
         (not (in-truck ?p ?t))
         (not (empty-crane ?c)))
   )
