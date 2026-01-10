@@ -108,25 +108,28 @@ class DepotRenderer(BaseStateRenderer):
                     properties={"description": f"{crane} at {depot}"}
                 ))
 
-            # --- Package on pile ---
-            elif name == "on-pile":
-                pkg, pile = params
-                visual_relations.append(VisualRelation(
-                    type="on-pile",
-                    source=pkg,
-                    target=pile,
-                    properties={"description": f"{pkg} on {pile}"}
-                ))
-
-            # --- Package on package (stacking) ---
+            # --- Package on surface (package or pile) ---
+            # The unified 'on' predicate handles both package-on-package and package-on-pile
             elif name == "on":
-                pkg1, pkg2 = params
-                visual_relations.append(VisualRelation(
-                    type="on",
-                    source=pkg1,
-                    target=pkg2,
-                    properties={"description": f"{pkg1} on {pkg2}"}
-                ))
+                pkg, surface = params
+                # Determine if the target is a pile or package
+                target_type = objects.get(surface, "package")
+                if target_type == "pile":
+                    # Package on pile
+                    visual_relations.append(VisualRelation(
+                        type="on-pile",
+                        source=pkg,
+                        target=surface,
+                        properties={"description": f"{pkg} on {surface}"}
+                    ))
+                else:
+                    # Package on package
+                    visual_relations.append(VisualRelation(
+                        type="on",
+                        source=pkg,
+                        target=surface,
+                        properties={"description": f"{pkg} on {surface}"}
+                    ))
 
             # --- Package in truck ---
             elif name == "in-truck":

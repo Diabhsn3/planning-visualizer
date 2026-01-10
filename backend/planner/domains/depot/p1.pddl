@@ -24,16 +24,16 @@
       (at-pile pile2 d2)
 
       ;; packages stacked: p1 on top of p2, p2 on pile1
-      (on p1 p2)
-      (on-pile p2 pile1)
-      (clear-package p1)    ;; p1 is on top, nothing above it
-      (clear-pile pile2)    ;; pile2 is empty
+      (on p2 pile1)       ;; p2 is on pile1 (using unified 'on' predicate)
+      (on p1 p2)          ;; p1 is on p2
+      (clear p1)          ;; p1 is on top, nothing above it
+      (clear pile2)       ;; pile2 is empty
       ;; Note: pile1 is NOT clear because p2 is on it
       ;; Note: p2 is NOT clear because p1 is on it
   )
 
   ;; Goal: move p2 to pile2 at d2
   (:goal
-      (on-pile p2 pile2)
+      (on p2 pile2)
   )
 )

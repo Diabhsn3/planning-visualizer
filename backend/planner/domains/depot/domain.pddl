@@ -5,8 +5,8 @@
       depot
       truck
       crane
-      pile
-      package
+      surface              ;; common supertype for things that can be clear
+      package pile - surface   ;; both package and pile are surfaces
   )
 
   (:predicates
@@ -16,12 +16,10 @@
       (at-pile ?pl - pile ?d - depot)
 
       ;; stacking relations
-      (on ?p - package ?q - package)
-      (on-pile ?p - package ?pl - pile)
+      (on ?p - package ?s - surface)    ;; package on another surface (package or pile)
       
-      ;; clear predicates (separate for type safety)
-      (clear-package ?p - package)    ;; package has nothing on top
-      (clear-pile ?pl - pile)         ;; pile has nothing on top
+      ;; clear predicate - works for both packages and piles
+      (clear ?s - surface)
 
       ;; crane state
       (holding ?c - crane ?p - package)
@@ -43,75 +41,38 @@
   )
 
   ;; --------------------
-  ;; Crane picks from pile (package directly on pile)
+  ;; Crane picks package from a surface (pile or another package)
   ;; --------------------
   (:action lift
-    :parameters (?c - crane ?p - package ?pl - pile ?d - depot)
+    :parameters (?c - crane ?p - package ?s - surface ?d - depot)
     :precondition (and
         (at-crane ?c ?d)
-        (at-pile ?pl ?d)
-        (on-pile ?p ?pl)
-        (clear-package ?p)
+        (on ?p ?s)
+        (clear ?p)
         (empty-crane ?c))
     :effect (and
-        (not (on-pile ?p ?pl))
+        (not (on ?p ?s))
         (holding ?c ?p)
-        (not (clear-package ?p))
-        (clear-pile ?pl)
+        (not (clear ?p))
+        (clear ?s)
         (not (empty-crane ?c)))
   )
 
   ;; --------------------
-  ;; Crane picks from package (unstacking)
-  ;; --------------------
-  (:action unstack
-    :parameters (?c - crane ?p - package ?q - package ?d - depot)
-    :precondition (and
-        (at-crane ?c ?d)
-        (on ?p ?q)
-        (clear-package ?p)
-        (empty-crane ?c))
-    :effect (and
-        (not (on ?p ?q))
-        (holding ?c ?p)
-        (clear-package ?q)
-        (not (clear-package ?p))
-        (not (empty-crane ?c)))
-  )
-
-  ;; --------------------
-  ;; Crane drops onto pile
+  ;; Crane drops package onto a surface (pile or another package)
   ;; --------------------
   (:action drop
-    :parameters (?c - crane ?p - package ?pl - pile ?d - depot)
-    :precondition (and
-        (at-crane ?c ?d)
-        (at-pile ?pl ?d)
-        (holding ?c ?p)
-        (clear-pile ?pl))
-    :effect (and
-        (on-pile ?p ?pl)
-        (clear-package ?p)
-        (empty-crane ?c)
-        (not (holding ?c ?p))
-        (not (clear-pile ?pl)))
-  )
-
-  ;; --------------------
-  ;; Crane stacks onto package
-  ;; --------------------
-  (:action stack
-    :parameters (?c - crane ?p - package ?q - package ?d - depot)
+    :parameters (?c - crane ?p - package ?s - surface ?d - depot)
     :precondition (and
         (at-crane ?c ?d)
         (holding ?c ?p)
-        (clear-package ?q))
+        (clear ?s))
     :effect (and
-        (on ?p ?q)
-        (clear-package ?p)
+        (on ?p ?s)
+        (clear ?p)
         (empty-crane ?c)
         (not (holding ?c ?p))
-        (not (clear-package ?q)))
+        (not (clear ?s)))
   )
 
   ;; --------------------
