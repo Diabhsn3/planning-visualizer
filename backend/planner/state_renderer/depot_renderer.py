@@ -11,82 +11,124 @@ class DepotRenderer(BaseStateRenderer):
     def __init__(self):
         super().__init__("depot")
         self.colors = {
-            "truck": "#00BFFF",       # Blue
-            "package": "#FFD700",     # Yellow
-            "depot": "#A9A9A9",       # Gray
-            "distributor": "#32CD32", # Green
+            "depot": "#A9A9A9",
+            "truck": "#00BFFF",
+            "crane": "#FF69B4",
+            "pile": "#8B4513",
+            "package": "#FFD700",
         }
 
     def render(self, state: Set, objects: Dict[str, str], metadata: Optional[Dict] = None) -> RenderedState:
-        """
-        Render a depot state as a visual representation.
 
-        Args:
-            state: Set of predicates representing the state
-            objects: Dictionary mapping object names to types
-            metadata: Optional metadata (step number, action)
-
-        Returns:
-            RenderedState object with visual elements
-        """
         visual_objects = []
         visual_relations = []
 
-        # Step 1: Create basic positions by type and index
-        type_positions = {
-            "depot": [0, 0],
-            "distributor": [6, 0],
-            "truck": [3, -2],
-            "package": [3, 2],
-        }
-        instance_counters = {}  # Keep track of how many of each type were placed
+        # -------------------------------------------------
+        # 1. Layout rules
+        # -------------------------------------------------
 
-        def get_position(obj_type: str) -> List[float]:
-            base = type_positions.get(obj_type, [0, 0])
-            count = instance_counters.get(obj_type, 0)
-            instance_counters[obj_type] = count + 1
-            # Offset each object slightly
-            return [base[0] + count * 1.5, base[1]]
+        depot_positions = {}
+        depot_index = 0
 
-        # Step 2: Create visual objects
+        # assign fixed positions for depots
+        for obj, typ in objects.items():
+            if typ == "depot":
+                depot_positions[obj] = [depot_index * 8, 0]
+                depot_index += 1
+
+        # default offsets inside each depot
+        pile_offsets = {}
+        crane_offsets = {}
+        truck_offsets = {}
+
+        # -------------------------------------------------
+        # 2. Create Visual Objects
+        # -------------------------------------------------
+
         for obj_name, obj_type in objects.items():
-            if obj_name in ["package", "truck", "depot", "distributor"]:
-                continue  # skip type names that got mistakenly parsed as objects
 
-            color = self.colors.get(obj_type, "#888888")
-            pos = get_position(obj_type)
+            if obj_type not in self.colors:
+                continue
+
+            color = self.colors[obj_type]
+
+            # --- Positioning rules ---
+            if obj_type == "depot":
+                pos = depot_positions[obj_name]
+
+            elif obj_type == "pile":
+                # place piles near their depot later via relation
+                pos = [0, 0]
+
+            elif obj_type == "crane":
+                pos = [0, 0]
+
+            elif obj_type == "truck":
+                pos = [0, -2]
+
+            elif obj_type == "package":
+                pos = [0, 2]
+
+            else:
+                pos = [0, 0]
 
             visual_objects.append(VisualObject(
                 id=obj_name,
                 type=obj_type,
-                label=obj_name.upper(),
+                label=obj_name,
                 position=pos,
                 properties={"color": color}
             ))
 
-        # Step 3: Create relations from predicates
+        # -------------------------------------------------
+        # 3. Create Relations from predicates
+        # -------------------------------------------------
+
         for pred in state:
             name = pred.name
             params = pred.params
 
-            if name == "at":
-                pkg, loc = params
-                visual_relations.append(VisualRelation(
-                    type="at",
-                    source=pkg,
-                    target=loc,
-                    properties={"description": f"{pkg} at {loc}"}
-                ))
-
-            elif name == "at-truck":
-                truck, loc = params
+            # --- Truck at depot ---
+            if name == "at-truck":
+                truck, depot = params
                 visual_relations.append(VisualRelation(
                     type="at-truck",
                     source=truck,
-                    target=loc,
-                    properties={"description": f"{truck} at {loc}"}
+                    target=depot,
+                    properties={"description": f"{truck} at {depot}"}
                 ))
 
+            # --- Crane at depot ---
+            elif name == "at-crane":
+                crane, depot = params
+                visual_relations.append(VisualRelation(
+                    type="at-crane",
+                    source=crane,
+                    target=depot,
+                    properties={"description": f"{crane} at {depot}"}
+                ))
+
+            # --- Package on pile ---
+            elif name == "on-pile":
+                pkg, pile = params
+                visual_relations.append(VisualRelation(
+                    type="on-pile",
+                    source=pkg,
+                    target=pile,
+                    properties={"description": f"{pkg} on {pile}"}
+                ))
+
+            # --- Package on package (stacking) ---
+            elif name == "on":
+                pkg1, pkg2 = params
+                visual_relations.append(VisualRelation(
+                    type="on",
+                    source=pkg1,
+                    target=pkg2,
+                    properties={"description": f"{pkg1} on {pkg2}"}
+                ))
+
+            # --- Package in truck ---
             elif name == "in-truck":
                 pkg, truck = params
                 visual_relations.append(VisualRelation(
@@ -96,6 +138,17 @@ class DepotRenderer(BaseStateRenderer):
                     properties={"description": f"{pkg} in {truck}"}
                 ))
 
+            # --- Crane holding package ---
+            elif name == "holding":
+                crane, pkg = params
+                visual_relations.append(VisualRelation(
+                    type="holding",
+                    source=crane,
+                    target=pkg,
+                    properties={"description": f"{crane} holding {pkg}"}
+                ))
+
+        # -------------------------------------------------
         return RenderedState(
             domain=self.domain_name,
             objects=visual_objects,

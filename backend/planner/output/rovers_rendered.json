@@ -40,23 +40,23 @@
       ],
       "relations": [
         {
-          "type": "connected",
-          "source": "w2",
-          "target": "w1"
-        },
-        {
           "type": "at-rover",
           "source": "r1",
           "target": "w1"
         },
         {
-          "type": "at-target",
-          "source": "t1",
+          "type": "connected",
+          "source": "w1",
           "target": "w2"
         },
         {
           "type": "connected",
-          "source": "w1",
+          "source": "w2",
+          "target": "w1"
+        },
+        {
+          "type": "at-target",
+          "source": "t1",
           "target": "w2"
         }
       ],
@@ -102,17 +102,13 @@
       ],
       "relations": [
         {
-          "type": "calibrated",
-          "source": "r1"
-        },
-        {
           "type": "connected",
           "source": "w1",
           "target": "w2"
         },
         {
-          "type": "at-rover",
-          "source": "r1",
+          "type": "connected",
+          "source": "w2",
           "target": "w1"
         },
         {
@@ -121,9 +117,13 @@
           "target": "w2"
         },
         {
-          "type": "connected",
-          "source": "w2",
+          "type": "at-rover",
+          "source": "r1",
           "target": "w1"
+        },
+        {
+          "type": "calibrated",
+          "source": "r1"
         }
       ],
       "metadata": {
@@ -169,12 +169,18 @@
       ],
       "relations": [
         {
-          "type": "calibrated",
-          "source": "r1"
+          "type": "connected",
+          "source": "w1",
+          "target": "w2"
         },
         {
           "type": "connected",
-          "source": "w1",
+          "source": "w2",
+          "target": "w1"
+        },
+        {
+          "type": "at-target",
+          "source": "t1",
           "target": "w2"
         },
         {
@@ -183,14 +189,8 @@
           "target": "w2"
         },
         {
-          "type": "at-target",
-          "source": "t1",
-          "target": "w2"
-        },
-        {
-          "type": "connected",
-          "source": "w2",
-          "target": "w1"
+          "type": "calibrated",
+          "source": "r1"
         }
       ],
       "metadata": {
@@ -236,10 +236,6 @@
       ],
       "relations": [
         {
-          "type": "calibrated",
-          "source": "r1"
-        },
-        {
           "type": "connected",
           "source": "w1",
           "target": "w2"
@@ -250,11 +246,6 @@
           "target": "t1"
         },
         {
-          "type": "at-rover",
-          "source": "r1",
-          "target": "w2"
-        },
-        {
           "type": "at-target",
           "source": "t1",
           "target": "w2"
@@ -263,6 +254,15 @@
           "type": "connected",
           "source": "w2",
           "target": "w1"
+        },
+        {
+          "type": "at-rover",
+          "source": "r1",
+          "target": "w2"
+        },
+        {
+          "type": "calibrated",
+          "source": "r1"
         }
       ],
       "metadata": {
@@ -308,10 +308,6 @@
       ],
       "relations": [
         {
-          "type": "calibrated",
-          "source": "r1"
-        },
-        {
           "type": "communicated",
           "source": "t1"
         },
@@ -326,11 +322,6 @@
           "target": "t1"
         },
         {
-          "type": "at-rover",
-          "source": "r1",
-          "target": "w2"
-        },
-        {
           "type": "at-target",
           "source": "t1",
           "target": "w2"
@@ -339,6 +330,15 @@
           "type": "connected",
           "source": "w2",
           "target": "w1"
+        },
+        {
+          "type": "at-rover",
+          "source": "r1",
+          "target": "w2"
+        },
+        {
+          "type": "calibrated",
+          "source": "r1"
         }
       ],
       "metadata": {
