@@ -1,4 +1,4 @@
-(define (problem p11)
+(define (problem depot-demo)
   (:domain depot)
 
   (:objects
@@ -26,10 +26,10 @@
       ;; packages stacked: p1 on top of p2, p2 on pile1
       (on p1 p2)
       (on-pile p2 pile1)
-      (clear p1)
-      (clear pile2)
-
-      ;; Note: pile1 is not clear because p2 is on it
+      (clear-package p1)    ;; p1 is on top, nothing above it
+      (clear-pile pile2)    ;; pile2 is empty
+      ;; Note: pile1 is NOT clear because p2 is on it
+      ;; Note: p2 is NOT clear because p1 is on it
   )
 
   ;; Goal: move p2 to pile2 at d2

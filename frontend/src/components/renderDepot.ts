@@ -48,16 +48,13 @@ export function renderDepot(
   const packageInTruck = new Map<string, string>(); // package -> truck
   const craneHolding = new Map<string, string>();  // crane -> package
 
-  console.log("[DEPOT DEBUG] state.relations:", state.relations);
   for (const r of state.relations) {
-    console.log("[DEPOT DEBUG] Processing relation:", r.type, r.source, r.target);
     if (r.type === "at-truck" && r.target) {
       truckAt.set(r.source, r.target);
     } else if (r.type === "at-crane" && r.target) {
       craneAt.set(r.source, r.target);
     } else if (r.type === "at-pile" && r.target) {
       pileAt.set(r.source, r.target);
-      console.log("[DEPOT DEBUG] Added to pileAt:", r.source, "->", r.target);
     } else if (r.type === "on-pile" && r.target) {
       packageOnPile.set(r.source, r.target);
     } else if (r.type === "on" && r.target) {
@@ -254,15 +251,10 @@ export function renderDepot(
 
     // === PILE BESIDE DEPOT ===
     // Find piles that belong to this depot
-    console.log("[DEPOT DEBUG] Looking for piles for depot:", depot.id);
-    console.log("[DEPOT DEBUG] pileAt map:", Array.from(pileAt.entries()));
-    console.log("[DEPOT DEBUG] All piles:", piles.map(p => p.id));
     const depotPiles = piles.filter(p => {
       const pileDepot = pileAt.get(p.id);
-      console.log("[DEPOT DEBUG] Pile", p.id, "belongs to depot:", pileDepot, "matches?", pileDepot === depot.id);
       return pileDepot === depot.id;
     });
-    console.log("[DEPOT DEBUG] Found depotPiles:", depotPiles.map(p => p.id));
     
     depotPiles.forEach((pile, pileIndex) => {
       const pileX = depotX + DEPOT_WIDTH + 30;  // To the right of depot

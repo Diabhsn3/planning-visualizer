@@ -18,7 +18,10 @@
       ;; stacking relations
       (on ?p - package ?q - package)
       (on-pile ?p - package ?pl - pile)
-      (clear ?x)                    ;; ?x = package or pile top free
+      
+      ;; clear predicates (separate for type safety)
+      (clear-package ?p - package)    ;; package has nothing on top
+      (clear-pile ?pl - pile)         ;; pile has nothing on top
 
       ;; crane state
       (holding ?c - crane ?p - package)
@@ -40,7 +43,7 @@
   )
 
   ;; --------------------
-  ;; Crane picks from pile
+  ;; Crane picks from pile (package directly on pile)
   ;; --------------------
   (:action lift
     :parameters (?c - crane ?p - package ?pl - pile ?d - depot)
@@ -48,31 +51,31 @@
         (at-crane ?c ?d)
         (at-pile ?pl ?d)
         (on-pile ?p ?pl)
-        (clear ?p)
+        (clear-package ?p)
         (empty-crane ?c))
     :effect (and
         (not (on-pile ?p ?pl))
         (holding ?c ?p)
-        (not (clear ?p))
-        (clear ?pl)
+        (not (clear-package ?p))
+        (clear-pile ?pl)
         (not (empty-crane ?c)))
   )
 
   ;; --------------------
-  ;; Crane picks from package
+  ;; Crane picks from package (unstacking)
   ;; --------------------
   (:action unstack
     :parameters (?c - crane ?p - package ?q - package ?d - depot)
     :precondition (and
         (at-crane ?c ?d)
         (on ?p ?q)
-        (clear ?p)
+        (clear-package ?p)
         (empty-crane ?c))
     :effect (and
         (not (on ?p ?q))
         (holding ?c ?p)
-        (clear ?q)
-        (not (clear ?p))
+        (clear-package ?q)
+        (not (clear-package ?p))
         (not (empty-crane ?c)))
   )
 
@@ -85,13 +88,13 @@
         (at-crane ?c ?d)
         (at-pile ?pl ?d)
         (holding ?c ?p)
-        (clear ?pl))
+        (clear-pile ?pl))
     :effect (and
         (on-pile ?p ?pl)
-        (clear ?p)
+        (clear-package ?p)
         (empty-crane ?c)
         (not (holding ?c ?p))
-        (not (clear ?pl)))
+        (not (clear-pile ?pl)))
   )
 
   ;; --------------------
@@ -102,13 +105,13 @@
     :precondition (and
         (at-crane ?c ?d)
         (holding ?c ?p)
-        (clear ?q))
+        (clear-package ?q))
     :effect (and
         (on ?p ?q)
-        (clear ?p)
+        (clear-package ?p)
         (empty-crane ?c)
         (not (holding ?c ?p))
-        (not (clear ?q)))
+        (not (clear-package ?q)))
   )
 
   ;; --------------------
@@ -127,7 +130,7 @@
   )
 
   ;; --------------------
-  ;; Unload from truck (package goes to crane, not pile)
+  ;; Unload from truck (package goes to crane)
   ;; --------------------
   (:action unload
     :parameters (?c - crane ?p - package ?t - truck ?d - depot)
