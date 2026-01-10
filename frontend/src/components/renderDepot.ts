@@ -199,8 +199,8 @@ export function renderDepot(
   const DEPOT_Y = 50;
 
   // ---------- BACKGROUND ----------
-  ctx.fillStyle = "#f8f9fa";
-  ctx.fillRect(0, 0, W, H);
+  // ctx.fillStyle = "#f8f9fa";
+  // ctx.fillRect(0, 0, W, H);
 
   // ---------- DRAW EACH DEPOT ----------
   let currentX = START_X;

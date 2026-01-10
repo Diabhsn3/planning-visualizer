@@ -34,11 +34,11 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
   const WORLD_HEIGHT = 600;
 
   // Clear the world area (in world coordinates)
-  ctx.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  // ctx.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   
   // Background
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  // ctx.fillStyle = "#ffffff";
+  // ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
   // ---------- Colors ----------
   const pegColor = "#8B5A2B";

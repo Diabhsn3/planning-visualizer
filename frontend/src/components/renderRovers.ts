@@ -359,9 +359,9 @@ export function renderRovers(
   const H = 600;
   const GRID = 100;
 
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#f8f9fa';
-  ctx.fillRect(0, 0, W, H);
+  // ctx.clearRect(0, 0, W, H);
+  // ctx.fillStyle = '#f8f9fa';
+  // ctx.fillRect(0, 0, W, H);
 
   const waypointColor = '#66BB6A';
   const pathColor = '#B0BEC5';
