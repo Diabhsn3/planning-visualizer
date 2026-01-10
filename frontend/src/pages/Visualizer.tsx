@@ -38,6 +38,7 @@ export default function Visualizer() {
   const [isDomainOpen, setIsDomainOpen] = useState(true);
   const [showExampleProblem, setShowExampleProblem] = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef = useRef<HTMLDivElement>(null);
   
@@ -563,9 +564,18 @@ export default function Visualizer() {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-3 gap-8">
+        <div className="grid lg:grid-cols-3 gap-8 relative">
+          {/* Sidebar Toggle Button */}
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="fixed left-4 top-24 z-40 lg:absolute lg:left-0 lg:top-0 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl p-2 shadow-lg transition-all"
+            title={isSidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          >
+            <ChevronDown className={`w-5 h-5 text-slate-600 transition-transform ${isSidebarCollapsed ? "rotate-90" : "-rotate-90"}`} />
+          </button>
+
           {/* Configuration Panel */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className={`lg:col-span-1 space-y-6 transition-all duration-300 ${isSidebarCollapsed ? "hidden" : ""}`}>
             {/* Domain Selection Card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <button
@@ -814,7 +824,7 @@ export default function Visualizer() {
           </div>
 
           {/* Visualization Panel */}
-          <div className="lg:col-span-2">
+          <div className={`transition-all duration-300 ${isSidebarCollapsed ? "lg:col-span-3" : "lg:col-span-2"}`}>
             {renderedStates.length > 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
                 {/* Visualization Header */}
