@@ -236,10 +236,10 @@ export function renderDepot(
 
     // Depot label at top
     ctx.fillStyle = "#37474F";
-    ctx.font = "bold 16px Arial";
+    ctx.font = "bold 18px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(depot.label.toUpperCase(), depotX + depotWidth / 2, depotY + 8);
+    ctx.fillText(depot.label.toUpperCase(), depotX + depotWidth / 2, depotY + 5);
 
     // === CRANE (Gripper style) at top ===
     const depotCranes = cranes.filter(c => craneAt.get(c.id) === depot.id);
@@ -251,7 +251,7 @@ export function renderDepot(
       const heldPkg = heldPkgId ? packages.find(p => p.id === heldPkgId) : null;
 
       ctx.strokeStyle = "#455A64";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 6;
       ctx.lineCap = "round";
 
       if (heldPkg) {
@@ -314,10 +314,10 @@ export function renderDepot(
         ctx.lineTo(craneX + gap / 2, armBottomY + clawLength);
         ctx.stroke();
 
-        ctx.fillStyle = "#455A64";
-        ctx.font = "bold 10px Arial";
+        ctx.fillStyle = "#000000ff";
+        ctx.font = "bold 13px Arial";
         ctx.textAlign = "center";
-        ctx.fillText(crane.label, craneX, craneTopY - 8);
+        ctx.fillText(crane.label, craneX +9, craneTopY +5 );
       }
     });
 
@@ -357,23 +357,23 @@ export function renderDepot(
       }
 
       // Truck label ON the truck (on the cab area)
-      ctx.fillStyle = "#FFFFFF";
-      ctx.font = "bold 9px Arial";
+      ctx.fillStyle = "#ad1d1dff";
+      ctx.font = "bold 13px Arial";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(truck.label, truckX + TRUCK_W - 15, truckY + TRUCK_H / 2 + 5);
+      ctx.fillText(truck.label, truckX + TRUCK_W -35, truckY + TRUCK_H / 2 + 10);
 
       // Draw packages in truck - REVERSE order so last loaded is on top
       const packagesInThisTruck = packages.filter(p => packageInTruck.get(p.id) === truck.id);
-      const flatbedCenterX = truckX + 18;
-      const flatbedBaseY = truckY + TRUCK_H - 8; // Base of flatbed
+      const flatbedCenterX = truckX + 25;
+      const flatbedBaseY = truckY + TRUCK_H - 21; // Base of flatbed
       
       // Draw from bottom to top: first package at bottom, last at top
       // Reverse the array so the last loaded package appears on top visually
-      const reversedPackages = [...packagesInThisTruck].reverse();
+      const reversedPackages = [...packagesInThisTruck];
       reversedPackages.forEach((pkg, pkgIndex) => {
         const containerY = flatbedBaseY - (reversedPackages.length - 1 - pkgIndex) * (CONTAINER_H - 8) - CONTAINER_H / 2;
-        drawContainer(ctx, flatbedCenterX, containerY, CONTAINER_W - 8, CONTAINER_H - 5, pkg.label, false);
+        drawContainer(ctx, flatbedCenterX, containerY, CONTAINER_W - 5, CONTAINER_H - 5, pkg.label, false);
       });
       
       truckCurrentX += TRUCK_W + TRUCK_SPACING;
@@ -439,8 +439,8 @@ function drawStackedPackages(
 ) {
   for (const pkg of packages) {
     if (packageOn.get(pkg.id) === basePkg.id) {
-      drawContainer(ctx, centerX, topY + containerH / 2, containerW, containerH, pkg.label, false);
-      drawStackedPackages(ctx, pkg, centerX, topY - containerH, packageOn, packages, containerW, containerH);
+      drawContainer(ctx, centerX, topY -5 + containerH / 2, containerW, containerH, pkg.label, false);
+      drawStackedPackages(ctx, pkg, centerX, topY - containerH , packageOn, packages, containerW, containerH);
       break;
     }
   }
