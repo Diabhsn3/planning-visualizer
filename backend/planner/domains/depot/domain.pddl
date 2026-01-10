@@ -12,6 +12,7 @@
   (:predicates
       (at-truck ?t - truck ?d - depot)
       (at-crane ?c - crane ?d - depot)
+      (at-pile ?pl - pile ?d - depot)
 
       (on ?p - package ?q - package)
       (on-pile ?p - package ?pl - pile)
@@ -35,6 +36,7 @@
     :parameters (?c - crane ?p - package ?pl - pile ?d - depot)
     :precondition (and
         (at-crane ?c ?d)
+        (at-pile ?pl ?d)
         (on-pile ?p ?pl)
         (clear ?p)
         (empty-crane ?c))
@@ -65,6 +67,7 @@
     :parameters (?c - crane ?p - package ?pl - pile ?d - depot)
     :precondition (and
         (at-crane ?c ?d)
+        (at-pile ?pl ?d)
         (holding ?c ?p))
     :effect (and
         (on-pile ?p ?pl)

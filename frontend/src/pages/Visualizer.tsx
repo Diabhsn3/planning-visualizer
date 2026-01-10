@@ -157,6 +157,9 @@ export default function Visualizer() {
       (at-crane c2 d2)
       (empty-crane c2)
 
+      (at-pile pile1 d1)
+      (at-pile pile2 d2)
+
       (on-pile p2 pile1)
       (on p1 p2)
 
