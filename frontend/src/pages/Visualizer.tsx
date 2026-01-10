@@ -5,7 +5,7 @@ import { StateCanvas } from "@/components/StateCanvas";
 import { 
   Play, Pause, SkipForward, SkipBack, Upload, FileText, 
   AlertTriangle, Clock, Zap, Settings, 
-  Cpu, CheckCircle2, XCircle, Info, Sparkles
+  Cpu, CheckCircle2, XCircle, Info, Sparkles, ChevronDown
 } from "lucide-react";
 
 // Search strategy type
@@ -21,8 +21,8 @@ interface SearchStrategy {
 
 export default function Visualizer() {
   const [selectedDomain, setSelectedDomain] = useState("blocks-world");
-  const [selectedStrategy, setSelectedStrategy] = useState("lazy-greedy-ff");
-  const [useCustomProblem, setUseCustomProblem] = useState(false);
+  const [selectedStrategy, setSelectedStrategy] = useState("astar-lmcut");
+  const [problemType, setProblemType] = useState<"example" | "custom">("example");
   const [inputMode, setInputMode] = useState<"file" | "text">("file");
   const [problemFile, setProblemFile] = useState<File | null>(null);
   const [problemText, setProblemText] = useState("");
@@ -35,7 +35,9 @@ export default function Visualizer() {
   const [showStatus, setShowStatus] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDomainOpen, setIsDomainOpen] = useState(true);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const planStepsRef = useRef<HTMLDivElement>(null);
   
   // Error modal state
   const [errorModal, setErrorModal] = useState<{
@@ -84,6 +86,27 @@ export default function Visualizer() {
       }
     };
   }, []);
+
+  // Reset problem section when domain changes
+  useEffect(() => {
+    setProblemType("example");
+    setProblemFile(null);
+    setProblemText("");
+    setInputMode("file");
+  }, [selectedDomain]);
+
+  // Auto-scroll plan steps to current action
+  useEffect(() => {
+    if (planStepsRef.current && plan.length > 0) {
+      const currentActionElement = planStepsRef.current.children[currentStateIndex - 1] as HTMLElement;
+      if (currentActionElement) {
+        currentActionElement.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      }
+    }
+  }, [currentStateIndex, plan.length]);
 
   // Get current strategy details
   const currentStrategy = strategiesQuery.data?.find(
@@ -305,7 +328,7 @@ export default function Visualizer() {
   const handleGenerate = () => {
     setIsProcessing(true);
     
-    if (useCustomProblem) {
+    if (problemType === "custom") {
       if (inputMode === "file" && !problemFile) {
         setIsProcessing(false);
         alert("Please select a problem file");
@@ -528,9 +551,14 @@ export default function Visualizer() {
           <div className="lg:col-span-1 space-y-6">
             {/* Domain Selection Card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100">
+              <button
+                onClick={() => setIsDomainOpen(!isDomainOpen)}
+                className="w-full px-6 py-4 border-b border-slate-100 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
+              >
                 <h2 className="text-base font-semibold text-slate-900">Domain</h2>
-              </div>
+                <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${isDomainOpen ? "" : "-rotate-90"}`} />
+              </button>
+              {isDomainOpen && (
               <div className="p-4">
                 <div className="space-y-2">
                   {domains.map((domain) => (
@@ -556,6 +584,117 @@ export default function Visualizer() {
                     </button>
                   ))}
                 </div>
+              </div>
+              )}
+            </div>
+
+            {/* Problem Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100">
+                <h2 className="text-base font-semibold text-slate-900">Problem</h2>
+              </div>
+              <div className="p-4 space-y-4">
+                {/* Problem Type Radio Buttons */}
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="problemType"
+                      checked={problemType === "example"}
+                      onChange={() => setProblemType("example")}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Example Problem</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="problemType"
+                      checked={problemType === "custom"}
+                      onChange={() => setProblemType("custom")}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-slate-700">Custom Problem</span>
+                  </label>
+                </div>
+
+                {problemType === "example" && (
+                  <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                    <p className="text-sm text-indigo-900">
+                      Using default example problem for <strong>{currentDomain?.name}</strong> domain
+                    </p>
+                  </div>
+                )}
+                
+                {problemType === "custom" && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setInputMode("file"); setProblemText(""); }}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                          inputMode === "file"
+                            ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/25"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload
+                      </button>
+                      <button
+                        onClick={() => { setInputMode("text"); setProblemFile(null); }}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                          inputMode === "text"
+                            ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/25"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                      >
+                        <FileText className="w-4 h-4" />
+                        Paste
+                      </button>
+                    </div>
+
+                    {inputMode === "file" && (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <input
+                            type="file"
+                            accept=".pddl"
+                            onChange={(e) => setProblemFile(e.target.files?.[0] || null)}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          />
+                          <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-300 hover:bg-indigo-50/30 transition-all">
+                            <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                            <p className="text-sm text-slate-600">
+                              {problemFile ? problemFile.name : "Drop .pddl file or click to browse"}
+                            </p>
+                          </div>
+                        </div>
+                        {problemFile && (
+                          <p className="text-xs text-emerald-600 flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            {problemFile.name}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {inputMode === "text" && (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={problemText}
+                          onChange={(e) => setProblemText(e.target.value)}
+                          placeholder="(define (problem ...)&#10;  (:domain ...)&#10;  ...&#10;)"
+                          className="font-mono text-sm min-h-[180px] bg-slate-50 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 rounded-xl"
+                        />
+                        {problemText && (
+                          <p className="text-xs text-slate-500">
+                            {problemText.split("\n").length} lines
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -606,97 +745,6 @@ export default function Visualizer() {
               </div>
             </div>
 
-            {/* Custom Problem Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useCustomProblem}
-                    onChange={(e) => {
-                      setUseCustomProblem(e.target.checked);
-                      if (!e.target.checked) {
-                        setProblemFile(null);
-                        setProblemText("");
-                      }
-                    }}
-                    className="w-5 h-5 rounded-md"
-                  />
-                  <span className="text-base font-semibold text-slate-900">Custom Problem</span>
-                </label>
-              </div>
-              
-              {useCustomProblem && (
-                <div className="p-4 space-y-4 animate-fade-in">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { setInputMode("file"); setProblemText(""); }}
-                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                        inputMode === "file"
-                          ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/25"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      <Upload className="w-4 h-4" />
-                      Upload
-                    </button>
-                    <button
-                      onClick={() => { setInputMode("text"); setProblemFile(null); }}
-                      className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                        inputMode === "text"
-                          ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/25"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      <FileText className="w-4 h-4" />
-                      Paste
-                    </button>
-                  </div>
-
-                  {inputMode === "file" && (
-                    <div className="space-y-2">
-                      <div className="relative">
-                        <input
-                          type="file"
-                          accept=".pddl"
-                          onChange={(e) => setProblemFile(e.target.files?.[0] || null)}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-                        <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-300 hover:bg-indigo-50/30 transition-all">
-                          <Upload className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-                          <p className="text-sm text-slate-600">
-                            {problemFile ? problemFile.name : "Drop .pddl file or click to browse"}
-                          </p>
-                        </div>
-                      </div>
-                      {problemFile && (
-                        <p className="text-xs text-emerald-600 flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          {problemFile.name}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {inputMode === "text" && (
-                    <div className="space-y-2">
-                      <Textarea
-                        value={problemText}
-                        onChange={(e) => setProblemText(e.target.value)}
-                        placeholder="(define (problem ...)&#10;  (:domain ...)&#10;  ...&#10;)"
-                        className="font-mono text-sm min-h-[180px] bg-slate-50 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 rounded-xl"
-                      />
-                      {problemText && (
-                        <p className="text-xs text-slate-500">
-                          {problemText.split("\n").length} lines
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* Generate Button */}
             <button
               onClick={handleGenerate}
@@ -712,7 +760,7 @@ export default function Visualizer() {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Processing... {formatTime(elapsedTime)}
                 </span>
-              ) : useCustomProblem ? (
+              ) : problemType === "custom" ? (
                 <span className="flex items-center justify-center gap-2">
                   <Sparkles className="w-5 h-5" />
                   Solve Problem
@@ -860,7 +908,7 @@ export default function Visualizer() {
                     <h3 className="text-sm font-semibold text-slate-900 mb-3">
                       Plan Steps ({plan.length} actions)
                     </h3>
-                    <div className="space-y-1 max-h-48 overflow-y-auto pr-2">
+                    <div ref={planStepsRef} className="space-y-1 max-h-48 overflow-y-auto pr-2">
                       {plan.map((action, idx) => (
                         <div
                           key={idx}
@@ -887,7 +935,7 @@ export default function Visualizer() {
                 </div>
                 <h3 className="text-xl font-semibold text-slate-900 mb-2">Ready to Visualize</h3>
                 <p className="text-slate-500 max-w-sm mx-auto">
-                  {useCustomProblem
+                  {problemType === "custom"
                     ? "Upload a PDDL problem file or paste your problem definition, then click 'Solve Problem'"
                     : "Select a domain and click 'Generate States' to see the planning visualization"}
                 </p>
