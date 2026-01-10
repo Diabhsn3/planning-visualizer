@@ -422,4 +422,29 @@ export const visualizerRouter = router({
 
     return status;
   }),
+
+  /**
+   * Get domain definition text for a specific domain
+   */
+  getDomainDefinition: publicProcedure
+    .input(z.object({
+      domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"]),
+    }))
+    .query(async ({ input }) => {
+      const domainConfig = DOMAIN_CONFIGS[input.domainName];
+      if (!domainConfig) {
+        throw new Error(`Domain ${input.domainName} not found`);
+      }
+
+      try {
+        const domainContent = await readFile(domainConfig.domainFile, "utf-8");
+        return {
+          domainName: input.domainName,
+          content: domainContent,
+        };
+      } catch (error) {
+        console.error(`[getDomainDefinition] Error reading domain file:`, error);
+        throw new Error(`Failed to read domain file for ${input.domainName}`);
+      }
+    }),
 });

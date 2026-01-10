@@ -36,6 +36,8 @@ export default function Visualizer() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDomainOpen, setIsDomainOpen] = useState(true);
+  const [showExampleProblem, setShowExampleProblem] = useState(false);
+  const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef = useRef<HTMLDivElement>(null);
   
@@ -55,6 +57,11 @@ export default function Visualizer() {
   const statusQuery = trpc.visualizer.checkStatus.useQuery(undefined, {
     enabled: showStatus,
   });
+
+  const domainDefinitionQuery = trpc.visualizer.getDomainDefinition.useQuery(
+    { domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers" },
+    { enabled: showDomainDefinition }
+  );
 
   const domains = [
     { id: "blocks-world", name: "Blocks World", description: "Classic block stacking problem", icon: "🧱" },
@@ -584,6 +591,13 @@ export default function Visualizer() {
                     </button>
                   ))}
                 </div>
+                <button
+                  onClick={() => setShowDomainDefinition(true)}
+                  className="w-full mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Domain Definition
+                </button>
               </div>
               )}
             </div>
@@ -619,10 +633,19 @@ export default function Visualizer() {
                 </div>
 
                 {problemType === "example" && (
-                  <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                    <p className="text-sm text-indigo-900">
-                      Using default example problem for <strong>{currentDomain?.name}</strong> domain
-                    </p>
+                  <div className="space-y-3">
+                    <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                      <p className="text-sm text-indigo-900">
+                        Using default example problem for <strong>{currentDomain?.name}</strong> domain
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowExampleProblem(true)}
+                      className="w-full px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      View Example Problem
+                    </button>
                   </div>
                 )}
                 
@@ -1015,6 +1038,78 @@ export default function Visualizer() {
               <button
                 onClick={() => setErrorModal({ show: false, title: "", message: "" })}
                 className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Example Problem Modal */}
+      {showExampleProblem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Example Problem - {currentDomain?.name}</h3>
+              <button
+                onClick={() => setShowExampleProblem(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              <pre className="text-sm font-mono bg-slate-50 p-4 rounded-xl border border-slate-200 whitespace-pre-wrap">
+                {getDefaultProblem(selectedDomain)}
+              </pre>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setShowExampleProblem(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Domain Definition Modal */}
+      {showDomainDefinition && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Domain Definition - {currentDomain?.name}</h3>
+              <button
+                onClick={() => setShowDomainDefinition(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              {domainDefinitionQuery.isLoading && (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                </div>
+              )}
+              {domainDefinitionQuery.error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm">
+                  Failed to load domain definition
+                </div>
+              )}
+              {domainDefinitionQuery.data && (
+                <pre className="text-sm font-mono bg-slate-50 p-4 rounded-xl border border-slate-200 whitespace-pre-wrap">
+                  {domainDefinitionQuery.data.content}
+                </pre>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setShowDomainDefinition(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-colors"
               >
                 Close
               </button>
