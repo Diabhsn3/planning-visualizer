@@ -1,16 +1,14 @@
 {
-  "domain": "depot",
-  "num_states": 4,
   "states": [
     {
       "domain": "depot",
       "objects": [
         {
-          "id": "d1",
+          "id": "d2",
           "type": "depot",
-          "label": "D1",
+          "label": "d2",
           "position": [
-            0.0,
+            0,
             0
           ],
           "properties": {
@@ -18,23 +16,23 @@
           }
         },
         {
-          "id": "s1",
-          "type": "distributor",
-          "label": "S1",
+          "id": "d1",
+          "type": "depot",
+          "label": "d1",
           "position": [
-            6.0,
+            8,
             0
           ],
           "properties": {
-            "color": "#32CD32"
+            "color": "#A9A9A9"
           }
         },
         {
           "id": "t1",
           "type": "truck",
-          "label": "T1",
+          "label": "t1",
           "position": [
-            3.0,
+            0,
             -2
           ],
           "properties": {
@@ -42,19 +40,103 @@
           }
         },
         {
-          "id": "c1",
-          "type": "package",
-          "label": "C1",
+          "id": "c2",
+          "type": "crane",
+          "label": "c2",
           "position": [
-            3.0,
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "crane",
+          "label": "c1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "p2",
+          "type": "package",
+          "label": "p2",
+          "position": [
+            0,
             2
           ],
           "properties": {
             "color": "#FFD700"
           }
+        },
+        {
+          "id": "p1",
+          "type": "package",
+          "label": "p1",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "pile2",
+          "type": "pile",
+          "label": "pile2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "pile1",
+          "type": "pile",
+          "label": "pile1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
         }
       ],
       "relations": [
+        {
+          "type": "at-pile",
+          "source": "pile2",
+          "target": "d2",
+          "properties": {
+            "description": "pile2 at d2"
+          }
+        },
+        {
+          "type": "on",
+          "source": "p1",
+          "target": "p2",
+          "properties": {
+            "description": "p1 on p2"
+          }
+        },
+        {
+          "type": "on-pile",
+          "source": "p2",
+          "target": "pile1",
+          "properties": {
+            "description": "p2 on pile1"
+          }
+        },
         {
           "type": "at-truck",
           "source": "t1",
@@ -64,11 +146,27 @@
           }
         },
         {
-          "type": "at",
+          "type": "at-crane",
           "source": "c1",
           "target": "d1",
           "properties": {
             "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c2",
+          "target": "d2",
+          "properties": {
+            "description": "c2 at d2"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile1",
+          "target": "d1",
+          "properties": {
+            "description": "pile1 at d1"
           }
         }
       ],
@@ -80,11 +178,11 @@
       "domain": "depot",
       "objects": [
         {
-          "id": "d1",
+          "id": "d2",
           "type": "depot",
-          "label": "D1",
+          "label": "d2",
           "position": [
-            0.0,
+            0,
             0
           ],
           "properties": {
@@ -92,23 +190,23 @@
           }
         },
         {
-          "id": "s1",
-          "type": "distributor",
-          "label": "S1",
+          "id": "d1",
+          "type": "depot",
+          "label": "d1",
           "position": [
-            6.0,
+            8,
             0
           ],
           "properties": {
-            "color": "#32CD32"
+            "color": "#A9A9A9"
           }
         },
         {
           "id": "t1",
           "type": "truck",
-          "label": "T1",
+          "label": "t1",
           "position": [
-            3.0,
+            0,
             -2
           ],
           "properties": {
@@ -116,19 +214,103 @@
           }
         },
         {
-          "id": "c1",
-          "type": "package",
-          "label": "C1",
+          "id": "c2",
+          "type": "crane",
+          "label": "c2",
           "position": [
-            3.0,
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "crane",
+          "label": "c1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "p2",
+          "type": "package",
+          "label": "p2",
+          "position": [
+            0,
             2
           ],
           "properties": {
             "color": "#FFD700"
           }
+        },
+        {
+          "id": "p1",
+          "type": "package",
+          "label": "p1",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "pile2",
+          "type": "pile",
+          "label": "pile2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "pile1",
+          "type": "pile",
+          "label": "pile1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
         }
       ],
       "relations": [
+        {
+          "type": "at-pile",
+          "source": "pile2",
+          "target": "d2",
+          "properties": {
+            "description": "pile2 at d2"
+          }
+        },
+        {
+          "type": "holding",
+          "source": "c1",
+          "target": "p1",
+          "properties": {
+            "description": "c1 holding p1"
+          }
+        },
+        {
+          "type": "on-pile",
+          "source": "p2",
+          "target": "pile1",
+          "properties": {
+            "description": "p2 on pile1"
+          }
+        },
         {
           "type": "at-truck",
           "source": "t1",
@@ -138,28 +320,44 @@
           }
         },
         {
-          "type": "in-truck",
+          "type": "at-crane",
           "source": "c1",
-          "target": "t1",
+          "target": "d1",
           "properties": {
-            "description": "c1 in t1"
+            "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c2",
+          "target": "d2",
+          "properties": {
+            "description": "c2 at d2"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile1",
+          "target": "d1",
+          "properties": {
+            "description": "pile1 at d1"
           }
         }
       ],
       "metadata": {
         "step": 1,
-        "action": "(load c1 t1 d1)"
+        "action": "(unstack c1 p1 p2 d1)"
       }
     },
     {
       "domain": "depot",
       "objects": [
         {
-          "id": "d1",
+          "id": "d2",
           "type": "depot",
-          "label": "D1",
+          "label": "d2",
           "position": [
-            0.0,
+            0,
             0
           ],
           "properties": {
@@ -167,23 +365,23 @@
           }
         },
         {
-          "id": "s1",
-          "type": "distributor",
-          "label": "S1",
+          "id": "d1",
+          "type": "depot",
+          "label": "d1",
           "position": [
-            6.0,
+            8,
             0
           ],
           "properties": {
-            "color": "#32CD32"
+            "color": "#A9A9A9"
           }
         },
         {
           "id": "t1",
           "type": "truck",
-          "label": "T1",
+          "label": "t1",
           "position": [
-            3.0,
+            0,
             -2
           ],
           "properties": {
@@ -191,50 +389,150 @@
           }
         },
         {
-          "id": "c1",
-          "type": "package",
-          "label": "C1",
+          "id": "c2",
+          "type": "crane",
+          "label": "c2",
           "position": [
-            3.0,
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "crane",
+          "label": "c1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "p2",
+          "type": "package",
+          "label": "p2",
+          "position": [
+            0,
             2
           ],
           "properties": {
             "color": "#FFD700"
           }
+        },
+        {
+          "id": "p1",
+          "type": "package",
+          "label": "p1",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "pile2",
+          "type": "pile",
+          "label": "pile2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "pile1",
+          "type": "pile",
+          "label": "pile1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
         }
       ],
       "relations": [
         {
+          "type": "at-pile",
+          "source": "pile2",
+          "target": "d2",
+          "properties": {
+            "description": "pile2 at d2"
+          }
+        },
+        {
+          "type": "on-pile",
+          "source": "p2",
+          "target": "pile1",
+          "properties": {
+            "description": "p2 on pile1"
+          }
+        },
+        {
           "type": "at-truck",
           "source": "t1",
-          "target": "s1",
+          "target": "d1",
           "properties": {
-            "description": "t1 at s1"
+            "description": "t1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c1",
+          "target": "d1",
+          "properties": {
+            "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c2",
+          "target": "d2",
+          "properties": {
+            "description": "c2 at d2"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile1",
+          "target": "d1",
+          "properties": {
+            "description": "pile1 at d1"
           }
         },
         {
           "type": "in-truck",
-          "source": "c1",
+          "source": "p1",
           "target": "t1",
           "properties": {
-            "description": "c1 in t1"
+            "description": "p1 in t1"
           }
         }
       ],
       "metadata": {
         "step": 2,
-        "action": "(drive t1 d1 s1)"
+        "action": "(load c1 p1 t1 d1)"
       }
     },
     {
       "domain": "depot",
       "objects": [
         {
-          "id": "d1",
+          "id": "d2",
           "type": "depot",
-          "label": "D1",
+          "label": "d2",
           "position": [
-            0.0,
+            0,
             0
           ],
           "properties": {
@@ -242,23 +540,23 @@
           }
         },
         {
-          "id": "s1",
-          "type": "distributor",
-          "label": "S1",
+          "id": "d1",
+          "type": "depot",
+          "label": "d1",
           "position": [
-            6.0,
+            8,
             0
           ],
           "properties": {
-            "color": "#32CD32"
+            "color": "#A9A9A9"
           }
         },
         {
           "id": "t1",
           "type": "truck",
-          "label": "T1",
+          "label": "t1",
           "position": [
-            3.0,
+            0,
             -2
           ],
           "properties": {
@@ -266,39 +564,839 @@
           }
         },
         {
-          "id": "c1",
-          "type": "package",
-          "label": "C1",
+          "id": "c2",
+          "type": "crane",
+          "label": "c2",
           "position": [
-            3.0,
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "crane",
+          "label": "c1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "p2",
+          "type": "package",
+          "label": "p2",
+          "position": [
+            0,
             2
           ],
           "properties": {
             "color": "#FFD700"
           }
+        },
+        {
+          "id": "p1",
+          "type": "package",
+          "label": "p1",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "pile2",
+          "type": "pile",
+          "label": "pile2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "pile1",
+          "type": "pile",
+          "label": "pile1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
         }
       ],
       "relations": [
         {
-          "type": "at",
-          "source": "c1",
-          "target": "s1",
+          "type": "at-pile",
+          "source": "pile2",
+          "target": "d2",
           "properties": {
-            "description": "c1 at s1"
+            "description": "pile2 at d2"
+          }
+        },
+        {
+          "type": "holding",
+          "source": "c1",
+          "target": "p2",
+          "properties": {
+            "description": "c1 holding p2"
           }
         },
         {
           "type": "at-truck",
           "source": "t1",
-          "target": "s1",
+          "target": "d1",
           "properties": {
-            "description": "t1 at s1"
+            "description": "t1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c1",
+          "target": "d1",
+          "properties": {
+            "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c2",
+          "target": "d2",
+          "properties": {
+            "description": "c2 at d2"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile1",
+          "target": "d1",
+          "properties": {
+            "description": "pile1 at d1"
+          }
+        },
+        {
+          "type": "in-truck",
+          "source": "p1",
+          "target": "t1",
+          "properties": {
+            "description": "p1 in t1"
           }
         }
       ],
       "metadata": {
         "step": 3,
-        "action": "(unload c1 t1 s1)"
+        "action": "(lift c1 p2 pile1 d1)"
+      }
+    },
+    {
+      "domain": "depot",
+      "objects": [
+        {
+          "id": "d2",
+          "type": "depot",
+          "label": "d2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "d1",
+          "type": "depot",
+          "label": "d1",
+          "position": [
+            8,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "truck",
+          "label": "t1",
+          "position": [
+            0,
+            -2
+          ],
+          "properties": {
+            "color": "#00BFFF"
+          }
+        },
+        {
+          "id": "c2",
+          "type": "crane",
+          "label": "c2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "crane",
+          "label": "c1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "p2",
+          "type": "package",
+          "label": "p2",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "p1",
+          "type": "package",
+          "label": "p1",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "pile2",
+          "type": "pile",
+          "label": "pile2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "pile1",
+          "type": "pile",
+          "label": "pile1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "in-truck",
+          "source": "p2",
+          "target": "t1",
+          "properties": {
+            "description": "p2 in t1"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile2",
+          "target": "d2",
+          "properties": {
+            "description": "pile2 at d2"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "d1",
+          "properties": {
+            "description": "t1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c1",
+          "target": "d1",
+          "properties": {
+            "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c2",
+          "target": "d2",
+          "properties": {
+            "description": "c2 at d2"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile1",
+          "target": "d1",
+          "properties": {
+            "description": "pile1 at d1"
+          }
+        },
+        {
+          "type": "in-truck",
+          "source": "p1",
+          "target": "t1",
+          "properties": {
+            "description": "p1 in t1"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 4,
+        "action": "(load c1 p2 t1 d1)"
+      }
+    },
+    {
+      "domain": "depot",
+      "objects": [
+        {
+          "id": "d2",
+          "type": "depot",
+          "label": "d2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "d1",
+          "type": "depot",
+          "label": "d1",
+          "position": [
+            8,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "truck",
+          "label": "t1",
+          "position": [
+            0,
+            -2
+          ],
+          "properties": {
+            "color": "#00BFFF"
+          }
+        },
+        {
+          "id": "c2",
+          "type": "crane",
+          "label": "c2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "crane",
+          "label": "c1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "p2",
+          "type": "package",
+          "label": "p2",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "p1",
+          "type": "package",
+          "label": "p1",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "pile2",
+          "type": "pile",
+          "label": "pile2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "pile1",
+          "type": "pile",
+          "label": "pile1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "in-truck",
+          "source": "p2",
+          "target": "t1",
+          "properties": {
+            "description": "p2 in t1"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile2",
+          "target": "d2",
+          "properties": {
+            "description": "pile2 at d2"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "d2",
+          "properties": {
+            "description": "t1 at d2"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c1",
+          "target": "d1",
+          "properties": {
+            "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c2",
+          "target": "d2",
+          "properties": {
+            "description": "c2 at d2"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile1",
+          "target": "d1",
+          "properties": {
+            "description": "pile1 at d1"
+          }
+        },
+        {
+          "type": "in-truck",
+          "source": "p1",
+          "target": "t1",
+          "properties": {
+            "description": "p1 in t1"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 5,
+        "action": "(drive t1 d1 d2)"
+      }
+    },
+    {
+      "domain": "depot",
+      "objects": [
+        {
+          "id": "d2",
+          "type": "depot",
+          "label": "d2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "d1",
+          "type": "depot",
+          "label": "d1",
+          "position": [
+            8,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "truck",
+          "label": "t1",
+          "position": [
+            0,
+            -2
+          ],
+          "properties": {
+            "color": "#00BFFF"
+          }
+        },
+        {
+          "id": "c2",
+          "type": "crane",
+          "label": "c2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "crane",
+          "label": "c1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "p2",
+          "type": "package",
+          "label": "p2",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "p1",
+          "type": "package",
+          "label": "p1",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "pile2",
+          "type": "pile",
+          "label": "pile2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "pile1",
+          "type": "pile",
+          "label": "pile1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-pile",
+          "source": "pile2",
+          "target": "d2",
+          "properties": {
+            "description": "pile2 at d2"
+          }
+        },
+        {
+          "type": "holding",
+          "source": "c2",
+          "target": "p2",
+          "properties": {
+            "description": "c2 holding p2"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "d2",
+          "properties": {
+            "description": "t1 at d2"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c1",
+          "target": "d1",
+          "properties": {
+            "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c2",
+          "target": "d2",
+          "properties": {
+            "description": "c2 at d2"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile1",
+          "target": "d1",
+          "properties": {
+            "description": "pile1 at d1"
+          }
+        },
+        {
+          "type": "in-truck",
+          "source": "p1",
+          "target": "t1",
+          "properties": {
+            "description": "p1 in t1"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 6,
+        "action": "(unload c2 p2 t1 d2)"
+      }
+    },
+    {
+      "domain": "depot",
+      "objects": [
+        {
+          "id": "d2",
+          "type": "depot",
+          "label": "d2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "d1",
+          "type": "depot",
+          "label": "d1",
+          "position": [
+            8,
+            0
+          ],
+          "properties": {
+            "color": "#A9A9A9"
+          }
+        },
+        {
+          "id": "t1",
+          "type": "truck",
+          "label": "t1",
+          "position": [
+            0,
+            -2
+          ],
+          "properties": {
+            "color": "#00BFFF"
+          }
+        },
+        {
+          "id": "c2",
+          "type": "crane",
+          "label": "c2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "c1",
+          "type": "crane",
+          "label": "c1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#FF69B4"
+          }
+        },
+        {
+          "id": "p2",
+          "type": "package",
+          "label": "p2",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "p1",
+          "type": "package",
+          "label": "p1",
+          "position": [
+            0,
+            2
+          ],
+          "properties": {
+            "color": "#FFD700"
+          }
+        },
+        {
+          "id": "pile2",
+          "type": "pile",
+          "label": "pile2",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        },
+        {
+          "id": "pile1",
+          "type": "pile",
+          "label": "pile1",
+          "position": [
+            0,
+            0
+          ],
+          "properties": {
+            "color": "#8B4513"
+          }
+        }
+      ],
+      "relations": [
+        {
+          "type": "at-pile",
+          "source": "pile2",
+          "target": "d2",
+          "properties": {
+            "description": "pile2 at d2"
+          }
+        },
+        {
+          "type": "on-pile",
+          "source": "p2",
+          "target": "pile2",
+          "properties": {
+            "description": "p2 on pile2"
+          }
+        },
+        {
+          "type": "at-truck",
+          "source": "t1",
+          "target": "d2",
+          "properties": {
+            "description": "t1 at d2"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c1",
+          "target": "d1",
+          "properties": {
+            "description": "c1 at d1"
+          }
+        },
+        {
+          "type": "at-crane",
+          "source": "c2",
+          "target": "d2",
+          "properties": {
+            "description": "c2 at d2"
+          }
+        },
+        {
+          "type": "at-pile",
+          "source": "pile1",
+          "target": "d1",
+          "properties": {
+            "description": "pile1 at d1"
+          }
+        },
+        {
+          "type": "in-truck",
+          "source": "p1",
+          "target": "t1",
+          "properties": {
+            "description": "p1 in t1"
+          }
+        }
+      ],
+      "metadata": {
+        "step": 7,
+        "action": "(drop c2 p2 pile2 d2)"
       }
     }
   ]
