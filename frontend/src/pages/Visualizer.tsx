@@ -715,7 +715,7 @@ export default function Visualizer() {
                           value={problemText}
                           onChange={(e) => setProblemText(e.target.value)}
                           placeholder="(define (problem ...)&#10;  (:domain ...)&#10;  ...&#10;)"
-                          className="font-mono text-sm min-h-[180px] bg-slate-50 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 rounded-xl"
+                          className="font-mono text-sm min-h-[320px] bg-slate-50 border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20 rounded-xl"
                         />
                         {problemText && (
                           <p className="text-xs text-slate-500">
