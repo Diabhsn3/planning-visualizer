@@ -42,7 +42,6 @@ export function renderDepot(
   // ---------- EXTRACT RELATIONS ----------
   const truckAt = new Map<string, string>();       // truck -> depot
   const craneAt = new Map<string, string>();       // crane -> depot
-  const pileAt = new Map<string, string>();        // pile -> depot
   const packageOnPile = new Map<string, string>(); // package -> pile
   const packageOn = new Map<string, string>();     // package -> package (stacking)
   const packageInTruck = new Map<string, string>(); // package -> truck
@@ -53,8 +52,6 @@ export function renderDepot(
       truckAt.set(r.source, r.target);
     } else if (r.type === "at-crane" && r.target) {
       craneAt.set(r.source, r.target);
-    } else if (r.type === "at-pile" && r.target) {
-      pileAt.set(r.source, r.target);
     } else if (r.type === "on-pile" && r.target) {
       packageOnPile.set(r.source, r.target);
     } else if (r.type === "on" && r.target) {
@@ -66,21 +63,48 @@ export function renderDepot(
     }
   }
 
-  // ---------- LAYOUT ----------
+  // ---------- LAYOUT CONSTANTS ----------
+  const DEPOT_WIDTH = 180;
+  const DEPOT_HEIGHT = 280;
+  const CONTAINER_W = 50;
+  const CONTAINER_H = 30;
+  const PILE_HEIGHT = 12;  // Height of pile platform
+  const PILE_PADDING = 10; // Padding on each side of pile
+  const MIN_PILE_WIDTH = 80; // Minimum pile width when empty
+
+  // ---------- CALCULATE PILE WIDTHS (dynamic based on packages) ----------
+  const pilePackageCounts = new Map<string, number>();
+  for (const pile of piles) {
+    // Count packages directly on this pile (side-by-side)
+    let count = 0;
+    for (const pkg of packages) {
+      if (packageOnPile.get(pkg.id) === pile.id) {
+        count++;
+      }
+    }
+    pilePackageCounts.set(pile.id, Math.max(1, count)); // At least 1 slot
+  }
+
+  // Calculate dynamic pile width
+  const getPileWidth = (pileId: string) => {
+    const count = pilePackageCounts.get(pileId) || 1;
+    return Math.max(MIN_PILE_WIDTH, count * (CONTAINER_W + 5) + PILE_PADDING * 2);
+  };
+
+  // ---------- LAYOUT CALCULATION ----------
   const numDepots = depots.length;
-  const DEPOT_WIDTH = 160;
-  const DEPOT_HEIGHT = 260;
-  const PILE_WIDTH = 70;
-  const PILE_HEIGHT = 15;
-  const CONTAINER_W = 55;  // Wider to fill truck bed
-  const CONTAINER_H = 25;
-  const SPACING = 100;  // Space between depot and pile
+  const SPACING = 60;
   
-  // Calculate total width needed: depots + piles beside them
-  const AREA_WIDTH = DEPOT_WIDTH + PILE_WIDTH + SPACING;
+  // Calculate max pile width for layout
+  let maxPileWidth = MIN_PILE_WIDTH;
+  for (const pile of piles) {
+    maxPileWidth = Math.max(maxPileWidth, getPileWidth(pile.id));
+  }
+  
+  const AREA_WIDTH = DEPOT_WIDTH + maxPileWidth + SPACING;
   const TOTAL_WIDTH = numDepots * AREA_WIDTH;
-  const START_X = Math.max(50, (W - TOTAL_WIDTH) / 2);
-  const DEPOT_Y = 80;
+  const START_X = Math.max(30, (W - TOTAL_WIDTH) / 2);
+  const DEPOT_Y = 60;
 
   // ---------- BACKGROUND ----------
   ctx.fillStyle = "#f0f4f8";
@@ -101,6 +125,22 @@ export function renderDepot(
     ctx.lineTo(W, y);
     ctx.stroke();
   }
+
+  // ---------- ASSIGN PILES TO DEPOTS ----------
+  // Since there's no at-pile relation, assign piles to depots by index
+  const pilesPerDepot = new Map<string, VisualObject[]>();
+  for (const depot of depots) {
+    pilesPerDepot.set(depot.id, []);
+  }
+  
+  // Distribute piles evenly among depots
+  piles.forEach((pile, index) => {
+    const depotIndex = index % depots.length;
+    const depot = depots[depotIndex];
+    if (depot) {
+      pilesPerDepot.get(depot.id)?.push(pile);
+    }
+  });
 
   // ---------- DRAW EACH DEPOT AREA ----------
   depots.forEach((depot, depotIndex) => {
@@ -145,23 +185,18 @@ export function renderDepot(
       ctx.textAlign = "center";
       ctx.fillText(truck.label, truckX + truckW / 2, truckY + truckH + 12);
 
-      // Draw containers ON the truck flatbed (stacked, no gaps)
-      // The flatbed is on the LEFT side of the truck image
+      // Draw containers ON the truck flatbed (stacked vertically)
       const packagesInThisTruck = packages.filter(p => packageInTruck.get(p.id) === truck.id);
-      const flatbedCenterX = truckX + 22;  // Center of flatbed
-      const flatbedTopY = truckY + 5;  // Top of flatbed area
+      const flatbedCenterX = truckX + 22;
+      const flatbedTopY = truckY + 5;
       
-      // Draw in REVERSE order so first loaded is at bottom, last loaded is on top
-      // packagesInThisTruck[0] = first loaded = bottom
-      // packagesInThisTruck[last] = last loaded = top
       packagesInThisTruck.forEach((pkg, pkgIndex) => {
-        // pkgIndex 0 = bottom, higher index = higher position
         const containerY = flatbedTopY - pkgIndex * CONTAINER_H;
         drawContainer(ctx, flatbedCenterX, containerY, CONTAINER_W, CONTAINER_H, pkg.label, false);
       });
     });
 
-    // === CRANE (Gripper style, like blocks-world) ===
+    // === CRANE (Gripper style) ===
     const depotCranes = cranes.filter(c => craneAt.get(c.id) === depot.id);
     depotCranes.forEach((crane, craneIndex) => {
       const craneX = depotX + DEPOT_WIDTH / 2 + (craneIndex - (depotCranes.length - 1) / 2) * 60;
@@ -249,43 +284,79 @@ export function renderDepot(
       }
     });
 
-    // === PILE BESIDE DEPOT ===
-    // Find piles that belong to this depot
-    const depotPiles = piles.filter(p => {
-      const pileDepot = pileAt.get(p.id);
-      return pileDepot === depot.id;
-    });
+    // === PILES BESIDE DEPOT ===
+    // Get piles assigned to this depot
+    const depotPiles = pilesPerDepot.get(depot.id) || [];
     
     depotPiles.forEach((pile, pileIndex) => {
-      const pileX = depotX + DEPOT_WIDTH + 30;  // To the right of depot
-      const pileBaseY = depotY + DEPOT_HEIGHT - 30 - pileIndex * 120;  // Base of pile platform
+      const pileWidth = getPileWidth(pile.id);
+      const pileX = depotX + DEPOT_WIDTH + 20;
+      const pileBaseY = depotY + DEPOT_HEIGHT - 50 - pileIndex * 100;
 
-      // Pile platform
+      // === DRAW PILE PLATFORM (wide surface) ===
+      // Main pile surface
       ctx.fillStyle = "#8D6E63";
-      ctx.fillRect(pileX, pileBaseY, PILE_WIDTH, PILE_HEIGHT);
+      ctx.fillRect(pileX, pileBaseY, pileWidth, PILE_HEIGHT);
+      
+      // Pile border
       ctx.strokeStyle = "#5D4037";
       ctx.lineWidth = 2;
-      ctx.strokeRect(pileX, pileBaseY, PILE_WIDTH, PILE_HEIGHT);
-
+      ctx.strokeRect(pileX, pileBaseY, pileWidth, PILE_HEIGHT);
+      
+      // Add some depth effect (3D look)
+      ctx.fillStyle = "#6D4C41";
+      ctx.fillRect(pileX, pileBaseY + PILE_HEIGHT, pileWidth, 4);
+      
       // Pile label below
       ctx.fillStyle = "#5D4037";
-      ctx.font = "bold 11px Arial";
+      ctx.font = "bold 12px Arial";
       ctx.textAlign = "center";
-      ctx.fillText(pile.label, pileX + PILE_WIDTH / 2, pileBaseY + PILE_HEIGHT + 14);
+      ctx.fillText(pile.label, pileX + pileWidth / 2, pileBaseY + PILE_HEIGHT + 18);
 
-      // Draw containers stacked on this pile (no gaps)
-      // Bottom container is at index 0, top is at last index
-      const stackedPackages = getPackageStack(pile.id, packageOnPile, packageOn, packages);
-      stackedPackages.forEach((pkg, stackIndex) => {
-        // stackIndex 0 = bottom (just above pile platform)
-        const containerCenterY = pileBaseY - CONTAINER_H / 2 - stackIndex * CONTAINER_H;
-        drawContainer(ctx, pileX + PILE_WIDTH / 2, containerCenterY, CONTAINER_W, CONTAINER_H, pkg.label, false);
+      // === DRAW PACKAGES ON PILE (side-by-side) ===
+      // Get all packages directly on this pile
+      const packagesOnThisPile = packages.filter(p => packageOnPile.get(p.id) === pile.id);
+      
+      packagesOnThisPile.forEach((pkg, pkgIndex) => {
+        // Position packages side-by-side on the pile surface
+        const containerX = pileX + PILE_PADDING + pkgIndex * (CONTAINER_W + 5) + CONTAINER_W / 2;
+        const containerY = pileBaseY - CONTAINER_H / 2;
+        
+        // Draw the base package
+        drawContainer(ctx, containerX, containerY, CONTAINER_W, CONTAINER_H, pkg.label, false);
+        
+        // Draw any packages stacked ON TOP of this package (vertical stacking via 'on' predicate)
+        drawStackedPackages(ctx, pkg, containerX, containerY - CONTAINER_H, packageOn, packages, CONTAINER_W, CONTAINER_H);
       });
     });
   });
 }
 
 // ================= HELPER FUNCTIONS =================
+
+// Draw packages stacked on top of a base package (recursive for multiple levels)
+function drawStackedPackages(
+  ctx: CanvasRenderingContext2D,
+  basePkg: VisualObject,
+  centerX: number,
+  topY: number,
+  packageOn: Map<string, string>,
+  packages: VisualObject[],
+  containerW: number,
+  containerH: number
+) {
+  // Find package that is ON this base package
+  for (const pkg of packages) {
+    if (packageOn.get(pkg.id) === basePkg.id) {
+      // Draw this package on top
+      drawContainer(ctx, centerX, topY + containerH / 2, containerW, containerH, pkg.label, false);
+      
+      // Recursively draw any packages stacked on this one
+      drawStackedPackages(ctx, pkg, centerX, topY - containerH, packageOn, packages, containerW, containerH);
+      break; // Only one package can be directly on top
+    }
+  }
+}
 
 // Draw a container/package
 function drawContainer(
@@ -326,7 +397,7 @@ function drawContainer(
 
   // Label
   ctx.fillStyle = "#5D4037";
-  ctx.font = `bold ${Math.min(11, h * 0.45)}px Arial`;
+  ctx.font = `bold ${Math.min(11, h * 0.4)}px Arial`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, cx, cy);
@@ -339,43 +410,4 @@ function drawContainer(
     ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
     ctx.setLineDash([]);
   }
-}
-
-// Get stack of packages on a pile (bottom to top)
-function getPackageStack(
-  pileId: string,
-  packageOnPile: Map<string, string>,
-  packageOn: Map<string, string>,
-  packages: VisualObject[]
-): VisualObject[] {
-  const stack: VisualObject[] = [];
-
-  // Find bottom package (directly on pile)
-  let bottomPkg: VisualObject | undefined;
-  for (const pkg of packages) {
-    if (packageOnPile.get(pkg.id) === pileId) {
-      bottomPkg = pkg;
-      break;
-    }
-  }
-
-  if (!bottomPkg) return stack;
-  stack.push(bottomPkg);
-
-  // Find packages stacked on top
-  let currentPkg = bottomPkg;
-  while (true) {
-    let found = false;
-    for (const pkg of packages) {
-      if (packageOn.get(pkg.id) === currentPkg.id) {
-        stack.push(pkg);
-        currentPkg = pkg;
-        found = true;
-        break;
-      }
-    }
-    if (!found) break;
-  }
-
-  return stack;
 }
