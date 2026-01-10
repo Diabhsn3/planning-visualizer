@@ -355,7 +355,8 @@ export function renderRovers(
   ctx: CanvasRenderingContext2D,
   state: RenderedState
 ): void {
-
+  const W = 800;
+  const H = 600;
 
   // ctx.clearRect(0, 0, W, H);
   // ctx.fillStyle = '#f8f9fa';
