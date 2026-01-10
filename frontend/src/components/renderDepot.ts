@@ -38,6 +38,13 @@ export function renderDepot(
   const piles = state.objects.filter(o => o.type === "pile");
   const packages = state.objects.filter(o => o.type === "package");
 
+  // DEBUG
+  console.log("=== DEPOT RENDERER DEBUG ===");
+  console.log("Depots:", depots.map(d => d.id));
+  console.log("Piles:", piles.map(p => p.id));
+  console.log("Packages:", packages.map(p => p.id));
+  console.log("Relations:", state.relations);
+
   // ---------- EXTRACT RELATIONS ----------
   const truckAt = new Map<string, string>();       // truck -> depot
   const craneAt = new Map<string, string>();       // crane -> depot
@@ -250,7 +257,13 @@ export function renderDepot(
 
     // === PILE BESIDE DEPOT ===
     // Find piles that belong to this depot
-    const depotPiles = piles.filter(p => pileAt.get(p.id) === depot.id);
+    console.log(`Depot ${depot.id}: pileAt map:`, Object.fromEntries(pileAt));
+    const depotPiles = piles.filter(p => {
+      const pileDepot = pileAt.get(p.id);
+      console.log(`  Pile ${p.id} -> depot ${pileDepot}, matches ${depot.id}? ${pileDepot === depot.id}`);
+      return pileDepot === depot.id;
+    });
+    console.log(`  Found ${depotPiles.length} piles for depot ${depot.id}:`, depotPiles.map(p => p.id));
     
     depotPiles.forEach((pile, pileIndex) => {
       const pileX = depotX + DEPOT_WIDTH + 30;  // To the right of depot
