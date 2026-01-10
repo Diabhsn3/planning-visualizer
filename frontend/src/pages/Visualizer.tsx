@@ -138,15 +138,15 @@ export default function Visualizer() {
     }
 
     if (domain === "depot") {
-      return `(define (problem depot-demo)
+      return `(define (problem depot-simple)
   (:domain depot)
 
   (:objects
       d1 d2 - depot
       t1 - truck
       c1 c2 - crane
-      p1 p2 - package
       pile1 pile2 - pile
+      p1 p2 - package
   )
 
   (:init
@@ -157,10 +157,7 @@ export default function Visualizer() {
       (at-crane c2 d2)
       (empty-crane c2)
 
-      (at-pile pile1 d1)
-      (at-pile pile2 d2)
-
-      (on p2 pile1)
+      (on-pile p2 pile1)
       (on p1 p2)
 
       (clear p1)
@@ -168,7 +165,7 @@ export default function Visualizer() {
   )
 
   (:goal
-      (on p2 pile2)
+      (on-pile p2 pile2)
   )
 )
 
