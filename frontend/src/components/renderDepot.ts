@@ -67,18 +67,18 @@ export function renderDepot(
 
   // ---------- LAYOUT ----------
   const numDepots = depots.length;
-  const DEPOT_WIDTH = 180;
-  const DEPOT_HEIGHT = 280;
-  const PILE_WIDTH = 80;
-  const PILE_HEIGHT = 20;
-  const CONTAINER_W = 50;
-  const CONTAINER_H = 30;
-  const SPACING = 60;
+  const DEPOT_WIDTH = 160;
+  const DEPOT_HEIGHT = 260;
+  const PILE_WIDTH = 70;
+  const PILE_HEIGHT = 15;
+  const CONTAINER_W = 55;  // Wider to fill truck bed
+  const CONTAINER_H = 25;
+  const SPACING = 100;  // Space between depot and pile
   
   // Calculate total width needed: depots + piles beside them
   const AREA_WIDTH = DEPOT_WIDTH + PILE_WIDTH + SPACING;
-  const TOTAL_WIDTH = numDepots * AREA_WIDTH - SPACING;
-  const START_X = (W - TOTAL_WIDTH) / 2;
+  const TOTAL_WIDTH = numDepots * AREA_WIDTH;
+  const START_X = Math.max(50, (W - TOTAL_WIDTH) / 2);
   const DEPOT_Y = 80;
 
   // ---------- BACKGROUND ----------
@@ -123,10 +123,10 @@ export function renderDepot(
     // === TRUCK INSIDE DEPOT ===
     const depotTrucks = trucks.filter(t => truckAt.get(t.id) === depot.id);
     depotTrucks.forEach((truck, truckIndex) => {
-      const truckW = 100;
-      const truckH = 55;
-      const truckX = depotX + 20 + truckIndex * 110;
-      const truckY = depotY + DEPOT_HEIGHT - truckH - 30;
+      const truckW = 90;
+      const truckH = 50;
+      const truckX = depotX + 20 + truckIndex * 100;
+      const truckY = depotY + DEPOT_HEIGHT - truckH - 40;
 
       // Draw truck image
       if (truckImg.complete && truckImg.naturalWidth > 0) {
@@ -134,8 +134,8 @@ export function renderDepot(
       } else {
         // Fallback
         ctx.fillStyle = "#607D8B";
-        ctx.fillRect(truckX, truckY + 15, 60, 30);
-        ctx.fillRect(truckX + 60, truckY + 20, 30, 25);
+        ctx.fillRect(truckX, truckY + 15, 55, 25);
+        ctx.fillRect(truckX + 55, truckY + 18, 25, 22);
       }
 
       // Truck label below
@@ -145,14 +145,18 @@ export function renderDepot(
       ctx.fillText(truck.label, truckX + truckW / 2, truckY + truckH + 12);
 
       // Draw containers ON the truck flatbed (stacked, no gaps)
+      // The flatbed is on the LEFT side of the truck image
       const packagesInThisTruck = packages.filter(p => packageInTruck.get(p.id) === truck.id);
-      // The flatbed is on the left side of the truck image
-      const flatbedX = truckX + 25;
-      const flatbedTopY = truckY + 8; // Top of flatbed area
+      const flatbedCenterX = truckX + 22;  // Center of flatbed
+      const flatbedTopY = truckY + 5;  // Top of flatbed area
       
+      // Draw in REVERSE order so first loaded is at bottom, last loaded is on top
+      // packagesInThisTruck[0] = first loaded = bottom
+      // packagesInThisTruck[last] = last loaded = top
       packagesInThisTruck.forEach((pkg, pkgIndex) => {
-        const containerY = flatbedTopY - pkgIndex * CONTAINER_H; // Stack upward, no gap
-        drawContainer(ctx, flatbedX, containerY, CONTAINER_W * 0.8, CONTAINER_H * 0.85, pkg.label, false);
+        // pkgIndex 0 = bottom, higher index = higher position
+        const containerY = flatbedTopY - pkgIndex * CONTAINER_H;
+        drawContainer(ctx, flatbedCenterX, containerY, CONTAINER_W, CONTAINER_H, pkg.label, false);
       });
     });
 
@@ -160,9 +164,8 @@ export function renderDepot(
     const depotCranes = cranes.filter(c => craneAt.get(c.id) === depot.id);
     depotCranes.forEach((crane, craneIndex) => {
       const craneX = depotX + DEPOT_WIDTH / 2 + (craneIndex - (depotCranes.length - 1) / 2) * 60;
-      const craneTopY = depotY + 35; // Where the arm starts from
+      const craneTopY = depotY + 35;
       
-      // Check if crane is holding something
       const heldPkgId = craneHolding.get(crane.id);
       const heldPkg = heldPkgId ? packages.find(p => p.id === heldPkgId) : null;
 
@@ -171,16 +174,16 @@ export function renderDepot(
       ctx.lineCap = "round";
 
       if (heldPkg) {
-        // Gripper wrapped around held container (like blocks-world)
+        // Gripper wrapped around held container
         const containerCenterX = craneX;
-        const containerTopY = craneTopY + 60;
+        const containerTopY = craneTopY + 50;
         const margin = 6;
         const leftX = containerCenterX - CONTAINER_W / 2 - margin;
         const rightX = containerCenterX + CONTAINER_W / 2 + margin;
         const topBarY = containerTopY - 8;
         const bottomY = containerTopY + CONTAINER_H;
 
-        // Vertical arm from depot
+        // Vertical arm
         ctx.beginPath();
         ctx.moveTo(craneX, craneTopY);
         ctx.lineTo(craneX, topBarY);
@@ -192,7 +195,7 @@ export function renderDepot(
         ctx.lineTo(rightX, topBarY);
         ctx.stroke();
 
-        // Left claw (goes down to bottom of container)
+        // Left claw
         ctx.beginPath();
         ctx.moveTo(leftX, topBarY);
         ctx.lineTo(leftX, bottomY);
@@ -204,7 +207,7 @@ export function renderDepot(
         ctx.lineTo(rightX, bottomY);
         ctx.stroke();
 
-        // Draw the held container inside the gripper
+        // Draw held container
         drawContainer(ctx, containerCenterX, containerTopY + CONTAINER_H / 2, CONTAINER_W, CONTAINER_H, heldPkg.label, true);
 
         // Crane label
@@ -213,36 +216,31 @@ export function renderDepot(
         ctx.textAlign = "center";
         ctx.fillText(crane.label, craneX, craneTopY - 5);
       } else {
-        // Empty gripper (open claws)
-        const armBottomY = craneTopY + 50;
-        const gap = 36;
-        const clawLength = 30;
+        // Empty gripper
+        const armBottomY = craneTopY + 45;
+        const gap = 40;
+        const clawLength = 28;
 
-        // Vertical arm
         ctx.beginPath();
         ctx.moveTo(craneX, craneTopY);
         ctx.lineTo(craneX, armBottomY);
         ctx.stroke();
 
-        // Horizontal bar
         ctx.beginPath();
         ctx.moveTo(craneX - gap / 2 - 5, armBottomY);
         ctx.lineTo(craneX + gap / 2 + 5, armBottomY);
         ctx.stroke();
 
-        // Left claw
         ctx.beginPath();
         ctx.moveTo(craneX - gap / 2, armBottomY);
         ctx.lineTo(craneX - gap / 2, armBottomY + clawLength);
         ctx.stroke();
 
-        // Right claw
         ctx.beginPath();
         ctx.moveTo(craneX + gap / 2, armBottomY);
         ctx.lineTo(craneX + gap / 2, armBottomY + clawLength);
         ctx.stroke();
 
-        // Crane label
         ctx.fillStyle = "#455A64";
         ctx.font = "bold 10px Arial";
         ctx.textAlign = "center";
@@ -251,29 +249,33 @@ export function renderDepot(
     });
 
     // === PILE BESIDE DEPOT ===
+    // Find piles that belong to this depot
     const depotPiles = piles.filter(p => pileAt.get(p.id) === depot.id);
+    
     depotPiles.forEach((pile, pileIndex) => {
-      const pileX = depotX + DEPOT_WIDTH + 20;
-      const pileY = depotY + DEPOT_HEIGHT - PILE_HEIGHT - 20 - pileIndex * 150;
+      const pileX = depotX + DEPOT_WIDTH + 30;  // To the right of depot
+      const pileBaseY = depotY + DEPOT_HEIGHT - 30 - pileIndex * 120;  // Base of pile platform
 
       // Pile platform
       ctx.fillStyle = "#8D6E63";
-      ctx.fillRect(pileX, pileY, PILE_WIDTH, PILE_HEIGHT);
+      ctx.fillRect(pileX, pileBaseY, PILE_WIDTH, PILE_HEIGHT);
       ctx.strokeStyle = "#5D4037";
       ctx.lineWidth = 2;
-      ctx.strokeRect(pileX, pileY, PILE_WIDTH, PILE_HEIGHT);
+      ctx.strokeRect(pileX, pileBaseY, PILE_WIDTH, PILE_HEIGHT);
 
-      // Pile label
+      // Pile label below
       ctx.fillStyle = "#5D4037";
       ctx.font = "bold 11px Arial";
       ctx.textAlign = "center";
-      ctx.fillText(pile.label, pileX + PILE_WIDTH / 2, pileY + PILE_HEIGHT + 15);
+      ctx.fillText(pile.label, pileX + PILE_WIDTH / 2, pileBaseY + PILE_HEIGHT + 14);
 
       // Draw containers stacked on this pile (no gaps)
+      // Bottom container is at index 0, top is at last index
       const stackedPackages = getPackageStack(pile.id, packageOnPile, packageOn, packages);
       stackedPackages.forEach((pkg, stackIndex) => {
-        const containerY = pileY - (stackIndex + 1) * CONTAINER_H + CONTAINER_H / 2;
-        drawContainer(ctx, pileX + PILE_WIDTH / 2, containerY, CONTAINER_W, CONTAINER_H, pkg.label, false);
+        // stackIndex 0 = bottom (just above pile platform)
+        const containerCenterY = pileBaseY - CONTAINER_H / 2 - stackIndex * CONTAINER_H;
+        drawContainer(ctx, pileX + PILE_WIDTH / 2, containerCenterY, CONTAINER_W, CONTAINER_H, pkg.label, false);
       });
     });
   });
@@ -307,12 +309,11 @@ function drawContainer(
   ctx.lineWidth = isHeld ? 2 : 1.5;
   ctx.strokeRect(x, y, w, h);
 
-  // Container ridges (shipping container look)
+  // Container ridges
   ctx.strokeStyle = "rgba(0,0,0,0.1)";
   ctx.lineWidth = 1;
-  const numRidges = 3;
-  for (let i = 1; i < numRidges + 1; i++) {
-    const rx = x + (w * i / (numRidges + 1));
+  for (let i = 1; i < 4; i++) {
+    const rx = x + (w * i / 4);
     ctx.beginPath();
     ctx.moveTo(rx, y + 2);
     ctx.lineTo(rx, y + h - 2);
@@ -321,12 +322,12 @@ function drawContainer(
 
   // Label
   ctx.fillStyle = "#5D4037";
-  ctx.font = `bold ${Math.min(11, h * 0.4)}px Arial`;
+  ctx.font = `bold ${Math.min(11, h * 0.45)}px Arial`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, cx, cy);
 
-  // Held indicator (dashed border like blocks-world)
+  // Held indicator
   if (isHeld) {
     ctx.strokeStyle = "#ffd54f";
     ctx.lineWidth = 2;
