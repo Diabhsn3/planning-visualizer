@@ -29,7 +29,6 @@ export function renderDepot(
   state: RenderedState
 ) {
   const W = 800;
-  const H = 600;
 
   // ---------- EXTRACT OBJECTS ----------
   const depots = state.objects.filter(o => o.type === "depot");
