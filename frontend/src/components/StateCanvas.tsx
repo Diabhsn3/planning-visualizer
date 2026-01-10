@@ -140,8 +140,29 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     ctx.clearRect(0, 0, width, height);
 
     // Set background
-    ctx.fillStyle = "#f8f9fa";
+    ctx.fillStyle = "#f0f4f8";
     ctx.fillRect(0, 0, width, height);
+
+    // Draw grid background (fixed, doesn't move with zoom/pan)
+    const GRID_SIZE = 40;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.08)";
+    ctx.lineWidth = 1;
+    
+    // Draw vertical lines
+    for (let x = 0; x <= width; x += GRID_SIZE) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+    
+    // Draw horizontal lines
+    for (let y = 0; y <= height; y += GRID_SIZE) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
 
     // Save context state
     ctx.save();
