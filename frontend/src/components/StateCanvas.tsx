@@ -88,6 +88,47 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     setOffsetState(newOffset);
   }, []);
 
+  // Native wheel event listener to properly prevent page scroll
+  // React's onWheel uses passive listeners by default which can't preventDefault
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      // Calculate zoom
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      const currentScale = persistentViewState.scale;
+      const newScale = Math.min(Math.max(0.1, currentScale * zoomFactor), 5);
+
+      // Adjust offset to zoom towards mouse position
+      const scaleChange = newScale / currentScale;
+      const currentOffsetX = persistentViewState.offsetX;
+      const currentOffsetY = persistentViewState.offsetY;
+      const newOffsetX = mouseX - (mouseX - currentOffsetX) * scaleChange;
+      const newOffsetY = mouseY - (mouseY - currentOffsetY) * scaleChange;
+
+      persistentViewState.scale = newScale;
+      persistentViewState.offsetX = newOffsetX;
+      persistentViewState.offsetY = newOffsetY;
+      setScaleState(newScale);
+      setOffsetState({ x: newOffsetX, y: newOffsetY });
+    };
+
+    // Add with passive: false to allow preventDefault
+    canvas.addEventListener('wheel', handleWheelNative, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('wheel', handleWheelNative);
+    };
+  }, []);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -127,33 +168,6 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     // Restore context state
     ctx.restore();
     }, [state, width, height, scale, offset, isFirst, isLast]);
-
-  // }, [state, width, height, scale, offset]);
-
-  // Handle mouse wheel for zoom
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    // Calculate zoom
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.min(Math.max(0.1, scale * zoomFactor), 5);
-
-    // Adjust offset to zoom towards mouse position
-    const scaleChange = newScale / scale;
-    const newOffsetX = mouseX - (mouseX - offset.x) * scaleChange;
-    const newOffsetY = mouseY - (mouseY - offset.y) * scaleChange;
-
-    setScale(newScale);
-    setOffset({ x: newOffsetX, y: newOffsetY });
-  };
 
   // Handle mouse down for panning
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -197,7 +211,6 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
         height={height}
         className="border border-gray-300 rounded-lg shadow-sm"
         style={{ cursor: isDragging ? "grabbing" : "grab" }}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
