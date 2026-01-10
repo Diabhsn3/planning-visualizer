@@ -68,7 +68,7 @@ export function renderDepot(
   // ---------- LAYOUT CONSTANTS ----------
   const CONTAINER_W = 45;
   const CONTAINER_H = 28;
-  const PILE_HEIGHT = 10;
+  const PILE_HEIGHT = 12;
   const PILE_PADDING = 8;
   const MIN_PILE_WIDTH = 60;
   const DEPOT_PADDING = 20;
@@ -78,7 +78,7 @@ export function renderDepot(
   const PILE_SPACING = 15;
   const BOTTOM_AREA_HEIGHT = 90;
   const CRANE_AREA_HEIGHT = 90;
-  const DEPOT_SPACING = 80; // Bigger gap between depots
+  const DEPOT_SPACING = 80;
 
   // ---------- ASSIGN PILES TO DEPOTS ----------
   const pilesPerDepot = new Map<string, VisualObject[]>();
@@ -86,13 +86,11 @@ export function renderDepot(
     pilesPerDepot.set(depot.id, []);
   }
   
-  // Use at-pile relation if available, otherwise distribute evenly
   piles.forEach((pile, index) => {
     const assignedDepot = pileAt.get(pile.id);
     if (assignedDepot && pilesPerDepot.has(assignedDepot)) {
       pilesPerDepot.get(assignedDepot)?.push(pile);
     } else {
-      // Fallback: distribute evenly
       const depotIndex = index % depots.length;
       const depot = depots[depotIndex];
       if (depot) {
@@ -163,12 +161,10 @@ export function renderDepot(
     const depotPilesList = pilesPerDepot.get(depot.id) || [];
     const depotTrucksList = trucksPerDepot.get(depot.id) || [];
     
-    // Calculate total width needed for trucks
     const trucksWidth = depotTrucksList.length > 0 
       ? depotTrucksList.length * TRUCK_W + (depotTrucksList.length - 1) * TRUCK_SPACING
       : 0;
     
-    // Calculate total width needed for piles
     let totalPilesWidth = 0;
     let maxStackHeight = 0;
     
@@ -181,12 +177,10 @@ export function renderDepot(
       totalPilesWidth += (depotPilesList.length - 1) * PILE_SPACING;
     }
     
-    // Depot width: trucks + piles + padding + spacing between them
     const spacingBetween = (trucksWidth > 0 && totalPilesWidth > 0) ? 20 : 0;
     const bottomContentWidth = trucksWidth + spacingBetween + totalPilesWidth;
     const depotWidth = Math.max(180, bottomContentWidth + DEPOT_PADDING * 2);
     
-    // Depot height: crane area + space for stacked packages + bottom area
     const stackSpace = maxStackHeight * CONTAINER_H + 20;
     const depotHeight = CRANE_AREA_HEIGHT + stackSpace + BOTTOM_AREA_HEIGHT;
     
@@ -208,7 +202,6 @@ export function renderDepot(
   ctx.fillStyle = "#f0f4f8";
   ctx.fillRect(0, 0, W, H);
 
-  // Draw subtle grid
   ctx.strokeStyle = "rgba(0,0,0,0.05)";
   ctx.lineWidth = 1;
   for (let x = 0; x < W; x += 40) {
@@ -332,12 +325,10 @@ export function renderDepot(
     const depotTrucksList = trucksPerDepot.get(depot.id) || [];
     const depotPilesList = pilesPerDepot.get(depot.id) || [];
     
-    // Calculate trucks total width
     const trucksWidth = depotTrucksList.length > 0 
       ? depotTrucksList.length * TRUCK_W + (depotTrucksList.length - 1) * TRUCK_SPACING
       : 0;
     
-    // Calculate piles total width
     let totalPilesWidth = 0;
     for (const pile of depotPilesList) {
       totalPilesWidth += getPileWidth(pile.id);
@@ -346,7 +337,6 @@ export function renderDepot(
       totalPilesWidth += (depotPilesList.length - 1) * PILE_SPACING;
     }
     
-    // Calculate starting positions to center content
     const spacingBetween = (trucksWidth > 0 && totalPilesWidth > 0) ? 20 : 0;
     const totalContentWidth = trucksWidth + spacingBetween + totalPilesWidth;
     const contentStartX = depotX + (depotWidth - totalContentWidth) / 2;
@@ -366,18 +356,23 @@ export function renderDepot(
         ctx.fillRect(truckX + 45, truckY + 13, 18, 17);
       }
 
-      ctx.fillStyle = "#37474F";
-      ctx.font = "bold 10px Arial";
+      // Truck label ON the truck (on the cab area)
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 9px Arial";
       ctx.textAlign = "center";
-      ctx.fillText(truck.label, truckX + TRUCK_W / 2, truckY + TRUCK_H + 10);
+      ctx.textBaseline = "middle";
+      ctx.fillText(truck.label, truckX + TRUCK_W - 15, truckY + TRUCK_H / 2 + 5);
 
-      // Draw packages in truck
+      // Draw packages in truck - REVERSE order so last loaded is on top
       const packagesInThisTruck = packages.filter(p => packageInTruck.get(p.id) === truck.id);
       const flatbedCenterX = truckX + 18;
-      const flatbedTopY = truckY + 3;
+      const flatbedBaseY = truckY + TRUCK_H - 8; // Base of flatbed
       
-      packagesInThisTruck.forEach((pkg, pkgIndex) => {
-        const containerY = flatbedTopY - pkgIndex * (CONTAINER_H - 5);
+      // Draw from bottom to top: first package at bottom, last at top
+      // Reverse the array so the last loaded package appears on top visually
+      const reversedPackages = [...packagesInThisTruck].reverse();
+      reversedPackages.forEach((pkg, pkgIndex) => {
+        const containerY = flatbedBaseY - (reversedPackages.length - 1 - pkgIndex) * (CONTAINER_H - 8) - CONTAINER_H / 2;
         drawContainer(ctx, flatbedCenterX, containerY, CONTAINER_W - 8, CONTAINER_H - 5, pkg.label, false);
       });
       
@@ -404,11 +399,12 @@ export function renderDepot(
       ctx.fillStyle = "#6D4C41";
       ctx.fillRect(pileX, pileBaseY + PILE_HEIGHT, pileWidth, 3);
       
-      // Pile label below
-      ctx.fillStyle = "#5D4037";
-      ctx.font = "bold 11px Arial";
+      // Pile label ON the pile base (centered on the platform)
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "bold 9px Arial";
       ctx.textAlign = "center";
-      ctx.fillText(pile.label, pileX + pileWidth / 2, pileBaseY + PILE_HEIGHT + 14);
+      ctx.textBaseline = "middle";
+      ctx.fillText(pile.label, pileX + pileWidth / 2, pileBaseY + PILE_HEIGHT / 2);
 
       // === DRAW PACKAGES ON PILE (side-by-side) ===
       const packagesOnThisPile = packages.filter(p => packageOnPile.get(p.id) === pile.id);
@@ -417,24 +413,20 @@ export function renderDepot(
         const containerX = pileX + PILE_PADDING + pkgIndex * (CONTAINER_W + 5) + CONTAINER_W / 2;
         const containerY = pileBaseY - CONTAINER_H / 2;
         
-        // Draw the base package on the pile
         drawContainer(ctx, containerX, containerY, CONTAINER_W, CONTAINER_H, pkg.label, false);
         
-        // Draw packages stacked ON TOP of this package (vertical stacking)
         drawStackedPackages(ctx, pkg, containerX, containerY - CONTAINER_H, packageOn, packages, CONTAINER_W, CONTAINER_H);
       });
       
       pileStartX += pileWidth + PILE_SPACING;
     });
 
-    // Move to next depot position
     currentX += depotWidth + DEPOT_SPACING;
   });
 }
 
 // ================= HELPER FUNCTIONS =================
 
-// Draw packages stacked on top of a base package (recursive)
 function drawStackedPackages(
   ctx: CanvasRenderingContext2D,
   basePkg: VisualObject,
@@ -454,7 +446,6 @@ function drawStackedPackages(
   }
 }
 
-// Draw a container/package
 function drawContainer(
   ctx: CanvasRenderingContext2D,
   cx: number,
