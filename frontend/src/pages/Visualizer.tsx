@@ -108,13 +108,19 @@ export default function Visualizer() {
       const container = planStepsRef.current;
       const currentActionElement = container.children[currentStateIndex - 1] as HTMLElement;
       if (currentActionElement) {
-        // Scroll element into view within its scrollable container
-        // Using 'nearest' keeps it in view without unnecessary scrolling
-        currentActionElement.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-          inline: "nearest",
-        });
+        // Get element position relative to container
+        const elementRect = currentActionElement.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        
+        // Check if element is not fully visible
+        const isAbove = elementRect.top < containerRect.top;
+        const isBelow = elementRect.bottom > containerRect.bottom;
+        
+        if (isAbove || isBelow) {
+          // Calculate scroll position (element offset from container top + current scroll position)
+          const scrollOffset = currentActionElement.offsetTop - container.offsetTop;
+          container.scrollTop = scrollOffset;
+        }
       }
     }
   }, [currentStateIndex, plan.length]);
@@ -935,7 +941,7 @@ export default function Visualizer() {
                     <h3 className="text-sm font-semibold text-slate-900 mb-3">
                       Plan Steps ({plan.length} actions)
                     </h3>
-                    <div ref={planStepsRef} className="space-y-1 max-h-80 overflow-y-auto pr-2">
+                    <div ref={planStepsRef} className="space-y-1 max-h-80 overflow-y-auto overscroll-contain pr-2" style={{ scrollBehavior: 'smooth' }}>
                       {plan.map((action, idx) => (
                         <div
                           key={idx}
