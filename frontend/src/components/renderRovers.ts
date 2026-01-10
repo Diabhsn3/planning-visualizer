@@ -363,15 +363,6 @@ export function renderRovers(
   ctx.fillStyle = '#f8f9fa';
   ctx.fillRect(0, 0, W, H);
 
-  // Grid background
-  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-  ctx.lineWidth = 1;
-  for (let y = 0; y < Math.ceil(H / GRID); y++) {
-    for (let x = 0; x < Math.ceil(W / GRID); x++) {
-      ctx.strokeRect(x * GRID, y * GRID, GRID, GRID);
-    }
-  }
-
   const waypointColor = '#66BB6A';
   const pathColor = '#B0BEC5';
   const textColor = '#444';

@@ -133,6 +133,7 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
   // Handle mouse wheel for zoom
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
+    e.stopPropagation();
     
     const canvas = canvasRef.current;
     if (!canvas) return;

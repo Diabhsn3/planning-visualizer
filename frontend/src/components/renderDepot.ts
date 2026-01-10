@@ -199,23 +199,8 @@ export function renderDepot(
   const DEPOT_Y = 50;
 
   // ---------- BACKGROUND ----------
-  ctx.fillStyle = "#f0f4f8";
+  ctx.fillStyle = "#f8f9fa";
   ctx.fillRect(0, 0, W, H);
-
-  ctx.strokeStyle = "rgba(0,0,0,0.05)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 40) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
-    ctx.stroke();
-  }
-  for (let y = 0; y < H; y += 40) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-  }
 
   // ---------- DRAW EACH DEPOT ----------
   let currentX = START_X;
