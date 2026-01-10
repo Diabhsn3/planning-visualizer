@@ -102,14 +102,22 @@ export default function Visualizer() {
     setInputMode("file");
   }, [selectedDomain]);
 
-  // Auto-scroll plan steps to current action
+  // Auto-scroll plan steps to current action (within container only)
   useEffect(() => {
-    if (planStepsRef.current && plan.length > 0) {
-      const currentActionElement = planStepsRef.current.children[currentStateIndex - 1] as HTMLElement;
+    if (planStepsRef.current && plan.length > 0 && currentStateIndex > 0) {
+      const container = planStepsRef.current;
+      const currentActionElement = container.children[currentStateIndex - 1] as HTMLElement;
       if (currentActionElement) {
-        currentActionElement.scrollIntoView({
+        // Calculate scroll position to center the current action in the container
+        const containerHeight = container.clientHeight;
+        const elementTop = currentActionElement.offsetTop;
+        const elementHeight = currentActionElement.clientHeight;
+        const scrollPosition = elementTop - (containerHeight / 2) + (elementHeight / 2);
+        
+        // Smooth scroll within the container only
+        container.scrollTo({
+          top: scrollPosition,
           behavior: "smooth",
-          block: "nearest",
         });
       }
     }
@@ -931,7 +939,7 @@ export default function Visualizer() {
                     <h3 className="text-sm font-semibold text-slate-900 mb-3">
                       Plan Steps ({plan.length} actions)
                     </h3>
-                    <div ref={planStepsRef} className="space-y-1 max-h-48 overflow-y-auto pr-2">
+                    <div ref={planStepsRef} className="space-y-1 max-h-80 overflow-y-auto pr-2">
                       {plan.map((action, idx) => (
                         <div
                           key={idx}
