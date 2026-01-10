@@ -31,9 +31,9 @@ DOMAIN_SIGNATURES = {
     },
     "depot": {
         "name": "Depot",
-        "types": {"depot", "distributor", "truck", "package", "location"},
-        "predicates": {"at", "at-truck", "in-truck"},
-        "unique_predicates": {"at-truck", "in-truck", "distributor"},
+        "types": {"depot", "truck", "crane", "pile", "package"},
+        "predicates": {"at", "at-truck", "at-crane", "at-pile", "in-truck", "on-pile", "holding", "empty-crane"},
+        "unique_predicates": {"at-truck", "at-crane", "at-pile", "in-truck", "on-pile"},
         "weight": 0,
     },
     "hanoi": {
