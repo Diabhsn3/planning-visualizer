@@ -1,79 +1,76 @@
 (define (domain satellite)
-  (:requirements :strips :typing)
+  (:requirements :typing :strips :negative-preconditions)
+  
   (:types
-    satellite
-    instrument
-    direction
-    mode
-    groundstation
+      satellite instrument target direction groundstation image
   )
 
   (:predicates
-    ;; satellite orientation
-    (pointing ?s - satellite ?d - direction)
+      ;; Satellite orientation
+      (pointing ?s - satellite ?d - direction)
 
-    ;; instrument onboard relation
-    (on-board ?i - instrument ?s - satellite)
+      ;; Instrument properties
+      (onboard ?i - instrument ?s - satellite)
+      (supports ?i - instrument ?t - target)
+      (calibrated ?i - instrument)
+      (calibration-target ?i - instrument ?t - target)
 
-    ;; instrument power + calibration
-    (power-on ?i - instrument)
-    (calibrated ?i - instrument)
+      ;; Imaging
+      (have-image ?t - target)
+      (image-taken ?i - instrument ?t - target)
 
-    ;; instrument supports a mode
-    (supports ?i - instrument ?m - mode)
+      ;; Resources
+      (power-avail ?s - satellite)
+      (storage-avail ?s - satellite)
 
-    ;; captured and downlinked data
-    (has-image ?d - direction ?m - mode)
-    (downlinked ?d - direction ?m - mode ?g - groundstation)
-
-    ;; visibility + link
-    (visible ?d - direction ?g - groundstation)
-    (link-available ?g - groundstation)
+      ;; Communication
+      (visible ?s - satellite ?g - groundstation)
   )
 
+  ;; Turn satellite
   (:action turn
-    :parameters (?s - satellite ?from - direction ?to - direction)
-    :precondition (pointing ?s ?from)
-    :effect (and
-      (not (pointing ?s ?from))
-      (pointing ?s ?to))
+     :parameters (?s - satellite ?d1 - direction ?d2 - direction)
+     :precondition (and (pointing ?s ?d1) (power-avail ?s))
+     :effect (and
+        (not (pointing ?s ?d1))
+        (pointing ?s ?d2))
   )
 
-  (:action switch-on
-    :parameters (?i - instrument ?s - satellite)
-    :precondition (on-board ?i ?s)
-    :effect (power-on ?i)
-  )
-
+  ;; Calibrate instrument
   (:action calibrate
-    :parameters (?i - instrument ?s - satellite ?d - direction)
-    :precondition (and
-      (on-board ?i ?s)
-      (power-on ?i)
-      (pointing ?s ?d)
-    )
-    :effect (calibrated ?i)
+     :parameters (?s - satellite ?i - instrument ?t - target ?d - direction)
+     :precondition (and
+        (onboard ?i ?s)
+        (calibration-target ?i ?t)
+        (pointing ?s ?d)
+        (power-avail ?s))
+     :effect (calibrated ?i)
   )
 
+  ;; Take image
   (:action take-image
-    :parameters (?s - satellite ?i - instrument ?d - direction ?m - mode)
-    :precondition (and
-      (on-board ?i ?s)
-      (power-on ?i)
-      (calibrated ?i)
-      (supports ?i ?m)
-      (pointing ?s ?d)
-    )
-    :effect (has-image ?d ?m)
+     :parameters (?s - satellite ?i - instrument ?t - target ?d - direction)
+     :precondition (and
+        (onboard ?i ?s)
+        (supports ?i ?t)
+        (calibrated ?i)
+        (pointing ?s ?d)
+        (storage-avail ?s)
+        (power-avail ?s))
+     :effect (and
+        (image-taken ?i ?t)
+        (not (storage-avail ?s)))
   )
 
-  (:action downlink
-    :parameters (?s - satellite ?i - instrument ?d - direction ?m - mode ?g - groundstation)
-    :precondition (and
-      (has-image ?d ?m)
-      (visible ?d ?g)
-      (link-available ?g)
-    )
-    :effect (downlinked ?d ?m ?g)
+  ;; Transmit image
+  (:action transmit-image
+     :parameters (?s - satellite ?i - instrument ?t - target ?g - groundstation)
+     :precondition (and
+        (image-taken ?i ?t)
+        (visible ?s ?g)
+        (power-avail ?s))
+     :effect (and
+        (have-image ?t)
+        (storage-avail ?s))
   )
 )
