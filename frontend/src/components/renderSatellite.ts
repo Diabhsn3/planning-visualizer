@@ -431,12 +431,8 @@ export function renderSatellite(ctx: CanvasRenderingContext2D, state: RenderedSt
   // NOTE: Background is handled by StateCanvas component (grid pattern)
   // Do NOT draw custom background here to maintain consistency with other domains
 
-  // ---- LEGEND safe area (so nothing gets covered) ----
-  // Move LEGEND higher by making LEGEND_Y more negative if you want.
-  const LEGEND_W = 540;
-  const LEGEND_H = 78;        // slightly taller to host the mini-timeline row
-  const LEGEND_Y = -18;       // <<<<<<<<<<<<<< legend up
-  const SAFE_TOP = LEGEND_H + 12; // stable safe area (independent of LEGEND_Y)
+  // Top margin for layout (no legend needed)
+  const SAFE_TOP = 20;
 
   // ---- Extract objects ----
   const satellites = state.objects.filter((o) => norm(o.type) === "satellite");
@@ -802,74 +798,7 @@ export function renderSatellite(ctx: CanvasRenderingContext2D, state: RenderedSt
     }
   }
 
-  // ================= LEGEND (DRAW LAST) =================
-  const lx = (W - LEGEND_W) / 2;
-  const ly = LEGEND_Y;
-
-  ctx.save();
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  drawRoundedRect(ctx, lx, ly, LEGEND_W, LEGEND_H, 14);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.08)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  ctx.fillStyle = "#333";
-  ctx.font = "bold 12px Arial";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  ctx.fillText("Satellite legend", lx + 12, ly + 8);
-
-  // legend markers row
-  drawTargetMarker(ctx, lx + 80, ly + 42, "T?", false, false);
-  drawLabel(ctx, "Pending", lx + 120, ly + 32, { align: "left", font: "12px Arial", color: "#444" });
-
-  drawTargetMarker(ctx, lx + 250, ly + 42, "T?", false, true);
-  drawLabel(ctx, "Imaged", lx + 290, ly + 32, { align: "left", font: "12px Arial", color: "#444" });
-
-  drawTargetMarker(ctx, lx + 410, ly + 42, "T?", true, true);
-  drawLabel(ctx, "Sent", lx + 450, ly + 32, { align: "left", font: "12px Arial", color: "#444" });
-
-  // 5) Mini timeline (inside legend, bottom row)
-//   const rawList: unknown =
-//     state.metadata?.recentActions ??
-//     state.metadata?.actions ??
-//     state.metadata?.plan ??
-//     state.metadata?.history ??
-//     null;
-
-//   let actions: string[] = [];
-//   if (Array.isArray(rawList)) {
-//     actions = (rawList as any[]).map((x) => String(x)).filter((x) => x.trim().startsWith("("));
-//   }
-
-//   // fallback: just current action
-//   if (actions.length === 0 && state.metadata?.action) actions = [String(state.metadata.action)];
-
-//   // keep last 6
-//   if (actions.length > 6) actions = actions.slice(actions.length - 6);
-
-//   if (actions.length) {
-//     ctx.fillStyle = "#556";
-//     ctx.font = "bold 10px Arial";
-//     ctx.textAlign = "left";
-//     ctx.textBaseline = "top";
-//     ctx.fillText("Timeline:", lx + 12, ly + 60);
-
-//     let cx = lx + 78;
-//     const cy = ly + 56;
-//     const current = String(state.metadata?.action ?? "");
-
-//     for (const a of actions) {
-//       const text = formatActionChip(a);
-//       const isNow = a === current;
-//       const w = drawChip(ctx, cx, cy, text, isNow);
-//       cx += w + 8;
-//       if (cx > lx + LEGEND_W - 60) break; // don't overflow
-//     }
-//   }
-
-  ctx.restore();
+  // Legend removed for consistency with other domain renderers
 
   // ---- Fallback debug ----
   if (sats.length === 0 && gss.length === 0 && tgs.length === 0) {
