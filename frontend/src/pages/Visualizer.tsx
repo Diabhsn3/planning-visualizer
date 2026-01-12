@@ -36,6 +36,7 @@ export default function Visualizer() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDomainOpen, setIsDomainOpen] = useState(true);
+  const [isStrategyOpen, setIsStrategyOpen] = useState(false);
   const [showExampleProblem, setShowExampleProblem] = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -628,7 +629,10 @@ export default function Visualizer() {
                 onClick={() => setIsDomainOpen(!isDomainOpen)}
                 className="w-full px-6 py-4 border-b border-slate-100 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
               >
-                <h2 className="text-base font-semibold text-slate-900">Domain</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-base font-semibold text-slate-900">Domain</h2>
+                  <span className="text-sm text-indigo-600 font-medium">{currentDomain?.icon} {currentDomain?.name}</span>
+                </div>
                 <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${isDomainOpen ? "" : "-rotate-90"}`} />
               </button>
               {isDomainOpen && (
@@ -789,49 +793,60 @@ export default function Visualizer() {
 
             {/* Search Strategy Card */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h2 className="text-base font-semibold text-slate-900">Search Strategy</h2>
-              </div>
-              <div className="p-4 space-y-4">
-                <select
-                  value={selectedStrategy}
-                  onChange={(e) => setSelectedStrategy(e.target.value)}
-                  className="w-full"
-                >
+              <button
+                onClick={() => setIsStrategyOpen(!isStrategyOpen)}
+                className="w-full px-6 py-4 border-b border-slate-100 flex items-center justify-between hover:bg-slate-50/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <h2 className="text-base font-semibold text-slate-900">Search Strategy</h2>
+                  <span className="text-sm text-indigo-600 font-medium">{currentStrategy?.name}</span>
+                </div>
+                <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${isStrategyOpen ? "" : "-rotate-90"}`} />
+              </button>
+              {isStrategyOpen && (
+              <div className="p-4">
+                <div className="space-y-2">
                   {strategiesQuery.data?.map((strategy: SearchStrategy) => (
-                    <option key={strategy.id} value={strategy.id}>
-                      {strategy.name}
-                    </option>
+                    <button
+                      key={strategy.id}
+                      onClick={() => setSelectedStrategy(strategy.id)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-200 ${
+                        selectedStrategy === strategy.id
+                          ? "bg-indigo-50 border-2 border-indigo-500 shadow-sm"
+                          : "bg-slate-50 border-2 border-transparent hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-medium ${selectedStrategy === strategy.id ? "text-indigo-900" : "text-slate-900"}`}>
+                            {strategy.name}
+                          </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            strategy.isOptimal 
+                              ? "bg-purple-100 text-purple-700" 
+                              : "bg-blue-100 text-blue-700"
+                          }`}>
+                            {strategy.isOptimal ? "Optimal" : "Satisficing"}
+                          </span>
+                          {getSpeedBadge(strategy.speed)}
+                        </div>
+                        <div className="text-xs text-slate-500 truncate mt-1">{strategy.description}</div>
+                      </div>
+                      {selectedStrategy === strategy.id && (
+                        <CheckCircle2 className="w-5 h-5 text-indigo-500 flex-shrink-0" />
+                      )}
+                    </button>
                   ))}
-                </select>
-                
-                {currentStrategy && (
-                  <div className="p-4 bg-slate-50 rounded-xl space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                        currentStrategy.isOptimal 
-                          ? "bg-purple-100 text-purple-700" 
-                          : "bg-blue-100 text-blue-700"
-                      }`}>
-                        {currentStrategy.isOptimal ? "Optimal" : "Satisficing"}
-                      </span>
-                      {getSpeedBadge(currentStrategy.speed)}
-                    </div>
-                    <p className="text-sm text-slate-600">{currentStrategy.description}</p>
-                    <div className="flex items-start gap-2 text-xs text-slate-500">
-                      <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                      <span>{currentStrategy.whenToUse}</span>
-                    </div>
-                  </div>
-                )}
+                </div>
 
                 {currentStrategy?.warning && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
+                  <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-800">{currentStrategy.warning}</p>
                   </div>
                 )}
               </div>
+              )}
             </div>
 
             {/* Generate Button */}
