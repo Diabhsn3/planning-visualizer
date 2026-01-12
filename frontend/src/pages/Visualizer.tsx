@@ -5,7 +5,7 @@ import { StateCanvas } from "@/components/StateCanvas";
 import { 
   Play, Pause, SkipForward, SkipBack, Upload, FileText, 
   AlertTriangle, Clock, Zap, Settings, 
-  Cpu, CheckCircle2, XCircle, Info, Sparkles, ChevronDown
+  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown
 } from "lucide-react";
 
 // Search strategy type

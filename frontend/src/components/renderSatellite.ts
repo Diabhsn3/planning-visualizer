@@ -206,27 +206,6 @@ function drawThinLine(
   ctx.restore();
 }
 
-// Nice background
-function drawSpaceBackground(ctx: CanvasRenderingContext2D, W: number, H: number) {
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "#eef5ff");
-  g.addColorStop(1, "#f6f9ff");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-
-  ctx.save();
-  ctx.globalAlpha = 0.35;
-  for (let i = 0; i < 70; i++) {
-    const x = (i * 97) % W;
-    const y = (i * 53) % H;
-    const r = (i % 3) + 0.6;
-    ctx.fillStyle = "#9fb5d6";
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
 
 function drawInstrumentMarker(ctx: CanvasRenderingContext2D, x: number, y: number, _label: string, calibrated: boolean) {
   const r = 10;
