@@ -423,11 +423,13 @@ function actionTag(name: string): { tag: string; style: "blue" | "orange" | "gre
 
 // ================= MAIN =================
 export function renderSatellite(ctx: CanvasRenderingContext2D, state: RenderedState): void {
-  const scale = ctx.getTransform().a || 1;
-  const W = ctx.canvas.width / scale || 800;
-  const H = ctx.canvas.height / scale || 600;
+  // Use fixed dimensions like other renderers (Rovers, Depot, etc.)
+  // The StateCanvas component handles zooming via ctx.scale() transform
+  const W = 800;
+  const H = 600;
 
-  drawSpaceBackground(ctx, W, H);
+  // NOTE: Background is handled by StateCanvas component (grid pattern)
+  // Do NOT draw custom background here to maintain consistency with other domains
 
   // ---- LEGEND safe area (so nothing gets covered) ----
   // Move LEGEND higher by making LEGEND_Y more negative if you want.
