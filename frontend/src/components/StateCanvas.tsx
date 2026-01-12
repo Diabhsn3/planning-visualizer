@@ -16,6 +16,7 @@ interface DomainRenderer {
 }
 
 // Map of domain names to their renderer configurations
+// Note: blocks-world and gripper are defined later in this file
 const domainRenderers: Record<string, DomainRenderer> = {
   "depot": {
     render: renderDepot,
@@ -37,6 +38,7 @@ const domainRenderers: Record<string, DomainRenderer> = {
     background: renderRoversBackground,
     legend: renderRoversLegend,
   },
+  // blocks-world and gripper are added after their functions are defined
 };
 
 
@@ -284,7 +286,79 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
   }, []);
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
+    <div ref={containerRef} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* Zoom controls - above the canvas */}
+      <div style={{
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "8px",
+        padding: "4px 0"
+      }}>
+        <button
+          onClick={() => setScale(s => Math.min(s * 1.2, 5))}
+          style={{
+            padding: "6px 14px",
+            background: "#4CAF50",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontSize: "16px",
+            fontWeight: "bold",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+          }}
+          title="Zoom In"
+        >
+          +
+        </button>
+        <button
+          onClick={() => setScale(s => Math.max(s * 0.8, 0.1))}
+          style={{
+            padding: "6px 14px",
+            background: "#4CAF50",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontSize: "16px",
+            fontWeight: "bold",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+          }}
+          title="Zoom Out"
+        >
+          −
+        </button>
+        <button
+          onClick={handleReset}
+          style={{
+            padding: "6px 14px",
+            background: "#2196F3",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontSize: "12px",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+          }}
+          title="Reset View"
+        >
+          Reset
+        </button>
+        <span style={{
+          padding: "6px 12px",
+          background: "#f0f0f0",
+          borderRadius: "6px",
+          fontSize: "12px",
+          display: "flex",
+          alignItems: "center",
+          fontWeight: "500",
+          color: "#333"
+        }}>
+          {Math.round(scale * 100)}%
+        </span>
+      </div>
+      
+      {/* Canvas */}
       <canvas
         ref={canvasRef}
         width={width}
@@ -296,75 +370,6 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
       />
-      <div style={{
-        position: "absolute",
-        top: "10px",
-        right: "10px",
-        display: "flex",
-        gap: "8px",
-        background: "rgba(255, 255, 255, 0.9)",
-        padding: "8px",
-        borderRadius: "6px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-      }}>
-        <button
-          onClick={() => setScale(s => Math.min(s * 1.2, 5))}
-          style={{
-            padding: "4px 12px",
-            background: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: "16px",
-            fontWeight: "bold"
-          }}
-          title="Zoom In"
-        >
-          +
-        </button>
-        <button
-          onClick={() => setScale(s => Math.max(s * 0.8, 0.1))}
-          style={{
-            padding: "4px 12px",
-            background: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: "16px",
-            fontWeight: "bold"
-          }}
-          title="Zoom Out"
-        >
-          −
-        </button>
-        <button
-          onClick={handleReset}
-          style={{
-            padding: "4px 12px",
-            background: "#2196F3",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontSize: "12px"
-          }}
-          title="Reset View"
-        >
-          Reset
-        </button>
-        <span style={{
-          padding: "4px 8px",
-          background: "#f0f0f0",
-          borderRadius: "4px",
-          fontSize: "12px",
-          display: "flex",
-          alignItems: "center"
-        }}>
-          {Math.round(scale * 100)}%
-        </span>
-      </div>
     </div>
   );
 }
@@ -796,3 +801,186 @@ function renderDefault(ctx: CanvasRenderingContext2D, state: RenderedState) {
     ctx.fillText(`... and ${state.objects.length - 10} more`, 40, y);
   }
 }
+
+
+// ================= BLOCKS WORLD BACKGROUND =================
+function renderBlocksWorldBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  // Workshop/table themed background
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#e8e0d8");  // Light wood
+  gradient.addColorStop(0.6, "#d4c8b8"); // Medium wood
+  gradient.addColorStop(1, "#c4b4a0");  // Darker wood (table surface)
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw wood plank pattern
+  ctx.save();
+  ctx.strokeStyle = "rgba(139, 90, 43, 0.08)";
+  ctx.lineWidth = 1;
+  
+  // Horizontal planks
+  for (let y = 0; y < height; y += 40) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  
+  // Vertical grain lines
+  for (let x = 0; x < width; x += 80) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ================= BLOCKS WORLD LEGEND =================
+function renderBlocksWorldLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const LEGEND_WIDTH = 150;
+  const LEGEND_HEIGHT = 110;
+  const PADDING = 12;
+  const LINE_HEIGHT = 22;
+
+  // Draw legend background
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
+  ctx.lineWidth = 1;
+  
+  const radius = 8;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + LEGEND_WIDTH - radius, y);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y, x + LEGEND_WIDTH, y + radius);
+  ctx.lineTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT - radius);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT, x + LEGEND_WIDTH - radius, y + LEGEND_HEIGHT);
+  ctx.lineTo(x + radius, y + LEGEND_HEIGHT);
+  ctx.quadraticCurveTo(x, y + LEGEND_HEIGHT, x, y + LEGEND_HEIGHT - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Legend title
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 12px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("Blocks World", x + PADDING, y + PADDING);
+
+  let itemY = y + PADDING + LINE_HEIGHT + 4;
+  ctx.font = "11px Arial";
+
+  ctx.fillStyle = "#e74c3c";
+  ctx.fillText("🧱  Block (colored)", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#8B4513";
+  ctx.fillText("📋  Table (surface)", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#555";
+  ctx.fillText("🤖  Gripper (arm)", x + PADDING, itemY);
+
+  ctx.restore();
+}
+
+// ================= GRIPPER BACKGROUND =================
+function renderGripperBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  // Robot lab themed background
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#e0e5ec");  // Light metallic
+  gradient.addColorStop(0.5, "#d0d5dc"); // Medium gray
+  gradient.addColorStop(1, "#c0c5cc");  // Floor color
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw tile floor pattern
+  ctx.save();
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.06)";
+  ctx.lineWidth = 1;
+  const TILE_SIZE = 50;
+  
+  for (let x = 0; x <= width; x += TILE_SIZE) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  
+  for (let y = 0; y <= height; y += TILE_SIZE) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ================= GRIPPER LEGEND =================
+function renderGripperLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const LEGEND_WIDTH = 150;
+  const LEGEND_HEIGHT = 110;
+  const PADDING = 12;
+  const LINE_HEIGHT = 22;
+
+  // Draw legend background
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
+  ctx.lineWidth = 1;
+  
+  const radius = 8;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + LEGEND_WIDTH - radius, y);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y, x + LEGEND_WIDTH, y + radius);
+  ctx.lineTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT - radius);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT, x + LEGEND_WIDTH - radius, y + LEGEND_HEIGHT);
+  ctx.lineTo(x + radius, y + LEGEND_HEIGHT);
+  ctx.quadraticCurveTo(x, y + LEGEND_HEIGHT, x, y + LEGEND_HEIGHT - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Legend title
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 12px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("Gripper Legend", x + PADDING, y + PADDING);
+
+  let itemY = y + PADDING + LINE_HEIGHT + 4;
+  ctx.font = "11px Arial";
+
+  ctx.fillStyle = "#1976d2";
+  ctx.fillText("🤖  Robot", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#4CAF50";
+  ctx.fillText("🏠  Room", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#e74c3c";
+  ctx.fillText("⚽  Ball", x + PADDING, itemY);
+
+  ctx.restore();
+}
+
+// Register blocks-world and gripper in domainRenderers
+domainRenderers["blocks-world"] = {
+  render: renderBlocksWorld,
+  background: renderBlocksWorldBackground,
+  legend: renderBlocksWorldLegend,
+};
+
+domainRenderers["gripper"] = {
+  render: renderGripper,
+  background: renderGripperBackground,
+  legend: renderGripperLegend,
+};

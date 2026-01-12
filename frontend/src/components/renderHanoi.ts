@@ -232,11 +232,83 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
 }
 
 
-// ================= BACKGROUND FUNCTION (Optional) =================
-// Return undefined to use default grid background
-export const renderHanoiBackground = undefined;
+// ================= BACKGROUND FUNCTION =================
+export function renderHanoiBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  // Wooden/puzzle themed background
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#f5f0e6");  // Light parchment
+  gradient.addColorStop(0.5, "#ebe4d4"); // Slightly darker
+  gradient.addColorStop(1, "#d4c9b5");  // Wooden table color
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
 
-// ================= LEGEND FUNCTION (Optional) =================
-// Return undefined to skip legend
-export const renderHanoiLegend = undefined;
+  // Draw subtle wood grain pattern
+  ctx.save();
+  ctx.strokeStyle = "rgba(139, 90, 43, 0.06)";
+  ctx.lineWidth = 2;
+  
+  for (let y = 0; y < height; y += 15) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    // Wavy wood grain
+    for (let x = 0; x < width; x += 20) {
+      const wave = Math.sin(x * 0.02 + y * 0.1) * 3;
+      ctx.lineTo(x, y + wave);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ================= LEGEND FUNCTION =================
+export function renderHanoiLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const LEGEND_WIDTH = 150;
+  const LEGEND_HEIGHT = 100;
+  const PADDING = 12;
+  const LINE_HEIGHT = 22;
+
+  // Draw legend background
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
+  ctx.lineWidth = 1;
+  
+  const radius = 8;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + LEGEND_WIDTH - radius, y);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y, x + LEGEND_WIDTH, y + radius);
+  ctx.lineTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT - radius);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT, x + LEGEND_WIDTH - radius, y + LEGEND_HEIGHT);
+  ctx.lineTo(x + radius, y + LEGEND_HEIGHT);
+  ctx.quadraticCurveTo(x, y + LEGEND_HEIGHT, x, y + LEGEND_HEIGHT - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Legend title
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 12px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("Hanoi Legend", x + PADDING, y + PADDING);
+
+  let itemY = y + PADDING + LINE_HEIGHT + 4;
+  ctx.font = "11px Arial";
+
+  ctx.fillStyle = "#8B4513";
+  ctx.fillText("🗼  Peg (Tower)", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#e74c3c";
+  ctx.fillText("🟢  Disk (colored)", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#666";
+  ctx.fillText("Goal: Move all to right", x + PADDING, itemY);
+
+  ctx.restore();
+}
 

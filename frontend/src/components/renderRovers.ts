@@ -673,11 +673,110 @@ export function renderRovers(
 }
 
 
-// ================= BACKGROUND FUNCTION (Optional) =================
-// Return undefined to use default grid background
-export const renderRoversBackground = undefined;
+// ================= BACKGROUND FUNCTION =================
+export function renderRoversBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  // Mars/terrain themed background
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#e8d4c4");  // Light dusty orange
+  gradient.addColorStop(0.4, "#d4b8a0"); // Sandy
+  gradient.addColorStop(1, "#c4a080");  // Mars terrain color
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
 
-// ================= LEGEND FUNCTION (Optional) =================
-// Return undefined to skip legend
-export const renderRoversLegend = undefined;
+  // Draw terrain texture (small dots/rocks)
+  ctx.save();
+  for (let i = 0; i < 150; i++) {
+    const x = (i * 73 + 17) % width;
+    const y = (i * 47 + 23) % height;
+    const r = (i % 4) + 1;
+    const alpha = 0.05 + (i % 5) * 0.02;
+    
+    ctx.fillStyle = `rgba(139, 90, 43, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Draw subtle grid for waypoints reference
+  ctx.save();
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.05)";
+  ctx.lineWidth = 1;
+  const GRID_SIZE = 50;
+  
+  for (let x = 0; x <= width; x += GRID_SIZE) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  
+  for (let y = 0; y <= height; y += GRID_SIZE) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ================= LEGEND FUNCTION =================
+export function renderRoversLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const LEGEND_WIDTH = 160;
+  const LEGEND_HEIGHT = 150;
+  const PADDING = 12;
+  const LINE_HEIGHT = 22;
+
+  // Draw legend background
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
+  ctx.lineWidth = 1;
+  
+  const radius = 8;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + LEGEND_WIDTH - radius, y);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y, x + LEGEND_WIDTH, y + radius);
+  ctx.lineTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT - radius);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT, x + LEGEND_WIDTH - radius, y + LEGEND_HEIGHT);
+  ctx.lineTo(x + radius, y + LEGEND_HEIGHT);
+  ctx.quadraticCurveTo(x, y + LEGEND_HEIGHT, x, y + LEGEND_HEIGHT - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Legend title
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 12px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("Rovers Legend", x + PADDING, y + PADDING);
+
+  let itemY = y + PADDING + LINE_HEIGHT + 4;
+  ctx.font = "11px Arial";
+
+  ctx.fillStyle = "#d32f2f";
+  ctx.fillText("🤖  Rover", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#1976d2";
+  ctx.fillText("📍  Waypoint", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#388e3c";
+  ctx.fillText("📷  Objective", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#7b1fa2";
+  ctx.fillText("📡  Lander", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#f57c00";
+  ctx.fillText("⚙️  Store (sample)", x + PADDING, itemY);
+
+  ctx.restore();
+}
 
