@@ -888,7 +888,9 @@ export default function Visualizer() {
           {/* Visualization Panel */}
           <div className={`transition-all duration-300 ${isSidebarCollapsed ? "lg:col-span-3" : "lg:col-span-2"}`}>
             {renderedStates.length > 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
+              <div className={`animate-fade-in ${isSidebarCollapsed ? "flex gap-4" : ""}`}>
+              {/* Main Visualization Card */}
+              <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${isSidebarCollapsed ? "flex-1" : ""}`}>
                 {/* Visualization Header */}
                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                   <div className="flex items-center justify-between">
@@ -1007,8 +1009,8 @@ export default function Visualizer() {
                   </div>
                 </div>
 
-                {/* Plan Steps */}
-                {plan.length > 0 && (
+                {/* Plan Steps - shown inside card when sidebar is open */}
+                {plan.length > 0 && !isSidebarCollapsed && (
                   <div className="px-6 py-4 border-t border-slate-100">
                     <h3 className="text-sm font-semibold text-slate-900 mb-3">
                       Plan Steps ({plan.length} actions)
@@ -1032,6 +1034,35 @@ export default function Visualizer() {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Plan Steps - shown as separate card beside visualization when sidebar is collapsed */}
+              {plan.length > 0 && isSidebarCollapsed && (
+                <div className="w-80 flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
+                    <h3 className="text-sm font-semibold text-slate-900">
+                      Plan Steps ({plan.length} actions)
+                    </h3>
+                  </div>
+                  <div ref={planStepsRef} className="p-3 space-y-1 max-h-[600px] overflow-y-auto overscroll-contain" style={{ scrollBehavior: 'smooth' }}>
+                    {plan.map((action, idx) => (
+                      <div
+                        key={idx}
+                        className={`text-sm px-3 py-2 rounded-lg transition-all ${
+                          idx === currentStateIndex - 1
+                            ? "bg-indigo-100 text-indigo-900 font-medium border-l-4 border-indigo-500"
+                            : idx < currentStateIndex - 1
+                            ? "text-slate-400"
+                            : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span className="text-xs text-slate-400 mr-2">{idx + 1}.</span>
+                        {action}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               </div>
             ) : (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
