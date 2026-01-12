@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { renderDepot } from "@/components/renderDepot";
+import { renderSatellite } from "@/components/renderSatellite";
 import {renderHanoi} from "@/components/renderHanoi";
 import {renderRovers} from "@/components/renderRovers";
 
@@ -182,6 +183,8 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
       renderHanoi(ctx, state);
     } else if(state.domain === "rovers"){
       renderRovers(ctx, state);
+    } else if(state.domain === "satellite"){
+      renderSatellite(ctx, state);
     } else {
       renderDefault(ctx, state);
     }

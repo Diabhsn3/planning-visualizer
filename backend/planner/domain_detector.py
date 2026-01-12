@@ -50,6 +50,18 @@ DOMAIN_SIGNATURES = {
         "unique_predicates": {"at-rover", "calibrated", "communicated", "have-image", "waypoint"},
         "weight": 0,
     },
+        "satellite": {
+        "name": "Satellite",
+        "types": {"satellite", "instrument", "target", "direction", "groundstation"},
+        "predicates": {
+            "onboard", "supports", "calibration-target",
+            "pointing", "power-avail", "storage-avail",
+            "calibrated", "image-taken", "have-image", "visible"
+        },
+        # Predicates that are much more typical/unique here than in rovers:
+        "unique_predicates": {"onboard", "calibration-target", "power-avail", "storage-avail", "pointing", "visible"},
+        "weight": 0,
+    },
 }
 
 

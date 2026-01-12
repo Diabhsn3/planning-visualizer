@@ -120,6 +120,11 @@ const DOMAIN_CONFIGS = {
     description: "Planetary rovers navigating between waypoints and collecting images",
     domainFile: path.join(PLANNER_DIR, "domains/rovers/domain.pddl"),
   },
+    "satellite": {
+    name: "Satellite",
+    description: "Satellites calibrate instruments, take images, and transmit them",
+    domainFile: path.join(PLANNER_DIR, "domains/satellite/domain.pddl"),
+  },
 };
 
 // Whitelist of valid search strategy IDs (must match backend/planner/search_strategies.py)
@@ -143,7 +148,7 @@ export const visualizerRouter = router({
   generateStates: publicProcedure
     .input(
       z.object({
-        domain: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"]),
+        domain: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"]),
       })
     )
     .mutation(async ({ input }) => {
@@ -189,7 +194,7 @@ export const visualizerRouter = router({
       z.object({
         domainContent: z.string(),
         problemContent: z.string(),
-        domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"]),
+        domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"]),
         searchStrategy: z.enum(VALID_STRATEGY_IDS).optional().default("lazy-greedy-ff"),
       })
     )
@@ -428,7 +433,7 @@ export const visualizerRouter = router({
    */
   getDomainDefinition: publicProcedure
     .input(z.object({
-      domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"]),
+      domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"]),
     }))
     .query(async ({ input }) => {
       const domainConfig = DOMAIN_CONFIGS[input.domainName];

@@ -1,6 +1,6 @@
 (define (domain satellite)
   (:requirements :typing :strips :negative-preconditions)
-  
+
   (:types
       satellite instrument target direction groundstation image
   )
@@ -8,6 +8,9 @@
   (:predicates
       ;; Satellite orientation
       (pointing ?s - satellite ?d - direction)
+
+      ;; Link target -> direction (NEW)
+      (target-dir ?t - target ?d - direction)
 
       ;; Instrument properties
       (onboard ?i - instrument ?s - satellite)
@@ -42,6 +45,7 @@
      :precondition (and
         (onboard ?i ?s)
         (calibration-target ?i ?t)
+        (target-dir ?t ?d)          ;; NEW: must match target's direction
         (pointing ?s ?d)
         (power-avail ?s))
      :effect (calibrated ?i)
@@ -54,6 +58,7 @@
         (onboard ?i ?s)
         (supports ?i ?t)
         (calibrated ?i)
+        (target-dir ?t ?d)          ;; NEW: must match target's direction
         (pointing ?s ?d)
         (storage-avail ?s)
         (power-avail ?s))
@@ -66,6 +71,7 @@
   (:action transmit-image
      :parameters (?s - satellite ?i - instrument ?t - target ?g - groundstation)
      :precondition (and
+        (onboard ?i ?s)
         (image-taken ?i ?t)
         (visible ?s ?g)
         (power-avail ?s))

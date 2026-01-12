@@ -528,6 +528,104 @@ def test_rendered_state_format():
     
     return True
 
+
+def test_satellite_renderer():
+    """Test Satellite renderer with state sequence."""
+    print("\n" + "=" * 60)
+    print("Testing Satellite Renderer")
+    print("=" * 60)
+
+    domain_path = PLANNER_DIR / "domains/satellite/domain.pddl"
+    problem_path = PLANNER_DIR / "domains/satellite/p1.pddl"
+
+    if not domain_path.exists() or not problem_path.exists():
+        print("  ⚠ Satellite domain/problem not found, skipping test")
+        return True
+
+    # Step 1: Generate states
+    print("\n[Step 1] Generating states...")
+    sg = StateGenerator(str(domain_path), str(problem_path))
+
+    # Pick some objects from the parsed object list (robust, no hardcoding)
+    objs = sg.parser.objects  # dict name -> type
+
+    sat = next((n for n, t in objs.items() if t == "satellite"), None)
+    inst = next((n for n, t in objs.items() if t == "instrument"), None)
+    tgt = next((n for n, t in objs.items() if t == "target"), None)
+    gs = next((n for n, t in objs.items() if t == "groundstation"), None)
+
+    dirs = [n for n, t in objs.items() if t == "direction"]
+    d1 = dirs[0] if len(dirs) >= 1 else None
+    d2 = dirs[1] if len(dirs) >= 2 else d1
+
+    if not all([sat, inst, tgt, gs, d1]):
+        print("  ⚠ Missing required objects (satellite/instrument/target/groundstation/direction), skipping test")
+        print(f"  Found: sat={sat}, inst={inst}, tgt={tgt}, gs={gs}, dirs={dirs}")
+        return True
+
+    # Plan (matches your domain actions)
+    plan = [
+        f"(turn {sat} {d1} {d2})",
+        f"(calibrate {sat} {inst} {tgt} {d2})",
+        f"(take-image {sat} {inst} {tgt} {d2})",
+        f"(transmit-image {sat} {inst} {tgt} {gs})"
+    ]
+
+    states = sg.apply_plan(plan)
+    print(f"Generated {len(states)} states")
+
+    # Step 2: Get renderer
+    print("\n[Step 2] Getting renderer...")
+    renderer = RendererFactory.get_renderer(sg.parser.domain_name)
+    print(f"Using renderer: {renderer.__class__.__name__}")
+
+    # Step 3: Render states
+    print("\n[Step 3] Rendering states...")
+    rendered_states = renderer.render_sequence(states, sg.parser.objects, plan)
+    print(f"Rendered {len(rendered_states)} states")
+
+    # Show first & last rendered state summary
+    for i in [0, len(rendered_states) - 1]:
+        rendered = rendered_states[i]
+        title = "Initial" if i == 0 else "Final"
+
+        print(f"\n{'='*50}")
+        print(f"Rendered State {i} ({title})")
+        print(f"{'='*50}")
+
+        print(f"  Domain: {rendered.domain}")
+        print(f"  Objects: {len(rendered.objects)}")
+        print(f"  Relations: {len(rendered.relations)}")
+
+        # Count object types
+        types = {}
+        for obj in rendered.objects:
+            types[obj.type] = types.get(obj.type, 0) + 1
+        print(f"  Object types: {types}")
+
+    # Step 4: Export to JSON
+    print("\n[Step 4] Exporting to JSON...")
+    json_output = renderer.render_sequence_to_json(states, sg.parser.objects, plan)
+
+    output_file = PLANNER_DIR / "output" / "satellite_rendered.json"
+    output_file.parent.mkdir(exist_ok=True)
+
+    with open(output_file, 'w') as f:
+        f.write(json_output)
+
+    print(f"✓ Rendered states saved to: {output_file}")
+
+    # Validate JSON structure
+    data = json.loads(json_output)
+    assert data["domain"] == "satellite"
+    assert data["num_states"] == len(states)
+    assert len(data["states"]) == len(states)
+
+    print("✓ JSON structure validated")
+
+    return True
+
+
 def main():
     """Run all tests."""
     print("State Renderer Test Suite")
@@ -536,6 +634,7 @@ def main():
     test_depot_renderer()
     test_hanoi_renderer()
     test_rovers_renderer()
+    test_satellite_renderer()
 
 # def main():
 #     """Run all tests."""

@@ -60,7 +60,7 @@ export default function Visualizer() {
   });
 
   const domainDefinitionQuery = trpc.visualizer.getDomainDefinition.useQuery(
-    { domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers" },
+    { domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers" | "satellite" },
     { enabled: showDomainDefinition }
   );
 
@@ -70,6 +70,8 @@ export default function Visualizer() {
     { id: "depot", name: "Depot", description: "Transporting packages via trucks and depots", icon: "📦" },
     { id: "hanoi", name: "Hanoi", description: "Moving disks between pegs (Tower of Hanoi)", icon: "🗼" },
     { id: "rovers", name: "Rovers", description: "Planetary exploration with rovers", icon: "🚀" },
+    { id: "satellite", name: "Satellite", description: "Satellite imaging and data transmission", icon: "🛰️" },
+
   ];
 
   // Timer for elapsed time during processing
@@ -277,6 +279,45 @@ export default function Visualizer() {
   )
 )`;
     }
+        if (domain === "satellite") {
+      return `(define (problem satellite-default)
+  (:domain satellite)
+
+  (:objects
+    s1 - satellite
+    i1 - instrument
+    t1 - target
+    dcal d1 - direction
+    g1 - groundstation
+  )
+
+  (:init
+    ;; instrument mounted on satellite
+    (onboard i1 s1)
+
+    ;; instrument capabilities + calibration target
+    (supports i1 t1)
+    (calibration-target i1 t1)
+
+    ;; initial orientation
+    (pointing s1 dcal)
+
+    ;; resources
+    (power-avail s1)
+    (storage-avail s1)
+
+    ;; communication visibility
+    (visible s1 g1)
+  )
+
+  (:goal
+    (and
+      (have-image t1)
+    )
+  )
+)`;
+    }
+
 
     return "";
   };
@@ -363,7 +404,7 @@ export default function Visualizer() {
         uploadMutation.mutate({
           domainContent: "",
           problemContent: content,
-          domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers",
+          domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers" | "satellite" ,
           searchStrategy: selectedStrategy as any,
         });
       };
@@ -381,7 +422,7 @@ export default function Visualizer() {
       uploadMutation.mutate({
         domainContent: "",
         problemContent: getDefaultProblem(selectedDomain),
-        domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers",
+        domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers"  | "satellite",
         searchStrategy: selectedStrategy as any,
       });
     }

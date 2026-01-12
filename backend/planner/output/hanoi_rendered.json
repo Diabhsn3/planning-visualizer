@@ -48,17 +48,26 @@
       ],
       "relations": [
         {
-          "type": "is-disk",
-          "source": "d1"
+          "type": "smaller",
+          "source": "d1",
+          "target": "d2"
         },
         {
           "type": "is-disk",
-          "source": "d2"
+          "source": "d1"
         },
         {
           "type": "on",
           "source": "d1",
           "target": "d2"
+        },
+        {
+          "type": "is-peg",
+          "source": "b"
+        },
+        {
+          "type": "clear",
+          "source": "c"
         },
         {
           "type": "on",
@@ -67,28 +76,19 @@
         },
         {
           "type": "clear",
-          "source": "c"
-        },
-        {
-          "type": "clear",
           "source": "b"
-        },
-        {
-          "type": "smaller",
-          "source": "d1",
-          "target": "d2"
-        },
-        {
-          "type": "is-peg",
-          "source": "b"
-        },
-        {
-          "type": "is-peg",
-          "source": "a"
         },
         {
           "type": "clear",
           "source": "d1"
+        },
+        {
+          "type": "is-disk",
+          "source": "d2"
+        },
+        {
+          "type": "is-peg",
+          "source": "a"
         },
         {
           "type": "is-peg",
@@ -145,12 +145,13 @@
       ],
       "relations": [
         {
-          "type": "is-disk",
-          "source": "d1"
+          "type": "smaller",
+          "source": "d1",
+          "target": "d2"
         },
         {
           "type": "is-disk",
-          "source": "d2"
+          "source": "d1"
         },
         {
           "type": "on",
@@ -158,8 +159,12 @@
           "target": "d2"
         },
         {
+          "type": "is-peg",
+          "source": "b"
+        },
+        {
           "type": "clear",
-          "source": "p1"
+          "source": "c"
         },
         {
           "type": "on",
@@ -167,34 +172,29 @@
           "target": "a"
         },
         {
+          "type": "clear",
+          "source": "b"
+        },
+        {
+          "type": "clear",
+          "source": "d1"
+        },
+        {
+          "type": "clear",
+          "source": "p1"
+        },
+        {
+          "type": "is-disk",
+          "source": "d2"
+        },
+        {
           "type": "on",
           "source": "d3",
           "target": "p3"
         },
         {
-          "type": "clear",
-          "source": "c"
-        },
-        {
-          "type": "clear",
-          "source": "b"
-        },
-        {
-          "type": "smaller",
-          "source": "d1",
-          "target": "d2"
-        },
-        {
-          "type": "is-peg",
-          "source": "b"
-        },
-        {
           "type": "is-peg",
           "source": "a"
-        },
-        {
-          "type": "clear",
-          "source": "d1"
         },
         {
           "type": "is-peg",
@@ -252,17 +252,39 @@
       ],
       "relations": [
         {
-          "type": "is-disk",
-          "source": "d1"
+          "type": "smaller",
+          "source": "d1",
+          "target": "d2"
         },
         {
           "type": "is-disk",
-          "source": "d2"
+          "source": "d1"
         },
         {
           "type": "on",
           "source": "d1",
           "target": "d2"
+        },
+        {
+          "type": "is-peg",
+          "source": "b"
+        },
+        {
+          "type": "clear",
+          "source": "c"
+        },
+        {
+          "type": "on",
+          "source": "d2",
+          "target": "a"
+        },
+        {
+          "type": "clear",
+          "source": "b"
+        },
+        {
+          "type": "clear",
+          "source": "d1"
         },
         {
           "type": "clear",
@@ -271,7 +293,11 @@
         {
           "type": "on",
           "source": "d2",
-          "target": "a"
+          "target": "p3"
+        },
+        {
+          "type": "is-disk",
+          "source": "d2"
         },
         {
           "type": "on",
@@ -279,34 +305,8 @@
           "target": "p3"
         },
         {
-          "type": "clear",
-          "source": "c"
-        },
-        {
-          "type": "clear",
-          "source": "b"
-        },
-        {
-          "type": "smaller",
-          "source": "d1",
-          "target": "d2"
-        },
-        {
-          "type": "is-peg",
-          "source": "b"
-        },
-        {
           "type": "is-peg",
           "source": "a"
-        },
-        {
-          "type": "on",
-          "source": "d2",
-          "target": "p3"
-        },
-        {
-          "type": "clear",
-          "source": "d1"
         },
         {
           "type": "is-peg",
@@ -364,17 +364,39 @@
       ],
       "relations": [
         {
-          "type": "is-disk",
-          "source": "d1"
+          "type": "smaller",
+          "source": "d1",
+          "target": "d2"
         },
         {
           "type": "is-disk",
-          "source": "d2"
+          "source": "d1"
         },
         {
           "type": "on",
           "source": "d1",
           "target": "d2"
+        },
+        {
+          "type": "is-peg",
+          "source": "b"
+        },
+        {
+          "type": "clear",
+          "source": "c"
+        },
+        {
+          "type": "on",
+          "source": "d2",
+          "target": "a"
+        },
+        {
+          "type": "clear",
+          "source": "b"
+        },
+        {
+          "type": "clear",
+          "source": "d1"
         },
         {
           "type": "clear",
@@ -383,7 +405,11 @@
         {
           "type": "on",
           "source": "d2",
-          "target": "a"
+          "target": "p3"
+        },
+        {
+          "type": "is-disk",
+          "source": "d2"
         },
         {
           "type": "on",
@@ -391,39 +417,13 @@
           "target": "p3"
         },
         {
-          "type": "clear",
-          "source": "c"
-        },
-        {
-          "type": "clear",
-          "source": "b"
-        },
-        {
-          "type": "smaller",
-          "source": "d1",
-          "target": "d2"
-        },
-        {
-          "type": "on",
-          "source": "d1",
-          "target": "p3"
-        },
-        {
-          "type": "is-peg",
-          "source": "b"
-        },
-        {
           "type": "is-peg",
           "source": "a"
         },
         {
           "type": "on",
-          "source": "d2",
+          "source": "d1",
           "target": "p3"
-        },
-        {
-          "type": "clear",
-          "source": "d1"
         },
         {
           "type": "is-peg",

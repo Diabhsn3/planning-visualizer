@@ -13,6 +13,7 @@ from .base_renderer import (
 )
 from .blocks_world_renderer import BlocksWorldRenderer
 from .gripper_renderer import GripperRenderer
+from .satellite_renderer import SatelliteRenderer
 
 # TODO: Uncomment these imports when renderers are implemented
 from .depot_renderer import DepotRenderer
@@ -36,7 +37,7 @@ class RendererFactory:
         # 'hanoi': HanoiRenderer,
         # 'logistics': LogisticsRenderer,
         # 'rovers': RoversRenderer,
-        # 'satellite': SatelliteRenderer,
+        'satellite': SatelliteRenderer,
     }
     
     @classmethod

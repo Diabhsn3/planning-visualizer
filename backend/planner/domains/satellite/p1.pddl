@@ -4,32 +4,33 @@
   (:objects
     s1 - satellite
     i1 - instrument
+    t1 - target
     dcal d1 - direction
-    m1 - mode
     g1 - groundstation
   )
 
   (:init
     ;; instrument mounted on satellite
-    (on-board i1 s1)
+    (onboard i1 s1)
 
-    ;; instrument capabilities
-    (supports i1 m1)
+    ;; instrument capabilities + calibration target
+    (supports i1 t1)
+    (calibration-target i1 t1)
 
     ;; satellite initially pointing at calibration direction
     (pointing s1 dcal)
 
-    ;; instrument already powered on
-    (power-on i1)
+    ;; resources
+    (power-avail s1)
+    (storage-avail s1)
 
-    ;; visibility + link
-    (visible d1 g1)
-    (link-available g1)
+    ;; visibility for transmission
+    (visible s1 g1)
   )
 
   (:goal
     (and
-      (downlinked d1 m1 g1)
+      (have-image t1)
     )
   )
 )
