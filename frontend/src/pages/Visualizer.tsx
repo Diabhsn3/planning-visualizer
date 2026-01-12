@@ -299,6 +299,9 @@ export default function Visualizer() {
     (supports i1 t1)
     (calibration-target i1 t1)
 
+    ;; REQUIRED: Link target to its direction
+    (target-dir t1 d1)
+
     ;; initial orientation
     (pointing s1 dcal)
 

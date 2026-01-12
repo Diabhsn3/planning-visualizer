@@ -17,6 +17,9 @@
     (supports i1 t1)
     (calibration-target i1 t1)
 
+    ;; REQUIRED: Link target to its direction
+    (target-dir t1 d1)
+
     ;; satellite initially pointing at calibration direction
     (pointing s1 dcal)
 
