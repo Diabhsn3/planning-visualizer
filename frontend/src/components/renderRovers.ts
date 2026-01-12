@@ -722,10 +722,12 @@ export function renderRoversBackground(ctx: CanvasRenderingContext2D, width: num
 
 // ================= LEGEND FUNCTION =================
 export function renderRoversLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-  const LEGEND_WIDTH = 160;
-  const LEGEND_HEIGHT = 150;
+  const LEGEND_WIDTH = 180;
+  const LEGEND_HEIGHT = 130;
   const PADDING = 12;
-  const LINE_HEIGHT = 22;
+  const LINE_HEIGHT = 32;
+  const ICON_SIZE = 12;
+  const TEXT_OFFSET = 40;
 
   // Draw legend background
   ctx.save();
@@ -753,29 +755,100 @@ export function renderRoversLegend(ctx: CanvasRenderingContext2D, x: number, y: 
   ctx.font = "bold 12px Arial";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillText("Rovers Legend", x + PADDING, y + PADDING);
+  ctx.fillText("Objective Status", x + PADDING, y + PADDING);
 
-  let itemY = y + PADDING + LINE_HEIGHT + 4;
+  let itemY = y + PADDING + 24;
+  const iconX = x + PADDING + 14;
+
+  // 1. PENDING - Orange dashed crosshair
+  ctx.strokeStyle = "#FF9800";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, ICON_SIZE, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, ICON_SIZE * 0.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "#FF9800";
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // Crosshair lines
+  ctx.strokeStyle = "#FF9800";
+  ctx.beginPath();
+  ctx.moveTo(iconX - ICON_SIZE - 3, itemY);
+  ctx.lineTo(iconX - ICON_SIZE + 4, itemY);
+  ctx.moveTo(iconX + ICON_SIZE - 4, itemY);
+  ctx.lineTo(iconX + ICON_SIZE + 3, itemY);
+  ctx.moveTo(iconX, itemY - ICON_SIZE - 3);
+  ctx.lineTo(iconX, itemY - ICON_SIZE + 4);
+  ctx.moveTo(iconX, itemY + ICON_SIZE - 4);
+  ctx.lineTo(iconX, itemY + ICON_SIZE + 3);
+  ctx.stroke();
+  
+  ctx.fillStyle = "#333";
   ctx.font = "11px Arial";
-
-  ctx.fillStyle = "#d32f2f";
-  ctx.fillText("🤖  Rover", x + PADDING, itemY);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Pending", x + TEXT_OFFSET, itemY);
   itemY += LINE_HEIGHT;
 
-  ctx.fillStyle = "#1976d2";
-  ctx.fillText("📍  Waypoint", x + PADDING, itemY);
+  // 2. IMAGED - Blue solid crosshair
+  ctx.fillStyle = "rgba(33, 150, 243, 0.2)";
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, ICON_SIZE, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#2196F3";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, ICON_SIZE, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, ICON_SIZE * 0.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = "#2196F3";
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  // Crosshair lines
+  ctx.beginPath();
+  ctx.moveTo(iconX - ICON_SIZE - 3, itemY);
+  ctx.lineTo(iconX - ICON_SIZE + 4, itemY);
+  ctx.moveTo(iconX + ICON_SIZE - 4, itemY);
+  ctx.lineTo(iconX + ICON_SIZE + 3, itemY);
+  ctx.moveTo(iconX, itemY - ICON_SIZE - 3);
+  ctx.lineTo(iconX, itemY - ICON_SIZE + 4);
+  ctx.moveTo(iconX, itemY + ICON_SIZE - 4);
+  ctx.lineTo(iconX, itemY + ICON_SIZE + 3);
+  ctx.stroke();
+  
+  ctx.fillStyle = "#333";
+  ctx.fillText("Imaged", x + TEXT_OFFSET, itemY);
   itemY += LINE_HEIGHT;
 
-  ctx.fillStyle = "#388e3c";
-  ctx.fillText("📷  Objective", x + PADDING, itemY);
-  itemY += LINE_HEIGHT;
-
-  ctx.fillStyle = "#7b1fa2";
-  ctx.fillText("📡  Lander", x + PADDING, itemY);
-  itemY += LINE_HEIGHT;
-
-  ctx.fillStyle = "#f57c00";
-  ctx.fillText("⚙️  Store (sample)", x + PADDING, itemY);
+  // 3. SENT - Green filled circle with checkmark
+  ctx.fillStyle = "#4CAF50";
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, ICON_SIZE, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(iconX, itemY, ICON_SIZE, 0, Math.PI * 2);
+  ctx.stroke();
+  // Checkmark
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(iconX - 5, itemY);
+  ctx.lineTo(iconX - 1, itemY + 4);
+  ctx.lineTo(iconX + 6, itemY - 4);
+  ctx.stroke();
+  
+  ctx.fillStyle = "#333";
+  ctx.fillText("Sent", x + TEXT_OFFSET, itemY);
 
   ctx.restore();
 }
