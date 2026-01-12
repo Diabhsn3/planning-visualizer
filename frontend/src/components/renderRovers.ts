@@ -671,3 +671,13 @@ export function renderRovers(
     });
   }
 }
+
+
+// ================= BACKGROUND FUNCTION (Optional) =================
+// Return undefined to use default grid background
+export const renderRoversBackground = undefined;
+
+// ================= LEGEND FUNCTION (Optional) =================
+// Return undefined to skip legend
+export const renderRoversLegend = undefined;
+

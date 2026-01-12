@@ -230,3 +230,13 @@ export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState)
   ctx.fillStyle = "#666";
   ctx.fillText(`${disks.length} disk${disks.length !== 1 ? 's' : ''}`, WORLD_WIDTH / 2, 45);
 }
+
+
+// ================= BACKGROUND FUNCTION (Optional) =================
+// Return undefined to use default grid background
+export const renderHanoiBackground = undefined;
+
+// ================= LEGEND FUNCTION (Optional) =================
+// Return undefined to skip legend
+export const renderHanoiLegend = undefined;
+

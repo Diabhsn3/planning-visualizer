@@ -477,3 +477,13 @@ function drawContainer(
     ctx.setLineDash([]);
   }
 }
+
+
+// ================= BACKGROUND FUNCTION (Optional) =================
+// Return undefined to use default grid background
+export const renderDepotBackground = undefined;
+
+// ================= LEGEND FUNCTION (Optional) =================
+// Return undefined to skip legend
+export const renderDepotLegend = undefined;
+

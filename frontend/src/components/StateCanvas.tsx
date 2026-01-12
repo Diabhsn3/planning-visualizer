@@ -1,8 +1,43 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { renderDepot } from "@/components/renderDepot";
-import { renderSatellite } from "@/components/renderSatellite";
-import {renderHanoi} from "@/components/renderHanoi";
-import {renderRovers} from "@/components/renderRovers";
+import { renderDepot, renderDepotBackground, renderDepotLegend } from "@/components/renderDepot";
+import { renderSatellite, renderSatelliteBackground, renderSatelliteLegend } from "@/components/renderSatellite";
+import { renderHanoi, renderHanoiBackground, renderHanoiLegend } from "@/components/renderHanoi";
+import { renderRovers, renderRoversBackground, renderRoversLegend } from "@/components/renderRovers";
+
+// Type definitions for optional background and legend functions
+type BackgroundRenderer = ((ctx: CanvasRenderingContext2D, width: number, height: number) => void) | undefined;
+type LegendRenderer = ((ctx: CanvasRenderingContext2D, x: number, y: number) => void) | undefined;
+
+// Domain renderer configuration
+interface DomainRenderer {
+  render: (ctx: CanvasRenderingContext2D, state: RenderedState) => void;
+  background?: BackgroundRenderer;
+  legend?: LegendRenderer;
+}
+
+// Map of domain names to their renderer configurations
+const domainRenderers: Record<string, DomainRenderer> = {
+  "depot": {
+    render: renderDepot,
+    background: renderDepotBackground,
+    legend: renderDepotLegend,
+  },
+  "satellite": {
+    render: renderSatellite,
+    background: renderSatelliteBackground,
+    legend: renderSatelliteLegend,
+  },
+  "hanoi": {
+    render: renderHanoi,
+    background: renderHanoiBackground,
+    legend: renderHanoiLegend,
+  },
+  "rovers": {
+    render: renderRovers,
+    background: renderRoversBackground,
+    legend: renderRoversLegend,
+  },
+};
 
 
 // Global robot image for gripper domain
@@ -140,58 +175,79 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Set background
-    ctx.fillStyle = "#f0f4f8";
-    ctx.fillRect(0, 0, width, height);
+    // Get domain-specific renderer configuration
+    const domainConfig = domainRenderers[state.domain];
 
-    // Draw grid background (fixed, doesn't move with zoom/pan)
+    // ============================================
+    // 1. DRAW BACKGROUND (BEFORE zoom/pan transform)
+    // ============================================
+    if (domainConfig?.background) {
+      // Use domain-specific background
+      domainConfig.background(ctx, width, height);
+    } else {
+      // Default background with grid
+      drawDefaultBackground(ctx, width, height);
+    }
+
+    // ============================================
+    // 2. APPLY ZOOM/PAN TRANSFORM
+    // ============================================
+    ctx.save();
+    ctx.translate(offset.x, offset.y);
+    ctx.scale(scale, scale);
+
+    // ============================================
+    // 3. DRAW MAIN VISUALIZATION
+    // ============================================
+    if (domainConfig) {
+      domainConfig.render(ctx, state);
+    } else if (state.domain === "blocks-world") {
+      renderBlocksWorld(ctx, state);
+    } else if (state.domain === "gripper") {
+      renderGripper(ctx, state);
+    } else {
+      renderDefault(ctx, state);
+    }
+
+    // Restore context state (removes zoom/pan transform)
+    ctx.restore();
+
+    // ============================================
+    // 4. DRAW LEGEND (AFTER restoring transform - fixed position)
+    // ============================================
+    if (domainConfig?.legend) {
+      // Draw legend at fixed position (top-left, below zoom controls)
+      domainConfig.legend(ctx, 20, 70);
+    }
+  }, [state, width, height, scale, offset, isFirst, isLast]);
+
+  // Default background with grid pattern
+  function drawDefaultBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    // Set background color
+    ctx.fillStyle = "#f0f4f8";
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw grid
     const GRID_SIZE = 40;
     ctx.strokeStyle = "rgba(0, 0, 0, 0.08)";
     ctx.lineWidth = 1;
     
     // Draw vertical lines
-    for (let x = 0; x <= width; x += GRID_SIZE) {
+    for (let x = 0; x <= w; x += GRID_SIZE) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
+      ctx.lineTo(x, h);
       ctx.stroke();
     }
     
     // Draw horizontal lines
-    for (let y = 0; y <= height; y += GRID_SIZE) {
+    for (let y = 0; y <= h; y += GRID_SIZE) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
+      ctx.lineTo(w, y);
       ctx.stroke();
     }
-
-    // Save context state
-    ctx.save();
-
-    // Apply transformations for zoom and pan
-    ctx.translate(offset.x, offset.y);
-    ctx.scale(scale, scale);
-
-    // Render based on domain
-    if (state.domain === "blocks-world") {
-      renderBlocksWorld(ctx, state);
-    } else if (state.domain === "gripper") {
-      renderGripper(ctx, state);
-    } else if(state.domain === "depot"){
-      renderDepot(ctx, state);
-    } else if(state.domain === "hanoi"){
-      renderHanoi(ctx, state);
-    } else if(state.domain === "rovers"){
-      renderRovers(ctx, state);
-    } else if(state.domain === "satellite"){
-      renderSatellite(ctx, state);
-    } else {
-      renderDefault(ctx, state);
-    }
-
-    // Restore context state
-    ctx.restore();
-    }, [state, width, height, scale, offset, isFirst, isLast]);
+  }
 
   // Handle mouse down for panning
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {

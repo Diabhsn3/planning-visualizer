@@ -790,3 +790,121 @@ export function renderSatellite(ctx: CanvasRenderingContext2D, state: RenderedSt
     ctx.fillText(`Objects found: ${state.objects.length}`, 30, 55);
   }
 }
+
+
+// ================= BACKGROUND FUNCTION (Optional) =================
+// This function is called by StateCanvas BEFORE zoom/pan transform
+// to draw a domain-specific background
+export function renderSatelliteBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  // Space-themed gradient background
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#0a0a2e");  // Dark space blue at top
+  gradient.addColorStop(0.5, "#1a1a4e"); // Slightly lighter in middle
+  gradient.addColorStop(1, "#0d1b2a");  // Dark blue-gray at bottom
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw stars
+  ctx.save();
+  for (let i = 0; i < 100; i++) {
+    // Use deterministic positions based on index for consistency
+    const x = (i * 97 + 13) % width;
+    const y = (i * 53 + 7) % height;
+    const r = (i % 3) * 0.5 + 0.5; // Star radius: 0.5 to 2
+    const brightness = 0.3 + (i % 5) * 0.15; // Varying brightness
+    
+    ctx.fillStyle = `rgba(255, 255, 255, ${brightness})`;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Draw subtle grid overlay for reference
+  ctx.save();
+  ctx.strokeStyle = "rgba(100, 150, 200, 0.1)";
+  ctx.lineWidth = 1;
+  const GRID_SIZE = 50;
+  
+  for (let x = 0; x <= width; x += GRID_SIZE) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  
+  for (let y = 0; y <= height; y += GRID_SIZE) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ================= LEGEND FUNCTION (Optional) =================
+// This function is called by StateCanvas AFTER zoom/pan transform is restored
+// to draw a legend at a fixed screen position
+export function renderSatelliteLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const LEGEND_WIDTH = 160;
+  const LEGEND_HEIGHT = 130;
+  const PADDING = 12;
+  const LINE_HEIGHT = 22;
+
+  // Draw legend background with rounded corners
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.15)";
+  ctx.lineWidth = 1;
+  
+  // Rounded rectangle
+  const radius = 8;
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + LEGEND_WIDTH - radius, y);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y, x + LEGEND_WIDTH, y + radius);
+  ctx.lineTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT - radius);
+  ctx.quadraticCurveTo(x + LEGEND_WIDTH, y + LEGEND_HEIGHT, x + LEGEND_WIDTH - radius, y + LEGEND_HEIGHT);
+  ctx.lineTo(x + radius, y + LEGEND_HEIGHT);
+  ctx.quadraticCurveTo(x, y + LEGEND_HEIGHT, x, y + LEGEND_HEIGHT - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Legend title
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 12px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("Satellite Legend", x + PADDING, y + PADDING);
+
+  // Draw legend items
+  let itemY = y + PADDING + LINE_HEIGHT + 4;
+  ctx.font = "11px Arial";
+
+  // Satellite icon
+  ctx.fillStyle = "#4a90d9";
+  ctx.fillText("🛰️  Satellite", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  // Ground station icon
+  ctx.fillStyle = "#6b8e23";
+  ctx.fillText("📡  Ground Station", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  // Target icons with status
+  ctx.fillStyle = "#888";
+  ctx.fillText("⭕  Target (pending)", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#4CAF50";
+  ctx.fillText("✅  Target (imaged)", x + PADDING, itemY);
+  itemY += LINE_HEIGHT;
+
+  ctx.fillStyle = "#2196F3";
+  ctx.fillText("📤  Target (sent)", x + PADDING, itemY);
+
+  ctx.restore();
+}
