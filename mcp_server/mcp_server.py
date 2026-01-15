@@ -67,6 +67,7 @@ CRITICAL RULES:
 10. Use simple ternary operators carefully: `condition ? valueA : valueB`.
 
 
+
 Output the required functions (main render and legend). Optionally include background if appropriate for the domain. Start with 'function render...'."""
 
 
@@ -166,6 +167,85 @@ def validate_renderer(
         return json.dumps({"valid": False, "errors": errors, "warnings": warnings})
     else:
         return json.dumps({"valid": True, "errors": [], "warnings": warnings, "message": "All required functions are valid"})
+
+
+@mcp.tool(
+    name="clean_code",
+    description="Clean generated code by removing markdown code blocks, TypeScript annotations, and extra whitespace.",
+)
+def clean_code(
+    code: str = Field(description="The raw code to clean"),
+) -> str:
+    """Clean code by removing markdown formatting and TypeScript annotations."""
+    try:
+        # Remove markdown code blocks
+        cleaned = re.sub(r'^```(?:javascript|typescript|js|ts)?\s*\n?', '', code, flags=re.MULTILINE)
+        cleaned = re.sub(r'\n?```\s*$', '', cleaned)
+        
+        # Remove TypeScript interface and type declarations
+        cleaned = re.sub(r'^\s*(interface|type)\s+\w+[^{]*\{[^}]*\}\s*;?\s*$', '', cleaned, flags=re.MULTILINE)
+        
+        # Remove TypeScript type annotations from function parameters
+        # e.g., (ctx: CanvasRenderingContext2D, state: any) -> (ctx, state)
+        cleaned = re.sub(r':\s*[A-Za-z_][A-Za-z0-9_<>\[\]|&\s,]*(?=[,)])', '', cleaned)
+        
+        # Remove TypeScript return type annotations
+        # e.g., function foo(): void { -> function foo() {
+        cleaned = re.sub(r'\)\s*:\s*[A-Za-z_][A-Za-z0-9_<>\[\]|&\s]*\s*\{', ') {', cleaned)
+        
+        # Remove TypeScript type annotations from variable declarations
+        # e.g., const x: number = 5 -> const x = 5
+        cleaned = re.sub(r'(const|let|var)\s+(\w+)\s*:\s*[A-Za-z_][A-Za-z0-9_<>\[\]|&\s]*\s*=', r'\1 \2 =', cleaned)
+        
+        # Remove 'as Type' casts (including generic types like Record<string, any>)
+        # This needs to handle nested angle brackets
+        def remove_as_casts(text):
+            result = []
+            i = 0
+            while i < len(text):
+                # Look for ' as '
+                if text[i:i+4] == ' as ':
+                    # Find the end of the type annotation
+                    j = i + 4
+                    # Skip whitespace
+                    while j < len(text) and text[j] in ' \t':
+                        j += 1
+                    # Skip the type name and any generic parameters
+                    depth = 0
+                    while j < len(text):
+                        if text[j] == '<':
+                            depth += 1
+                        elif text[j] == '>':
+                            depth -= 1
+                            if depth == 0:
+                                j += 1
+                                break
+                        elif depth == 0 and text[j] in ';,)\n ':
+                            break
+                        j += 1
+                    i = j
+                else:
+                    result.append(text[i])
+                    i += 1
+            return ''.join(result)
+        
+        cleaned = remove_as_casts(cleaned)
+        
+        # Remove generic type parameters from function calls
+        # e.g., Array<string> -> Array
+        cleaned = re.sub(r'<[A-Za-z_][A-Za-z0-9_<>\[\]|&\s,]*>', '', cleaned)
+        
+        cleaned = cleaned.strip()
+        
+        return json.dumps({
+            "success": True,
+            "code": cleaned
+        })
+    except Exception as e:
+        return json.dumps({
+            "success": False,
+            "error": str(e)
+        })
 
 
 if __name__ == "__main__":
