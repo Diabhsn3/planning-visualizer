@@ -41,7 +41,7 @@ export function GenerationProgress({ isGenerating, onComplete, onShowResult }: G
   const [showLogs, setShowLogs] = useState(true); // Default to showing logs
   const [isFinished, setIsFinished] = useState(false); // Track if generation finished
   const [userDismissed, setUserDismissed] = useState(false); // Track if user clicked Show Result
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsContainerRef = useRef<HTMLDivElement>(null);
 
   // Poll for progress updates
   const { data } = trpc.visualizer.getGenerationProgress.useQuery(
@@ -67,10 +67,11 @@ export function GenerationProgress({ isGenerating, onComplete, onShowResult }: G
     }
   }, [data, onComplete]);
 
-  // Auto-scroll logs to bottom
+  // Auto-scroll logs to bottom (within container only, not the page)
   useEffect(() => {
-    if (showLogs && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    if (showLogs && logsContainerRef.current) {
+      const container = logsContainerRef.current;
+      container.scrollTop = container.scrollHeight;
     }
   }, [progress?.detailedLogs, showLogs]);
 
@@ -209,7 +210,10 @@ export function GenerationProgress({ isGenerating, onComplete, onShowResult }: G
 
         {/* Detailed Logs - Terminal Style */}
         {showLogs && (
-          <div className="bg-gray-900 rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs">
+          <div 
+            ref={logsContainerRef}
+            className="bg-gray-900 rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs"
+          >
             {progress?.detailedLogs && progress.detailedLogs.length > 0 ? (
               progress.detailedLogs.map((log, index) => (
                 <div
@@ -236,7 +240,7 @@ export function GenerationProgress({ isGenerating, onComplete, onShowResult }: G
                 </div>
               ))
             )}
-            <div ref={logsEndRef} />
+
           </div>
         )}
 
