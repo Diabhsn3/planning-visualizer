@@ -5,7 +5,7 @@ import { StateCanvas } from "@/components/StateCanvas";
 import { 
   Play, Pause, SkipForward, SkipBack, Upload, FileText, 
   AlertTriangle, Clock, Zap, Settings, 
-  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown
+  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown, Trash2
 } from "lucide-react";
 
 // Search strategy type
@@ -40,6 +40,7 @@ export default function Visualizer() {
   const [showExampleProblem, setShowExampleProblem] = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [visualizationMode, setVisualizationMode] = useState<"basic" | "llm">("basic");
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef = useRef<HTMLDivElement>(null);
   
@@ -847,6 +848,71 @@ export default function Visualizer() {
                 )}
               </div>
               )}
+            </div>
+                        {/* Visualization Mode Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100">
+                <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-500" />
+                  Visualization Mode
+                </h2>
+              </div>
+              <div className="p-4 space-y-3">
+                {/* Basic Visualizer */}
+                <button
+                  onClick={() => setVisualizationMode("basic")}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-200 ${
+                    visualizationMode === "basic"
+                      ? "bg-indigo-50 border-2 border-indigo-500 shadow-sm"
+                      : "bg-slate-50 border-2 border-transparent hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center">
+                    <Cpu className="w-4 h-4 text-slate-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className={`font-medium ${visualizationMode === "basic" ? "text-indigo-900" : "text-slate-900"}`}>
+                      Basic Visualizer
+                    </div>
+                    <div className="text-xs text-slate-500">Hand-crafted domain-specific renderers</div>
+                  </div>
+                  {visualizationMode === "basic" && (
+                    <CheckCircle2 className="w-5 h-5 text-indigo-500" />
+                  )}
+                </button>
+
+                {/* LLM-Based Visualizer */}
+                <button
+                  onClick={() => setVisualizationMode("llm")}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-200 ${
+                    visualizationMode === "llm"
+                      ? "bg-purple-50 border-2 border-purple-500 shadow-sm"
+                      : "bg-slate-50 border-2 border-transparent hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className={`font-medium ${visualizationMode === "llm" ? "text-purple-900" : "text-slate-900"}`}>
+                      LLM-Based Visualizer
+                    </div>
+                    <div className="text-xs text-slate-500">AI-generated rendering code</div>
+                  </div>
+                  {visualizationMode === "llm" && (
+                    <CheckCircle2 className="w-5 h-5 text-purple-500" />
+                  )}
+                </button>
+
+                {visualizationMode === "llm" && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                    <p className="text-xs text-purple-800">
+                      <strong>Note:</strong> LLM mode generates fresh TypeScript code using AI.
+                      This may take 30-60 seconds.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Generate Button */}
