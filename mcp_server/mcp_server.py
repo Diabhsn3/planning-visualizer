@@ -248,5 +248,65 @@ def clean_code(
         })
 
 
+@mcp.tool(
+    name="get_domain_hints",
+    description="Get visualization hints for a specific planning domain.",
+)
+def get_domain_hints(
+    domain_name: str = Field(description="Name of the planning domain"),
+) -> str:
+    """Get visualization hints for a domain."""
+    
+    hints = {
+        "hanoi": {
+            "description": "Tower of Hanoi puzzle with disks on pegs",
+            "layout": "3 pegs arranged horizontally, disks stacked vertically",
+            "background": "Wooden texture or gradient",
+            "legend": "Show disk sizes and colors",
+        },
+        "blocks-world": {
+            "description": "Blocks stacking puzzle",
+            "layout": "blocks on table or stacked",
+            "background": "Table surface with wood grain",
+            "legend": "Show block colors and arm state",
+        },
+        "gripper": {
+            "description": "Robot gripper moving balls between rooms",
+            "layout": "rooms side by side, robot moves between them",
+            "background": "Room floor pattern",
+            "legend": "Show ball colors and gripper states",
+        },
+        "logistics": {
+            "description": "Package delivery with trucks and planes",
+            "layout": "cities with locations, vehicles move between them",
+            "background": "Map-like terrain",
+            "legend": "Show vehicle types and package states",
+        },
+        "satellite": {
+            "description": "Satellites taking images of targets",
+            "layout": "satellites in orbit, targets on ground",
+            "background": "Space/Earth view",
+            "legend": "Show satellite modes and target types",
+        },
+    }
+    
+    domain_key = domain_name.lower().replace(" ", "-").replace("_", "-")
+    
+    if domain_key in hints:
+        return json.dumps({"found": True, "domain": domain_key, "hints": hints[domain_key]})
+    else:
+        return json.dumps({
+            "found": False,
+            "domain": domain_key,
+            "hints": {
+                "description": "Unknown domain - analyze the state structure",
+                "layout": "Arrange objects based on relations",
+                "background": "Use a subtle gradient or pattern",
+                "legend": "Show all object types and their colors"
+            },
+            "available_domains": list(hints.keys())
+        })
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
