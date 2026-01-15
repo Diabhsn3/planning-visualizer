@@ -6,10 +6,13 @@ This is a PURE TOOL SERVER - it does NOT call Claude.
 Claude orchestration happens in the Node.js backend.
 """
 
+import os
 import json
-from typing import Union
-
+import re
+import subprocess
+import tempfile
 from pydantic import Field
+from typing import Union
 from mcp.server.fastmcp import FastMCP
 
 # Create the MCP server
@@ -64,17 +67,12 @@ CRITICAL RULES:
 10. Use simple ternary operators carefully: `condition ? valueA : valueB`.
 
 
-Output the required functions (main render and legend). Optionally include background if appropriate for the domain.
-Start with 'function render...'.
-"""
+Output the required functions (main render and legend). Optionally include background if appropriate for the domain. Start with 'function render...'."""
 
 
 @mcp.tool(
     name="get_generation_prompt",
-    description=(
-        "Get the system and user prompts for generating a renderer. "
-        "Returns prompts that should be sent to Claude."
-    ),
+    description="Get the system and user prompts for generating a renderer. Returns prompts that should be sent to Claude.",
 )
 def get_generation_prompt(
     domain_name: str = Field(description="Name of the planning domain"),
@@ -84,32 +82,90 @@ def get_generation_prompt(
     """Get prompts for renderer generation."""
     try:
         state_data = json.loads(example_state) if isinstance(example_state, str) else example_state
-
+        
         # Convert domain name to PascalCase for function names
-        domain_pascal = "".join(
-            word.capitalize() for word in domain_name.replace("-", " ").replace("_", " ").split()
-        )
-
+        domain_pascal = ''.join(word.capitalize() for word in domain_name.replace('-', ' ').replace('_', ' ').split())
+        
         system_prompt = get_system_prompt(domain_pascal)
-
+        
         user_prompt = f'Generate renderer functions for "{domain_name}" domain.\n'
         user_prompt += f"Use PascalCase name: {domain_pascal}\n\n"
         user_prompt += f"EXAMPLE STATE:\n{json.dumps(state_data, indent=2)}\n\n"
         if style_hints:
             user_prompt += f"STYLE HINTS: {style_hints}\n\n"
         user_prompt += "Generate ALL THREE JavaScript functions (render, background, legend)."
-
-        return json.dumps(
-            {
-                "success": True,
-                "system_prompt": system_prompt,
-                "user_prompt": user_prompt,
-                "domain_pascal": domain_pascal,
-            }
-        )
-
+        
+        return json.dumps({
+            "success": True,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
+            "domain_pascal": domain_pascal
+        })
+        
     except Exception as e:
-        return json.dumps({"success": False, "error": str(e)})
+        return json.dumps({
+            "success": False,
+            "error": str(e)
+        })
+
+
+@mcp.tool(
+    name="validate_renderer",
+    description="Validate JavaScript renderer code for syntax errors.",
+)
+def validate_renderer(
+    code: str = Field(description="The JavaScript renderer code to validate"),
+    domain_name: str = Field(description="Expected domain name"),
+) -> str:
+    """Validate renderer code for syntax errors."""
+    errors = []
+    warnings = []
+    
+    # Convert domain name to PascalCase
+    domain_pascal = ''.join(word.capitalize() for word in domain_name.replace('-', ' ').replace('_', ' ').split())
+    
+    # Check for required functions
+    main_func = f"function render{domain_pascal}"
+    legend_func = f"function render{domain_pascal}Legend"
+    bg_func = f"function render{domain_pascal}Background"
+    
+    if main_func not in code:
+        errors.append(f"Missing main render function: {main_func}")
+    
+    if legend_func not in code:
+        errors.append(f"Missing legend function: {legend_func}")
+    
+    # Background is optional - just note if missing
+    if bg_func not in code:
+        warnings.append(f"No background function (optional): {bg_func}")
+    
+    if "ctx" not in code:
+        errors.append("Missing 'ctx' parameter")
+    
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
+            f.write(code)
+            temp_path = f.name
+        
+        result = subprocess.run(
+            ['node', '--check', temp_path],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode != 0:
+            errors.append(f"JavaScript syntax error: {result.stderr.strip()[:200]}")
+        
+        os.unlink(temp_path)
+        
+    except Exception as e:
+        errors.append(f"Validation error: {str(e)}")
+    
+    if errors:
+        return json.dumps({"valid": False, "errors": errors, "warnings": warnings})
+    else:
+        return json.dumps({"valid": True, "errors": [], "warnings": warnings, "message": "All required functions are valid"})
 
 
 if __name__ == "__main__":
