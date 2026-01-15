@@ -5,6 +5,7 @@
 
 import path from "path";
 import { fileURLToPath } from "url";
+import { generateRendererCode, isLlmAvailable } from "./llm-orchestrator.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,7 +20,6 @@ export interface LLMRendererResult {
 
 /**
  * Generate an LLM-based renderer for a domain
- * Currently returns a stub - MCP integration coming next
  */
 export async function generateLLMRenderer(
   domainName: string,
@@ -30,50 +30,55 @@ export async function generateLLMRenderer(
   console.log(`[LLM Renderer] Session ID: ${sessionId || "none"}`);
   console.log(`[LLM Renderer] States count: ${states.length}`);
   
-  // Stub implementation - returns mock code
-  const domainPascal = domainName
-    .split(/[-_\s]/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join("");
+  // Check if LLM is available
+  if (!isLlmAvailable()) {
+    return {
+      success: false,
+      error: "ANTHROPIC_API_KEY not configured. LLM mode is not available.",
+      sessionId,
+    };
+  }
   
-  const mockCode = `
-// Mock LLM-generated renderer for ${domainName}
-function render${domainPascal}(ctx, state) {
-  ctx.fillStyle = "#333";
-  ctx.font = "20px Arial";
-  ctx.fillText("LLM Renderer Stub for ${domainName}", 50, 50);
-  ctx.fillText("MCP integration pending...", 50, 80);
-}
-
-function render${domainPascal}Background(ctx, width, height) {
-  ctx.fillStyle = "#f0f0f0";
-  ctx.fillRect(0, 0, width, height);
-}
-
-function render${domainPascal}Legend(ctx, x, y) {
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
-  ctx.fillRect(x, y, 150, 60);
-  ctx.strokeStyle = "#ccc";
-  ctx.strokeRect(x, y, 150, 60);
-  ctx.fillStyle = "#333";
-  ctx.font = "12px Arial";
-  ctx.fillText("Legend (stub)", x + 10, y + 30);
-}
-`.trim();
-
-  return {
-    success: true,
-    code: mockCode,
-    cached: false,
-    sessionId,
-  };
+  try {
+    // Use the first state as an example for generation
+    const exampleState = states[0] || {};
+    
+    // Call the LLM orchestrator
+    const result = await generateRendererCode(domainName, exampleState);
+    
+    if (result.success && result.code) {
+      console.log(`[LLM Renderer] Generation successful after ${result.attempts} attempt(s)`);
+      
+      return {
+        success: true,
+        code: result.code,
+        cached: false,
+        sessionId,
+      };
+    } else {
+      console.error(`[LLM Renderer] Generation failed: ${result.error}`);
+      return {
+        success: false,
+        error: result.error || "Unknown error during generation",
+        sessionId,
+      };
+    }
+    
+  } catch (error: any) {
+    console.error("[LLM Renderer] Error:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to generate renderer",
+      sessionId,
+    };
+  }
 }
 
 /**
  * Check if a cached renderer exists for a domain
  */
 export async function checkCachedRenderer(domainName: string): Promise<{ found: boolean; code: string | null }> {
-  // Stub - no caching yet
+  // No caching yet - will be added in next commit
   return { found: false, code: null };
 }
 
@@ -81,6 +86,6 @@ export async function checkCachedRenderer(domainName: string): Promise<{ found: 
  * Clear cached renderers
  */
 export async function clearRendererCache(): Promise<{ cleared: number }> {
-  // Stub - no caching yet
+  // No caching yet - will be added in next commit
   return { cleared: 0 };
 }
