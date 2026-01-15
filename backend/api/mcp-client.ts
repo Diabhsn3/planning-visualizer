@@ -111,3 +111,27 @@ export async function disconnectMcpClient(): Promise<void> {
 export function isMcpConnected(): boolean {
   return mcpClient !== null;
 }
+
+/**
+ * Call an MCP tool
+ */
+export async function callTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+  const client = await getMcpClient();
+  
+  console.log(`[MCP Client] Calling tool: ${toolName}`);
+  
+  const result = await client.callTool({
+    name: toolName,
+    arguments: args,
+  });
+
+  // Extract text content from result
+  if (result.content && Array.isArray(result.content)) {
+    const textContent = result.content.find((c: any) => c.type === "text");
+    if (textContent && "text" in textContent) {
+      return textContent.text;
+    }
+  }
+
+  return JSON.stringify(result);
+}
