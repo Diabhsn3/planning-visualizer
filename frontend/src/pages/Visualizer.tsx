@@ -41,6 +41,9 @@ export default function Visualizer() {
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [visualizationMode, setVisualizationMode] = useState<"basic" | "llm">("basic");
+  const [llmCode, setLlmCode] = useState<string | null>(null);
+  const [llmError, setLlmError] = useState<string | null>(null);
+  const [isLlmGenerating, setIsLlmGenerating] = useState(false);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef = useRef<HTMLDivElement>(null);
   
@@ -65,6 +68,36 @@ export default function Visualizer() {
     { domainName: selectedDomain as "blocks-world" | "gripper" | "depot" | "hanoi" | "rovers" | "satellite" },
     { enabled: showDomainDefinition }
   );
+    // LLM Renderer queries and mutations
+  const checkCachedRendererQuery = trpc.visualizer.checkCachedRenderer.useQuery(
+    { domainName: selectedDomain },
+    { enabled: false } // Only fetch on demand
+  );
+
+  const clearCacheMutation = trpc.visualizer.clearRendererCache.useMutation({
+    onSuccess: () => {
+      console.log('[Visualizer] Cache cleared');
+      setLlmCode(null);
+    },
+  });
+
+  const llmRendererMutation = trpc.visualizer.generateLLMRenderer.useMutation({
+    onSuccess: (data: { success: boolean; code?: string; cached?: boolean; sessionId?: string }) => {
+      setIsLlmGenerating(false);
+      if (data.success && data.code) {
+        setLlmCode(data.code);
+        setLlmError(null);
+        console.log('[Visualizer] LLM renderer generated successfully');
+      } else {
+        setLlmError("Failed to generate LLM renderer");
+      }
+    },
+    onError: (error: any) => {
+      setIsLlmGenerating(false);
+      setLlmCode(null);
+      setLlmError(error.message || "Failed to generate LLM renderer");
+    },
+  });
 
   const domains = [
     { id: "blocks-world", name: "Blocks World", description: "Classic block stacking problem", icon: "🧱" },
@@ -338,6 +371,30 @@ export default function Visualizer() {
         info: data.planner_info || "Unknown",
         strategy: data.search_strategy
       });
+            // If LLM mode, check cache first then generate if needed
+      if (visualizationMode === "llm" && data.states.length > 0) {
+        const domainForLlm = data.domain || selectedDomain;
+        
+        // Check cache first
+        checkCachedRendererQuery.refetch().then((result: { data?: { found: boolean; code: string | null } }) => {
+          if (result.data?.found && result.data.code) {
+            // Use cached renderer
+            console.log('[Visualizer] Using cached LLM renderer');
+            setLlmCode(result.data.code);
+            setLlmError(null);
+          } else {
+            // No cache, generate new
+            console.log('[Visualizer] No cached renderer, generating new');
+            setIsLlmGenerating(true);
+            setLlmCode(null);
+            setLlmError(null);
+            llmRendererMutation.mutate({
+              domainName: domainForLlm,
+              states: data.states,
+            });
+          }
+        });
+      }
     },
     onError: (error: any) => {
       setIsProcessing(false);
