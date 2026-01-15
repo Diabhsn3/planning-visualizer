@@ -124,7 +124,7 @@ ${code}
  * This function:
  * 1. Creates an MCP client (TypeScript) that connects to Python MCP server
  * 2. Uses LLM Orchestrator for provider-agnostic LLM operations
- * 3. Executes tools (get_domain_hints, get_generation_prompt, validate_renderer)
+ * 3. Executes tools (get_domain_hints, prepare_generation_artifacts, validate_renderer)
  * 4. Returns the generated code
  * 
  * The architecture supports MCP sampling, enabling the server to request

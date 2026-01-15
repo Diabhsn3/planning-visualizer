@@ -84,15 +84,15 @@ Output the required functions (main render and legend). Optionally include backg
 
 
 @mcp.tool(
-    name="get_generation_prompt",
-    description="Get the system and user prompts for generating a renderer. Returns prompts that should be sent to Claude.",
+    name="prepare_generation_artifacts",
+    description="Prepare the system prompt, user prompt, and PascalCase domain name for renderer generation.",
 )
-def get_generation_prompt(
+def prepare_generation_artifacts(
     domain_name: str = Field(description="Name of the planning domain"),
     example_state: Union[str, dict] = Field(description="JSON string or dict containing an example state"),
     style_hints: str = Field(default="", description="Optional style hints"),
 ) -> str:
-    """Get prompts for renderer generation."""
+    """Prepare all artifacts needed for the LLM to generate a renderer."""
     try:
         state_data = json.loads(example_state) if isinstance(example_state, str) else example_state
         

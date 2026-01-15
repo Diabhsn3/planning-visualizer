@@ -454,13 +454,13 @@ export async function generateRendererWithLLM(
 
     // Step 2: Get generation prompts
     reportProgress(2, "Preparing generation prompts...");
-    log('MCPClient', 'Calling tool: get_generation_prompt');
-    const promptResult = await mcpClient.callTool("get_generation_prompt", {
+    log('MCPClient', 'Calling tool: prepare_generation_artifacts');
+    const promptResult = await mcpClient.callTool("prepare_generation_artifacts", {
       domain_name: domainName,
       example_state: JSON.stringify(exampleState),
       style_hints: styleHints || "",
     });
-    const promptData = safeParseToolResult(promptResult, "get_generation_prompt") as {
+    const promptData = safeParseToolResult(promptResult, "prepare_generation_artifacts") as {
       success: boolean;
       system_prompt?: string;
       user_prompt?: string;

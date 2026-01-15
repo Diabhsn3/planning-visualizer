@@ -46,14 +46,14 @@ async function main() {
     console.error("✗ Failed:", error);
   }
 
-  // Test 3: Call get_generation_prompt tool
-  console.log("Test 3: Calling get_generation_prompt...");
+  // Test 3: Call prepare_generation_artifacts tool
+  console.log("Test 3: Calling prepare_generation_artifacts...");
   try {
     const exampleState = {
       objects: { disk: ["d1", "d2"], peg: ["peg1", "peg2", "peg3"] },
       predicates: { on: [["d1", "d2"]], smaller: [["d1", "d2"]] }
     };
-    const result = await mcpClient.callTool("get_generation_prompt", {
+    const result = await mcpClient.callTool("prepare_generation_artifacts", {
       domain_name: "hanoi",
       example_state: JSON.stringify(exampleState),
       style_hints: ""
