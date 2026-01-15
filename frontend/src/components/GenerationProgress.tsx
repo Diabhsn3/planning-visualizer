@@ -33,28 +33,33 @@ interface GenerationProgressData {
 interface GenerationProgressProps {
   isGenerating: boolean;
   onComplete?: () => void;
+  onShowResult?: () => void; // New callback for when user clicks "Show Result"
 }
 
-export function GenerationProgress({ isGenerating, onComplete }: GenerationProgressProps) {
+export function GenerationProgress({ isGenerating, onComplete, onShowResult }: GenerationProgressProps) {
   const [progress, setProgress] = useState<GenerationProgressData | null>(null);
   const [showLogs, setShowLogs] = useState(true); // Default to showing logs
+  const [isFinished, setIsFinished] = useState(false); // Track if generation finished
+  const [userDismissed, setUserDismissed] = useState(false); // Track if user clicked Show Result
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Poll for progress updates
   const { data } = trpc.visualizer.getGenerationProgress.useQuery(
     { progressId: undefined },
     {
-      enabled: isGenerating,
+      enabled: isGenerating || (isFinished && !userDismissed),
       refetchInterval: isGenerating ? 300 : false, // Poll every 300ms for smoother updates
     }
   );
 
   useEffect(() => {
     if (data?.found && data.progress) {
-      setProgress(data.progress as GenerationProgressData);
+      const progressData = data.progress as GenerationProgressData;
+      setProgress(progressData);
       
       // Check if generation is complete
-      if (data.progress.status === "completed" || data.progress.status === "error") {
+      if (progressData.status === "completed" || progressData.status === "error") {
+        setIsFinished(true);
         if (onComplete) {
           onComplete();
         }
@@ -69,20 +74,30 @@ export function GenerationProgress({ isGenerating, onComplete }: GenerationProgr
     }
   }, [progress?.detailedLogs, showLogs]);
 
-  // Reset progress when not generating
+  // Reset state when starting new generation
   useEffect(() => {
-    if (!isGenerating) {
-      // Keep showing the last progress for a moment before clearing
-      const timer = setTimeout(() => {
-        setProgress(null);
-      }, 2000);
-      return () => clearTimeout(timer);
+    if (isGenerating) {
+      setIsFinished(false);
+      setUserDismissed(false);
     }
   }, [isGenerating]);
 
-  if (!isGenerating && !progress) {
+  // Hide component when user dismisses it
+  if (userDismissed) {
     return null;
   }
+
+  // Hide if not generating and no progress to show
+  if (!isGenerating && !progress && !isFinished) {
+    return null;
+  }
+
+  // Calculate dynamic percentage based on actual step count
+  // Use the higher of currentStep or totalSteps to avoid >100%
+  const actualTotalSteps = Math.max(progress?.currentStep || 0, progress?.totalSteps || 1);
+  const dynamicPercentage = progress?.status === "completed" 
+    ? 100 
+    : Math.min(100, Math.round(((progress?.currentStep || 0) / actualTotalSteps) * 100));
 
   const getStatusColor = () => {
     switch (progress?.status) {
@@ -130,6 +145,13 @@ export function GenerationProgress({ isGenerating, onComplete }: GenerationProgr
     return "text-gray-400";
   };
 
+  const handleShowResult = () => {
+    setUserDismissed(true);
+    if (onShowResult) {
+      onShowResult();
+    }
+  };
+
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-10 rounded-xl">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 max-w-lg w-full mx-4">
@@ -142,7 +164,9 @@ export function GenerationProgress({ isGenerating, onComplete }: GenerationProgr
           </div>
           <div>
             <h3 className="font-semibold text-gray-900 dark:text-white">
-              Generating Renderer
+              {progress?.status === "completed" ? "Generation Complete" : 
+               progress?.status === "error" ? "Generation Failed" : 
+               "Generating Renderer"}
             </h3>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {progress?.domainName || "..."}
@@ -154,19 +178,22 @@ export function GenerationProgress({ isGenerating, onComplete }: GenerationProgr
         <div className="mb-4">
           <div className="flex justify-between text-sm text-gray-600 dark:text-gray-300 mb-1">
             <span>{progress?.currentMessage || "Initializing..."}</span>
-            <span>{progress?.percentage || 0}%</span>
+            <span>{dynamicPercentage}%</span>
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-300 ${getStatusColor()}`}
-              style={{ width: `${progress?.percentage || 0}%` }}
+              style={{ width: `${dynamicPercentage}%` }}
             />
           </div>
           <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <span>Step {progress?.currentStep || 0} of {progress?.totalSteps || 6}</span>
+            <span>Step {progress?.currentStep || 0}{progress?.status !== "completed" ? ` (autonomous)` : ""}</span>
             {progress?.startTime && (
               <span>
-                {Math.round((Date.now() - progress.startTime) / 1000)}s elapsed
+                {progress.endTime 
+                  ? `${Math.round((progress.endTime - progress.startTime) / 1000)}s total`
+                  : `${Math.round((Date.now() - progress.startTime) / 1000)}s elapsed`
+                }
               </span>
             )}
           </div>
@@ -203,7 +230,7 @@ export function GenerationProgress({ isGenerating, onComplete }: GenerationProgr
                   className="flex items-start gap-2 text-gray-300 py-0.5"
                 >
                   <span className="text-gray-500 shrink-0">
-                    [{log.step}/{log.totalSteps}]
+                    [Step {log.step}]
                   </span>
                   <span>{log.message}</span>
                 </div>
@@ -220,10 +247,30 @@ export function GenerationProgress({ isGenerating, onComplete }: GenerationProgr
           </div>
         )}
 
-        {/* Success Message */}
+        {/* Success Message with Show Result Button */}
         {progress?.status === "completed" && (
-          <div className="mt-4 p-3 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-700 dark:text-green-300 text-sm">
-            Renderer generated successfully! Applying visualization...
+          <div className="mt-4 space-y-3">
+            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-700 dark:text-green-300 text-sm">
+              Renderer generated successfully! Click below to view the visualization.
+            </div>
+            <button
+              onClick={handleShowResult}
+              className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+            >
+              Show Visualization
+            </button>
+          </div>
+        )}
+
+        {/* Error Dismiss Button */}
+        {progress?.status === "error" && (
+          <div className="mt-4">
+            <button
+              onClick={() => setUserDismissed(true)}
+              className="w-full py-2 px-4 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+            >
+              Dismiss
+            </button>
           </div>
         )}
       </div>

@@ -39,8 +39,9 @@ export interface GenerationProgress {
 // In a production app, you might use Redis or similar
 const progressStore = new Map<string, GenerationProgress>();
 
-// Default total steps for the generation process
-const TOTAL_STEPS = 6;
+// Initial estimate for total steps - will be updated dynamically
+// The autonomous agentic loop can have variable iterations
+const INITIAL_STEPS_ESTIMATE = 10;
 
 /**
  * Create a new progress tracker for a generation session
@@ -51,7 +52,7 @@ export function createProgress(id: string, domainName: string): GenerationProgre
     domainName,
     status: 'pending',
     currentStep: 0,
-    totalSteps: TOTAL_STEPS,
+    totalSteps: INITIAL_STEPS_ESTIMATE,
     percentage: 0,
     currentMessage: 'Initializing...',
     logs: [],
@@ -99,6 +100,13 @@ export function updateProgress(
   
   progress.currentStep = step;
   progress.currentMessage = message;
+  
+  // Dynamically adjust totalSteps if current step exceeds it
+  // This handles the autonomous agentic loop which can have variable iterations
+  if (step > progress.totalSteps) {
+    progress.totalSteps = step + 2; // Always show some room ahead
+  }
+  
   progress.percentage = Math.round((step / progress.totalSteps) * 100);
   
   if (status) {

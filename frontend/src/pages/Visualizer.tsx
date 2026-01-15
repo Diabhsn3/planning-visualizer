@@ -1148,12 +1148,17 @@ export default function Visualizer() {
                   {/* Canvas with Progress Overlay */}
                   <div className="relative">
                     {/* LLM Generation Progress - Overlays only the canvas */}
-                    {visualizationMode === "llm" && isLlmGenerating && (
+                    {/* Show during generation AND after completion until user clicks Show Result */}
+                    {visualizationMode === "llm" && (isLlmGenerating || llmCode) && (
                       <GenerationProgress 
                         isGenerating={isLlmGenerating}
                         onComplete={() => {
                           // Progress component will show completion state
                           // The actual llmCode update happens via the mutation
+                        }}
+                        onShowResult={() => {
+                          // User clicked Show Result - component will dismiss itself
+                          // The llmCode is already set, so visualization will show
                         }}
                       />
                     )}
