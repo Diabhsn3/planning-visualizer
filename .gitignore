@@ -6,8 +6,18 @@ __pycache__/
 
 # Virtualenv
 venv/
+
+# Environment files (keep .env.example)
 .env
-*.env
+.env.local
+backend/api/.env
+backend/api/.env.local
+!.env.example
+!backend/api/.env.example
+
+# LLM generated renderers (keep .gitkeep)
+backend/api/llm_renderers/*.ts
+!backend/api/llm_renderers/.gitkeep
 
 # Node.js
 node_modules/
