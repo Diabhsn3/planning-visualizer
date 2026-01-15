@@ -178,6 +178,61 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
+        // ============================================
+    // PARSE LLM CODE FOR BACKGROUND/LEGEND FUNCTIONS
+    // ============================================
+    let llmBackgroundFn: ((ctx: CanvasRenderingContext2D, w: number, h: number) => void) | null = null;
+    let llmLegendFn: ((ctx: CanvasRenderingContext2D, x: number, y: number) => void) | null = null;
+    let llmMainFn: ((ctx: CanvasRenderingContext2D, state: RenderedState) => void) | null = null;
+    let llmFnName = 'render';
+    
+    if (llmCode) {
+      try {
+        // First, strip any markdown code blocks that Claude might have added
+        let jsCode = llmCode
+          .replace(/^```(?:javascript|typescript|js)?\s*\n?/gm, '')
+          .replace(/\n?```$/gm, '')
+          .trim();
+        
+        // Strip TypeScript type annotations
+        jsCode = jsCode
+          .replace(/:\s*(?:string|number|boolean|any|void|never|unknown|null|undefined|[A-Z][A-Za-z0-9_<>\[\]|&\s,]*)(?=[,)])/g, '')
+          .replace(/\)\s*:\s*(?:string|number|boolean|any|void|never|unknown|null|undefined|[A-Z][A-Za-z0-9_<>\[\]|&\s]*)\s*\{/g, ') {')
+          .replace(/(const|let|var)\s+(\w+)\s*:\s*[A-Za-z_][A-Za-z0-9_<>\[\]|&\s]*\s*=/g, '$1 $2 =');
+        
+        // Find the main render function name (e.g., renderBlocksWorld)
+        const mainFnMatch = jsCode.match(/function\s+(render[A-Z][A-Za-z0-9]*)\s*\(/);
+        if (mainFnMatch) {
+          llmFnName = mainFnMatch[1];
+        }
+        
+        // Create a function that returns all three functions
+        const wrappedCode = `
+          ${jsCode}
+          return {
+            main: typeof ${llmFnName} === 'function' ? ${llmFnName} : null,
+            background: typeof ${llmFnName}Background === 'function' ? ${llmFnName}Background : null,
+            legend: typeof ${llmFnName}Legend === 'function' ? ${llmFnName}Legend : null
+          };
+        `;
+        
+        const factory = new Function(wrappedCode);
+        const fns = factory();
+        
+        llmMainFn = fns.main;
+        llmBackgroundFn = fns.background;
+        llmLegendFn = fns.legend;
+        
+        console.log('[StateCanvas] LLM functions parsed:', {
+          main: !!llmMainFn,
+          background: !!llmBackgroundFn,
+          legend: !!llmLegendFn
+        });
+      } catch (e) {
+        console.error('[StateCanvas] Failed to parse LLM code:', e);
+      }
+    }
+    
     // Get domain-specific renderer configuration
     const domainConfig = domainRenderers[state.domain];
 
