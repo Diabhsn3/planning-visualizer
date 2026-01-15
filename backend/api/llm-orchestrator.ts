@@ -4,18 +4,18 @@
  * This module provides a generic LLM orchestration layer that:
  * 1. Abstracts away specific LLM provider details (currently Anthropic)
  * 2. Supports MCP sampling - allowing the MCP server to request LLM generations
- * 3. Implements an AGENTIC LOOP for renderer generation where the LLM decides
- *    which tools to call and when, rather than following a hardcoded sequence
+ * 3. Implements a FULLY AUTONOMOUS agentic loop where the LLM discovers and
+ *    uses MCP tools based on their descriptions - NO hardcoded workflow
  * 
  * Architecture:
  * - LLMOrchestrator: Generic interface for LLM operations
  * - AnthropicProvider: Concrete implementation using Anthropic SDK
- * - generateRendererWithLLM: Agentic loop that lets LLM orchestrate tool calls
+ * - generateRendererWithLLM: Autonomous loop where LLM decides everything
  * 
  * MCP Integration:
  * - Resources: Versioned prompts fetched from prompt://renderer/system/{version}
- * - Tools: Utility functions (validate_renderer, clean_code, get_domain_hints)
- * - The LLM decides which tools to use based on the task context
+ * - Tools: Self-descriptive functions that LLM discovers and uses autonomously
+ * - The LLM reads tool descriptions and decides which to call and when
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -209,8 +209,6 @@ export class AnthropicProvider implements LLMProvider {
   async handleSamplingRequest(request: SamplingRequest): Promise<SamplingResponse> {
     console.log("[AnthropicProvider] Handling MCP sampling request");
 
-    // Convert MCP sampling request to Anthropic format
-    // We need to handle the content conversion carefully for type safety
     const messages = request.messages.map(msg => {
       let content: string | Anthropic.ContentBlockParam[];
       
@@ -221,7 +219,6 @@ export class AnthropicProvider implements LLMProvider {
           if (c.type === "text") {
             return { type: "text" as const, text: (c as { type: "text"; text: string }).text };
           }
-          // For other types, convert to text representation
           return { type: "text" as const, text: JSON.stringify(c) };
         });
       } else if (msg.content && typeof msg.content === "object" && "type" in msg.content) {
@@ -254,8 +251,6 @@ export class AnthropicProvider implements LLMProvider {
 
     const response = await this.client.messages.create(params);
 
-    // Convert Anthropic response to MCP sampling response format
-    // Handle single text response vs array of content blocks
     let responseContent: SamplingResponse["content"];
     
     if (response.content.length === 1 && response.content[0].type === "text") {
@@ -274,7 +269,6 @@ export class AnthropicProvider implements LLMProvider {
               input: block.input as Record<string, unknown>,
             };
           }
-          // Fallback for other types
           return { type: "text" as const, text: "" };
         });
     }
@@ -299,32 +293,20 @@ export class LLMOrchestrator {
     this.provider = provider || new AnthropicProvider();
   }
 
-  /**
-   * Get the underlying provider
-   */
   getProvider(): LLMProvider {
     return this.provider;
   }
 
-  /**
-   * Check if response contains tool use
-   */
   hasToolUse(response: LLMResponse): boolean {
     return response.content.some(block => block.type === "tool_use");
   }
 
-  /**
-   * Extract tool use blocks from response
-   */
   getToolUseBlocks(response: LLMResponse): ToolUseBlock[] {
     return response.content.filter(
       (block): block is ToolUseBlock => block.type === "tool_use"
     );
   }
 
-  /**
-   * Extract text from response
-   */
   extractText(response: LLMResponse): string {
     return response.content
       .filter((block): block is TextBlock => block.type === "text")
@@ -332,9 +314,6 @@ export class LLMOrchestrator {
       .join("\n");
   }
 
-  /**
-   * Execute tool requests using MCP client
-   */
   async executeToolRequests(
     mcpClient: MCPClient,
     response: LLMResponse
@@ -358,25 +337,15 @@ export class LLMOrchestrator {
     return results;
   }
 
-  /**
-   * Handle an MCP sampling request
-   * This is called when the MCP server requests LLM generation
-   */
   async handleSamplingRequest(request: SamplingRequest): Promise<SamplingResponse> {
     console.log("[LLMOrchestrator] Received MCP sampling request");
     return this.provider.handleSamplingRequest(request);
   }
 
-  /**
-   * Simple chat without tools
-   */
   async simpleChat(system: string, userMessage: string): Promise<string> {
     return this.provider.simpleChat(system, userMessage);
   }
 
-  /**
-   * Chat with tools
-   */
   async chat(
     messages: Message[],
     system: string,
@@ -387,24 +356,21 @@ export class LLMOrchestrator {
 }
 
 // ============================================================================
-// Renderer Generation with Agentic Loop
+// Renderer Generation - FULLY AUTONOMOUS Agentic Loop
 // ============================================================================
 
 /**
- * Generate a renderer using an AGENTIC LOOP where the LLM decides tool usage.
+ * Generate a renderer using a FULLY AUTONOMOUS agentic loop.
  * 
- * This function implements the MCP-idiomatic pattern:
- * 1. Fetch the versioned system prompt from MCP Resource (prompt://renderer/system/v1)
- * 2. Prepare the initial user prompt using MCP Tool (prepare_generation_artifacts)
- * 3. Enter an agentic loop where the LLM decides which tools to call
- * 4. The LLM can use: get_domain_hints, clean_code, validate_renderer
- * 5. Loop continues until LLM returns final code or max iterations reached
+ * The LLM:
+ * 1. Receives a simple task: "Generate a visualization renderer for this domain"
+ * 2. Discovers available MCP tools via their descriptions
+ * 3. Autonomously decides which tools to call and when
+ * 4. Uses tools to understand the domain, get hints, validate code, etc.
+ * 5. Returns the final code when ready
  * 
- * Benefits:
- * - LLM decides the optimal sequence of tool calls
- * - More flexible than hardcoded orchestration
- * - Prompts are versioned and reproducible via MCP Resources
- * - Follows MCP design philosophy: Resources for context, Tools for actions
+ * NO HARDCODED WORKFLOW - the LLM figures out the best approach based on
+ * the tool descriptions. This is the true MCP pattern.
  */
 export type ProgressCallback = (step: number, message: string) => void;
 export type DetailedLogCallback = (source: string, message: string, level?: 'info' | 'success' | 'warning' | 'error') => void;
@@ -413,7 +379,7 @@ export type DetailedLogCallback = (source: string, message: string, level?: 'inf
 const DEFAULT_PROMPT_VERSION = "v1";
 
 // Maximum iterations for the agentic loop
-const MAX_AGENT_ITERATIONS = 10;
+const MAX_AGENT_ITERATIONS = 15;
 
 export async function generateRendererWithLLM(
   mcpClient: MCPClient,
@@ -441,32 +407,17 @@ export async function generateRendererWithLLM(
     }
   };
 
-  // Helper function to safely parse JSON from MCP tool results
-  const safeParseToolResult = (result: { content: string; isError: boolean }, toolName: string): unknown => {
-    if (result.isError) {
-      log('LLMOrchestrator', `Tool ${toolName} returned error: ${result.content}`, 'error');
-      throw new Error(`MCP tool ${toolName} failed: ${result.content}`);
-    }
-    try {
-      return JSON.parse(result.content);
-    } catch (e) {
-      log('LLMOrchestrator', `Failed to parse JSON from ${toolName}: ${result.content.substring(0, 200)}`, 'error');
-      throw new Error(`Invalid JSON from MCP tool ${toolName}: ${result.content.substring(0, 100)}...`);
-    }
-  };
-
-  log('LLMOrchestrator', `Starting AGENTIC renderer generation for domain: ${domainName}`);
+  log('LLMOrchestrator', `Starting AUTONOMOUS renderer generation for domain: ${domainName}`);
   log('LLMOrchestrator', `Using provider: ${orchestrator.getProvider().getProviderName()}`);
   log('LLMOrchestrator', `Using model: ${orchestrator.getProvider().getModelName()}`);
 
   try {
     // =========================================================================
-    // SETUP PHASE: Fetch versioned prompt and prepare initial context
+    // SETUP: Fetch system prompt and prepare minimal context
     // =========================================================================
     
-    reportProgress(1, "Fetching versioned system prompt from MCP Resource...");
+    reportProgress(1, "Fetching system prompt from MCP Resource...");
     
-    // Step 1: Read the versioned system prompt from MCP Resource
     const promptResourceUri = `prompt://renderer/system/${DEFAULT_PROMPT_VERSION}`;
     log('MCPClient', `Reading resource: ${promptResourceUri}`);
     const systemPromptResult = await mcpClient.readResource(promptResourceUri);
@@ -476,190 +427,173 @@ export async function generateRendererWithLLM(
       return { success: false, code: "", error: `Failed to fetch system prompt: ${systemPromptResult.content}` };
     }
     
-    log('LLMOrchestrator', `Fetched system prompt (${systemPromptResult.content.length} chars) from ${promptResourceUri}`, 'success');
+    // Convert domain name to PascalCase for the prompt
+    const domainPascal = domainName
+      .split(/[-_\s]+/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
     
-    // Step 2: Get the initial user prompt and domain_pascal from prepare_generation_artifacts
-    reportProgress(2, "Preparing initial generation context...");
-    log('MCPClient', 'Calling tool: prepare_generation_artifacts');
+    // Replace placeholder in system prompt
+    const systemPrompt = systemPromptResult.content.replace(/{domain_pascal}/g, domainPascal);
     
-    const artifactsResult = await mcpClient.callTool("prepare_generation_artifacts", {
-      domain_name: domainName,
-      example_state: JSON.stringify(exampleState),
-      style_hints: styleHints || "",
-    });
-    
-    const artifacts = safeParseToolResult(artifactsResult, "prepare_generation_artifacts") as {
-      success: boolean;
-      user_prompt?: string;
-      domain_pascal?: string;
-      error?: string;
-    };
-    
-    if (!artifacts.success || !artifacts.user_prompt || !artifacts.domain_pascal) {
-      return { success: false, code: "", error: artifacts.error || "Failed to prepare generation artifacts" };
-    }
-    
-    // Replace {domain_pascal} placeholder in system prompt
-    const systemPrompt = systemPromptResult.content.replace(/{domain_pascal}/g, artifacts.domain_pascal);
-    const initialUserPrompt = artifacts.user_prompt;
-    
-    log('LLMOrchestrator', `Domain PascalCase: ${artifacts.domain_pascal}`);
+    log('LLMOrchestrator', `System prompt loaded (${systemPrompt.length} chars)`);
+    log('LLMOrchestrator', `Domain PascalCase: ${domainPascal}`);
     
     // =========================================================================
-    // AGENTIC LOOP: Let the LLM decide which tools to use
+    // AUTONOMOUS AGENTIC LOOP - LLM discovers and uses tools on its own
     // =========================================================================
     
-    reportProgress(3, "Starting agentic generation loop...");
+    reportProgress(2, "Starting autonomous agentic loop...");
     
-    // Get available tools from MCP server (for LLM to choose from)
+    // Get ALL available tools from MCP server - LLM will discover what they do
     const availableTools = mcpClient.getToolsForLLM();
-    log('LLMOrchestrator', `Available tools for LLM: ${availableTools.map(t => t.name).join(', ')}`);
+    log('LLMOrchestrator', `Available MCP tools: ${availableTools.map(t => t.name).join(', ')}`);
     
-    // Build the agentic system prompt that instructs the LLM how to use tools
-    const agenticSystemPrompt = `${systemPrompt}
+    // Build a simple, minimal user prompt - just the task and data
+    // NO workflow instructions - let LLM figure it out from tool descriptions
+    let userPrompt = `Generate JavaScript renderer functions for the "${domainName}" domain.
 
----
+The renderer must use PascalCase name: ${domainPascal}
+(e.g., function render${domainPascal}(ctx, state) { ... })
 
-You have access to the following tools to help generate and validate the renderer:
+EXAMPLE STATE DATA:
+${JSON.stringify(exampleState, null, 2)}
+`;
 
-AVAILABLE TOOLS:
-- get_domain_hints: Get visualization hints for known planning domains
-- clean_code: Remove markdown formatting and TypeScript annotations from code
-- validate_renderer: Check JavaScript syntax and required functions
+    if (styleHints) {
+      userPrompt += `\nSTYLE HINTS: ${styleHints}\n`;
+    }
 
-WORKFLOW:
-1. First, optionally call get_domain_hints to get styling suggestions for this domain
-2. Generate the JavaScript renderer code based on the example state
-3. Call clean_code on your generated code to remove any formatting issues
-4. Call validate_renderer to check for syntax errors
-5. If validation fails, fix the errors and repeat steps 3-4
-6. When the code is valid, output ONLY the final JavaScript code
+    userPrompt += `
+Use the available tools to:
+- Understand the domain better (check for existing rendered data, get hints)
+- Validate your generated code before returning it
+- Clean any formatting issues from your code
 
-IMPORTANT: When you have valid, working code, output it as plain text WITHOUT any tool calls.
-The final output should start with 'function render...' and contain only JavaScript code.`;
+When you have valid, working code, output ONLY the JavaScript functions (no explanations).`;
 
-    // Initialize message history with the user's request
+    // Initialize message history
     const messages: Message[] = [
-      { role: "user", content: initialUserPrompt }
+      { role: "user", content: userPrompt }
     ];
     
     let finalCode = "";
     let iteration = 0;
     
-    // Agentic loop: LLM decides what to do
+    // Autonomous loop: LLM decides everything
     while (iteration < MAX_AGENT_ITERATIONS) {
       iteration++;
-      reportProgress(3 + iteration, `Agentic loop iteration ${iteration}...`);
+      reportProgress(2 + iteration, `Autonomous iteration ${iteration}...`);
       log('LLMOrchestrator', `--- Iteration ${iteration} ---`);
       
-      // Call LLM with current history and available tools
-      const llmResponse = await orchestrator.chat(messages, agenticSystemPrompt, availableTools);
+      // Call LLM with current history and ALL available tools
+      const llmResponse = await orchestrator.chat(messages, systemPrompt, availableTools);
       
       log('LLMOrchestrator', `LLM stop reason: ${llmResponse.stopReason}`);
       
       // Check if LLM wants to use tools
       if (orchestrator.hasToolUse(llmResponse)) {
-        // LLM requested tool calls - execute them
         const toolBlocks = orchestrator.getToolUseBlocks(llmResponse);
-        log('LLMOrchestrator', `LLM requested ${toolBlocks.length} tool(s): ${toolBlocks.map(t => t.name).join(', ')}`);
+        log('LLMOrchestrator', `LLM autonomously chose ${toolBlocks.length} tool(s): ${toolBlocks.map(t => t.name).join(', ')}`);
         
-        // Add assistant's response (with tool_use) to history
+        // Add assistant's response to history
         messages.push({
           role: "assistant",
           content: llmResponse.content
         });
         
-        // Execute each tool and collect results
+        // Execute tools and collect results
         const toolResults = await orchestrator.executeToolRequests(mcpClient, llmResponse);
         
         // Log tool results
         for (const result of toolResults) {
-          const preview = result.content.substring(0, 100);
-          log('MCPClient', `Tool result: ${preview}${result.content.length > 100 ? '...' : ''}`, result.is_error ? 'error' : 'info');
+          const preview = result.content.substring(0, 150);
+          log('MCPClient', `Tool result: ${preview}${result.content.length > 150 ? '...' : ''}`, result.is_error ? 'error' : 'info');
         }
         
-        // Add tool results to history (as user message per Anthropic spec)
+        // Add tool results to history
         messages.push({
           role: "user",
           content: toolResults
         });
         
       } else {
-        // LLM returned text (no tool calls) - this should be the final code
+        // LLM returned text - check if it's the final code
         let rawOutput = orchestrator.extractText(llmResponse);
-        log('LLMOrchestrator', `LLM returned final output (${rawOutput.length} chars)`);
+        log('LLMOrchestrator', `LLM returned text output (${rawOutput.length} chars)`);
         
-        // Check if it looks like valid code
         if (rawOutput.includes('function render')) {
-          // Extract just the code portion - strip any conversational preamble
-          // This handles cases like "Here's the code:\n\nfunction render..."
+          // Extract just the code portion - strip any preamble
           const functionMatch = rawOutput.match(/function\s+render\w*\s*\(/);
           if (functionMatch && functionMatch.index !== undefined && functionMatch.index > 0) {
-            log('LLMOrchestrator', `Stripping ${functionMatch.index} chars of preamble before code`);
+            log('LLMOrchestrator', `Stripping ${functionMatch.index} chars of preamble`);
             rawOutput = rawOutput.substring(functionMatch.index);
           }
           finalCode = rawOutput;
-          log('LLMOrchestrator', 'Final output contains render function - accepting as final code', 'success');
+          log('LLMOrchestrator', 'Final code received from LLM', 'success');
           break;
         } else {
-          // LLM returned text but it doesn't look like code - ask it to continue
-          log('LLMOrchestrator', 'Output does not contain render function - prompting LLM to continue', 'warning');
+          // LLM returned text but no code - prompt to continue
+          log('LLMOrchestrator', 'Output does not contain render function - prompting to continue', 'warning');
           messages.push({
             role: "assistant",
             content: llmResponse.content
           });
           messages.push({
             role: "user",
-            content: "Please generate the JavaScript renderer code. The output should start with 'function render...' and contain the complete implementation."
+            content: "Please generate the JavaScript renderer code now. Output ONLY the functions, starting with 'function render...'."
           });
         }
       }
     }
     
     if (!finalCode || !finalCode.includes('function render')) {
-      log('LLMOrchestrator', 'Agentic loop completed but no valid code produced', 'error');
+      log('LLMOrchestrator', 'Loop completed but no valid code produced', 'error');
       return { success: false, code: "", error: "Failed to generate valid renderer code after maximum iterations" };
     }
     
     // =========================================================================
-    // FINAL CLEANUP: Ensure code is clean and valid
+    // FINAL CLEANUP - ensure code is clean
     // =========================================================================
     
-    reportProgress(10, "Final validation...");
+    reportProgress(MAX_AGENT_ITERATIONS + 3, "Final cleanup...");
     
-    // Final clean pass
+    // Clean the code one more time
     log('MCPClient', 'Final clean_code call');
-    const finalCleanResult = await mcpClient.callTool("clean_code", { code: finalCode });
-    const finalCleanData = safeParseToolResult(finalCleanResult, "clean_code") as { success: boolean; code?: string };
+    const cleanResult = await mcpClient.callTool("clean_code", { code: finalCode });
     
-    if (finalCleanData.success && finalCleanData.code) {
-      finalCode = finalCleanData.code;
+    try {
+      const cleanData = JSON.parse(cleanResult.content) as { success: boolean; code?: string };
+      if (cleanData.success && cleanData.code) {
+        finalCode = cleanData.code;
+      }
+    } catch {
+      log('LLMOrchestrator', 'Could not parse clean_code result, using raw code', 'warning');
     }
     
     // Final validation
     log('MCPClient', 'Final validate_renderer call');
-    const finalValidateResult = await mcpClient.callTool("validate_renderer", {
+    const validateResult = await mcpClient.callTool("validate_renderer", {
       code: finalCode,
       domain_name: domainName,
     });
-    const finalValidation = safeParseToolResult(finalValidateResult, "validate_renderer") as {
-      valid: boolean;
-      errors?: string[];
-      warnings?: string[];
-    };
     
-    if (!finalValidation.valid) {
-      log('LLMOrchestrator', `Final validation warnings: ${finalValidation.errors?.join(', ') || 'none'}`, 'warning');
-      // Still return the code - frontend can handle partial results
+    try {
+      const validation = JSON.parse(validateResult.content) as { valid: boolean; errors?: string[]; warnings?: string[] };
+      
+      if (!validation.valid) {
+        log('LLMOrchestrator', `Final validation errors: ${validation.errors?.join(', ') || 'none'}`, 'warning');
+      }
+      if (validation.warnings && validation.warnings.length > 0) {
+        log('LLMOrchestrator', `Validation warnings: ${validation.warnings.join(', ')}`, 'info');
+      }
+    } catch {
+      log('LLMOrchestrator', 'Could not parse validation result', 'warning');
     }
     
-    if (finalValidation.warnings && finalValidation.warnings.length > 0) {
-      log('LLMOrchestrator', `Validation warnings: ${finalValidation.warnings.join(', ')}`, 'info');
-    }
-    
-    reportProgress(11, "Generation complete!");
+    reportProgress(MAX_AGENT_ITERATIONS + 4, "Generation complete!");
     log('LLMOrchestrator', `Generation complete, code length: ${finalCode.length}`, 'success');
-    log('LLMOrchestrator', `Total agentic iterations: ${iteration}`);
+    log('LLMOrchestrator', `Total iterations: ${iteration}`);
     
     return { success: true, code: finalCode };
 
