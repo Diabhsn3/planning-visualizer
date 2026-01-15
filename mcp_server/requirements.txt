@@ -1,5 +1,8 @@
-fastapi
-python-dotenv
-uvicorn
-# MCP Server
-fastmcp
+# MCP Server Dependencies
+# This is a PURE TOOL SERVER - Claude calls happen in Node.js
+
+# Model Context Protocol (MCP)
+mcp>=1.0.0
+
+# Data validation (used by FastMCP)
+pydantic>=2.0.0

@@ -66,7 +66,19 @@ CRITICAL RULES:
 9. Legend should explain all colors and shapes used.
 10. Use simple ternary operators carefully: `condition ? valueA : valueB`.
 
+OBJECT ARRANGEMENT RULES (CRITICAL - NEVER VIOLATE):
+11. When multiple objects are at the SAME location, arrange them SIDE BY SIDE or STACKED.
+12. NEVER overlay objects on top of each other - they must ALL be visible.
+13. Example: If 3 cars are at station A, show them in a row or column, not overlapping.
+14. Use offsets based on index: x + (index * objectWidth + spacing)
 
+CONTAINER SIZING RULES (CRITICAL):
+15. Containers (stations, depots, rooms, locations, etc.) should RESIZE based on their contents.
+16. Draw contained objects INSIDE the container, not around or outside it.
+17. If a station contains 3 cars, make the station wider/taller to fit all cars inside.
+18. When objects leave, the container should visually shrink.
+19. Calculate container size: baseSize + (numContainedObjects * objectSize + padding)
+20. Draw the container FIRST (as background), then draw objects INSIDE it.
 
 Output the required functions (main render and legend). Optionally include background if appropriate for the domain. Start with 'function render...'."""
 

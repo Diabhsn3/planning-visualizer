@@ -1,187 +1,471 @@
 /**
- * LLM Renderer Generation Pipeline
- * Orchestrates the generation of visualization renderers using LLM.
+ * LLM Renderer Client
+ * 
+ * This module handles communication with the MCP server for generating
+ * JavaScript rendering code using LLM via MCP.
+ * 
+ * Architecture:
+ * - MCP Client (TypeScript) in Node.js backend
+ * - MCP Server (Python) providing tools via FastMCP
+ * - LLM Orchestrator (TypeScript) for generic LLM operations
+ * 
+ * The architecture supports MCP sampling, where the server can request
+ * LLM generations from the client. This enables more sophisticated
+ * agentic workflows where the server controls the generation process.
+ * 
+ * Generated renderers are saved to llm_renderers/ folder for history and debugging.
  */
 
-import fs from "fs/promises";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
-import { generateRendererCode, isLlmAvailable } from "./llm-orchestrator.js";
-import { createProgress, updateProgress, getProgress } from "./generation-progress.js";
+import { createMCPClient, MCPClient } from "./mcp-client.js";
+import { generateRendererWithLLM, LLMOrchestrator, ProgressCallback, DetailedLogCallback } from "./llm-orchestrator.js";
+import {
+  createProgress,
+  updateProgress,
+  completeProgress,
+  addDetailedLog,
+  getProgress,
+  getLatestProgress,
+  generateProgressId,
+  cleanupOldProgress,
+  type GenerationProgress
+} from "./generation-progress.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Directory for cached renderers
-const CACHE_DIR = path.resolve(__dirname, "llm_renderers");
+// Resolve llm_renderers folder path
+function getLlmRenderersPath(): string {
+  if (__dirname.endsWith('/dist') || __dirname.endsWith('\\dist')) {
+    return path.join(__dirname, '../llm_renderers');
+  }
+  return path.join(__dirname, 'llm_renderers');
+}
 
-export interface LLMRendererResult {
+const LLM_RENDERERS_DIR = getLlmRenderersPath();
+
+// Ensure llm_renderers directory exists
+function ensureRenderersDir(): void {
+  if (!fs.existsSync(LLM_RENDERERS_DIR)) {
+    fs.mkdirSync(LLM_RENDERERS_DIR, { recursive: true });
+  }
+}
+
+// Generate unique filename for renderer
+function generateRendererFilename(domainName: string): string {
+  const timestamp = new Date().toISOString()
+    .replace(/[:.]/g, '-')
+    .replace('T', '_')
+    .replace('Z', '');
+  const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, '_');
+  return `${sanitizedDomain}_${timestamp}.ts`;
+}
+
+export interface LLMRendererRequest {
+  domain_name: string;
+  states: unknown[];
+  style_hints?: string;
+}
+
+export interface LLMRendererResponse {
   success: boolean;
-  code?: string;
-  error?: string;
-  cached?: boolean;
-  sessionId?: string;
-}
-
-// Simple session ID generator
-function generateSessionId(): string {
-  return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  typescript_code: string;
+  error: string | null;
+  iterations?: number;
+  saved_file?: string;
+  progress_id?: string;
 }
 
 /**
- * Get the cache file path for a domain
+ * Save generated TypeScript code to file
  */
-function getCachePath(domainName: string): string {
-  const safeName = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
-  return path.join(CACHE_DIR, `${safeName}.ts`);
-}
-
-/**
- * Ensure cache directory exists
- */
-async function ensureCacheDir(): Promise<void> {
+function saveRendererToFile(code: string, domainName: string): string | null {
   try {
-    await fs.mkdir(CACHE_DIR, { recursive: true });
-  } catch (error) {
-    // Directory may already exist
-  }
-}
-
-/**
- * Check if a cached renderer exists for a domain
- */
-export async function checkCachedRenderer(domainName: string): Promise<{ found: boolean; code: string | null }> {
-  try {
-    const cachePath = getCachePath(domainName);
-    const code = await fs.readFile(cachePath, "utf-8");
-    console.log(`[LLM Renderer] Found cached renderer for ${domainName}`);
-    return { found: true, code };
-  } catch (error) {
-    return { found: false, code: null };
-  }
-}
-
-/**
- * Save renderer to cache
- */
-async function saveToCache(domainName: string, code: string): Promise<void> {
-  await ensureCacheDir();
-  const cachePath = getCachePath(domainName);
-  
-  // Add header comment
-  const header = `// LLM-generated renderer for ${domainName}\n// Generated at: ${new Date().toISOString()}\n\n`;
-  await fs.writeFile(cachePath, header + code, "utf-8");
-  
-  console.log(`[LLM Renderer] Saved renderer to cache: ${cachePath}`);
-}
-
-/**
- * Clear cached renderers
- */
-export async function clearRendererCache(): Promise<{ cleared: number }> {
-  try {
-    await ensureCacheDir();
-    const files = await fs.readdir(CACHE_DIR);
-    const tsFiles = files.filter(f => f.endsWith(".ts") && f !== ".gitkeep");
+    ensureRenderersDir();
     
-    for (const file of tsFiles) {
-      await fs.unlink(path.join(CACHE_DIR, file));
-    }
+    const filename = generateRendererFilename(domainName);
+    const filepath = path.join(LLM_RENDERERS_DIR, filename);
     
-    console.log(`[LLM Renderer] Cleared ${tsFiles.length} cached renderers`);
-    return { cleared: tsFiles.length };
+    // Add header comment to the file
+    const fileContent = `/**
+ * LLM-Generated Renderer for ${domainName}
+ * Generated at: ${new Date().toISOString()}
+ * 
+ * This file was automatically generated by the MCP visualization pipeline.
+ * Architecture: Node.js MCP Client + Python MCP Server + LLM Orchestrator
+ * 
+ * The generation process uses:
+ * - MCP tools for domain hints, prompt generation, and code validation
+ * - LLM Orchestrator for provider-agnostic LLM operations
+ * - MCP sampling capability for server-initiated LLM requests
+ * 
+ * It can be used for debugging, inspection, or as a reference for manual renderers.
+ */
+
+${code}
+`;
+    
+    fs.writeFileSync(filepath, fileContent, 'utf-8');
+    
+    console.log('[LLM Renderer] Saved to file:', filepath);
+    
+    return filepath;
   } catch (error) {
-    console.error("[LLM Renderer] Error clearing cache:", error);
-    return { cleared: 0 };
+    console.error('[LLM Renderer] Failed to save file:', error);
+    return null;
   }
 }
 
 /**
- * Generate an LLM-based renderer for a domain
+ * Generate TypeScript renderer using LLM via MCP
+ * 
+ * This function:
+ * 1. Creates an MCP client (TypeScript) that connects to Python MCP server
+ * 2. Uses LLM Orchestrator for provider-agnostic LLM operations
+ * 3. Executes tools (get_domain_hints, get_generation_prompt, validate_renderer)
+ * 4. Returns the generated code
+ * 
+ * The architecture supports MCP sampling, enabling the server to request
+ * LLM generations from the client for more sophisticated workflows.
+ * 
+ * Generated code is saved to llm_renderers/ folder for history.
  */
 export async function generateLLMRenderer(
-  domainName: string,
-  states: any[],
-  sessionId?: string
-): Promise<LLMRendererResult> {
-  // Create or use session ID
-  const sid = sessionId || generateSessionId();
-  
-  console.log(`[LLM Renderer] Generate request for domain: ${domainName}`);
-  console.log(`[LLM Renderer] Session ID: ${sid}`);
-  console.log(`[LLM Renderer] States count: ${states.length}`);
-  
-  // Initialize progress tracking
-  createProgress(sid, domainName);
-  
-  // Check if LLM is available
-  if (!isLlmAvailable()) {
-    updateProgress(sid, "connect", "failed", "ANTHROPIC_API_KEY not configured");
+  request: LLMRendererRequest
+): Promise<LLMRendererResponse> {
+  // Check for API key
+  if (!process.env.ANTHROPIC_API_KEY) {
     return {
       success: false,
-      error: "ANTHROPIC_API_KEY not configured. LLM mode is not available.",
-      sessionId: sid,
+      typescript_code: "",
+      error: "ANTHROPIC_API_KEY environment variable not set. Please add it to backend/api/.env"
     };
   }
+
+  let mcpClient: MCPClient | null = null;
+  
+  // Create progress tracker
+  const progressId = generateProgressId();
+  createProgress(progressId, request.domain_name);
+  
+  // Clean up old progress entries
+  cleanupOldProgress();
+
+  // Helper for detailed logging
+  const logDetail = (source: string, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    console.log(`[${source}] ${message}`);
+    addDetailedLog(progressId, source, message, level);
+  };
+
+  try {
+    logDetail('LLM Renderer', `Starting MCP generation for domain: ${request.domain_name}`);
+    logDetail('LLM Renderer', `Progress ID: ${progressId}`);
+    
+    // Create and connect MCP client with sampling support
+    const orchestrator = new LLMOrchestrator();
+    logDetail('MCPClient', 'Setting up sampling request handler');
+    mcpClient = await createMCPClient({
+      enableSampling: true,
+      orchestrator,
+    });
+    logDetail('MCPClient', 'Connected to MCP server');
+    
+    // Log discovered tools
+    const tools = mcpClient.getToolNames();
+    logDetail('MCPClient', `Discovered tools: ${JSON.stringify(tools)}`);
+    logDetail('LLM Renderer', 'MCP client connected (sampling enabled)');
+    
+    // Get example state
+    const exampleState = request.states[0] || {};
+    
+    // Progress callback to update the progress store
+    const onProgress: ProgressCallback = (step, message) => {
+      updateProgress(progressId, step, message, 'running');
+    };
+    
+    // Detailed log callback
+    const onDetailedLog: DetailedLogCallback = (source, message, level) => {
+      addDetailedLog(progressId, source, message, level || 'info');
+    };
+    
+    // Generate renderer using LLM with MCP tools
+    const result = await generateRendererWithLLM(
+      mcpClient,
+      request.domain_name,
+      exampleState,
+      request.style_hints,
+      onProgress,
+      onDetailedLog
+    );
+    
+    logDetail('LLM Renderer', `Generation complete, success: ${result.success}`, result.success ? 'success' : 'error');
+    
+    // Save to file if successful
+    let savedFile: string | null = null;
+    if (result.success && result.code) {
+      savedFile = saveRendererToFile(result.code, request.domain_name);
+      if (savedFile) {
+        logDetail('LLM Renderer', `Saved to file: ${savedFile}`, 'success');
+      }
+    }
+    
+    // Mark progress as complete
+    completeProgress(progressId, result.success, result.error);
+    
+    return {
+      success: result.success,
+      typescript_code: result.code || "",
+      error: result.error || null,
+      saved_file: savedFile || undefined,
+      progress_id: progressId
+    };
+    
+  } catch (error) {
+    logDetail('LLM Renderer', `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+    
+    let errorMessage = "Unknown error during MCP generation";
+    
+    if (error instanceof Error) {
+      if (error.message.includes("ENOENT")) {
+        errorMessage = `Python not found. Please ensure Python 3 is installed.`;
+      } else if (error.message.includes("timeout")) {
+        errorMessage = "MCP generation timed out. Please try again.";
+      } else if (error.message.includes("connect")) {
+        errorMessage = "Failed to connect to MCP server. Ensure Python dependencies are installed.";
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    // Mark progress as error
+    completeProgress(progressId, false, errorMessage);
+    
+    return {
+      success: false,
+      typescript_code: "",
+      error: errorMessage,
+      progress_id: progressId
+    };
+  } finally {
+    // Always disconnect MCP client
+    if (mcpClient) {
+      try {
+        await mcpClient.disconnect();
+      } catch (e) {
+        // Ignore disconnect errors
+      }
+    }
+  }
+}
+
+/**
+ * Check if LLM renderer is available
+ */
+export async function checkLLMRendererStatus(): Promise<{
+  available: boolean;
+  error: string | null;
+  apiKeySet: boolean;
+  samplingEnabled: boolean;
+}> {
+  const apiKeySet = !!process.env.ANTHROPIC_API_KEY;
+  
+  let mcpClient: MCPClient | null = null;
   
   try {
-    // Step 1: Connect to MCP
-    updateProgress(sid, "connect", "running");
-    // Connection happens lazily in callTool
-    updateProgress(sid, "connect", "completed");
+    // Try to connect to MCP server with sampling support
+    const orchestrator = new LLMOrchestrator();
+    mcpClient = await createMCPClient({
+      enableSampling: true,
+      orchestrator,
+    });
     
-    // Step 2: Get prompts
-    updateProgress(sid, "prompts", "running");
-    
-    // Use the first state as an example for generation
-    const exampleState = states[0] || {};
-    
-    // Step 3-5: Call the LLM orchestrator (handles prompts, LLM call, clean, validate)
-    updateProgress(sid, "prompts", "completed");
-    updateProgress(sid, "llm", "running");
-    
-    const result = await generateRendererCode(domainName, exampleState);
-    
-    if (result.success && result.code) {
-      updateProgress(sid, "llm", "completed");
-      updateProgress(sid, "clean", "completed");
-      updateProgress(sid, "validate", "completed");
-      
-      console.log(`[LLM Renderer] Generation successful after ${result.attempts} attempt(s)`);
-      
-      // Step 6: Save to cache
-      updateProgress(sid, "save", "running");
-      await saveToCache(domainName, result.code);
-      updateProgress(sid, "save", "completed");
-      
+    const tools = mcpClient.getToolNames();
+    if (tools.length === 0) {
       return {
-        success: true,
-        code: result.code,
-        cached: false,
-        sessionId: sid,
-      };
-    } else {
-      updateProgress(sid, "llm", "failed", result.error);
-      console.error(`[LLM Renderer] Generation failed: ${result.error}`);
-      return {
-        success: false,
-        error: result.error || "Unknown error during generation",
-        sessionId: sid,
+        available: false,
+        error: "MCP server has no tools available",
+        apiKeySet,
+        samplingEnabled: false
       };
     }
     
-  } catch (error: any) {
-    console.error("[LLM Renderer] Error:", error);
-    updateProgress(sid, "llm", "failed", error.message);
+    return {
+      available: true,
+      error: null,
+      apiKeySet,
+      samplingEnabled: mcpClient.isSamplingEnabled()
+    };
+    
+  } catch (error) {
+    let errorMsg = "Unknown error";
+    if (error instanceof Error) {
+      if (error.message.includes("ENOENT")) {
+        errorMsg = "Python not found. Please ensure Python 3 is installed.";
+      } else if (error.message.includes("ModuleNotFoundError") || error.message.includes("No module")) {
+        errorMsg = "MCP dependencies not installed. Run: pip install -r mcp_server/requirements.txt";
+      } else {
+        errorMsg = error.message;
+      }
+    }
+    
+    return {
+      available: false,
+      error: errorMsg,
+      apiKeySet,
+      samplingEnabled: false
+    };
+  } finally {
+    if (mcpClient) {
+      try {
+        await mcpClient.disconnect();
+      } catch (e) {
+        // Ignore
+      }
+    }
+  }
+}
+
+/**
+ * List all saved renderer files
+ */
+export function listSavedRenderers(): { filename: string; path: string; domain: string; timestamp: string }[] {
+  try {
+    ensureRenderersDir();
+    
+    const files = fs.readdirSync(LLM_RENDERERS_DIR)
+      .filter(f => f.endsWith('.ts') && f !== '.gitkeep')
+      .sort()
+      .reverse(); // Most recent first
+    
+    return files.map(filename => {
+      // Parse filename: domain_YYYY-MM-DD_HH-MM-SS-mmm.ts
+      const match = filename.match(/^(.+)_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}-\d{3})\.ts$/);
+      
+      return {
+        filename,
+        path: path.join(LLM_RENDERERS_DIR, filename),
+        domain: match ? match[1].replace(/_/g, '-') : 'unknown',
+        timestamp: match ? match[2].replace('_', 'T').replace(/-/g, ':') : 'unknown'
+      };
+    });
+  } catch (error) {
+    console.error('[LLM Renderer] Failed to list renderers:', error);
+    return [];
+  }
+}
+
+/**
+ * Read a saved renderer file
+ */
+export function readSavedRenderer(filename: string): string | null {
+  try {
+    const filepath = path.join(LLM_RENDERERS_DIR, filename);
+    
+    // Security check: ensure the file is in the renderers directory
+    if (!filepath.startsWith(LLM_RENDERERS_DIR)) {
+      console.error('[LLM Renderer] Invalid file path:', filepath);
+      return null;
+    }
+    
+    if (!fs.existsSync(filepath)) {
+      return null;
+    }
+    
+    return fs.readFileSync(filepath, 'utf-8');
+  } catch (error) {
+    console.error('[LLM Renderer] Failed to read renderer:', error);
+    return null;
+  }
+}
+
+/**
+ * Get cached renderer for a domain (most recent one)
+ * Returns null if no cached renderer exists
+ */
+export function getCachedRenderer(domainName: string): { code: string; filename: string } | null {
+  try {
+    ensureRenderersDir();
+    
+    // Sanitize domain name to match filename format
+    const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, '_');
+    
+    // List all files for this domain
+    const files = fs.readdirSync(LLM_RENDERERS_DIR)
+      .filter(f => f.endsWith('.ts') && f.startsWith(sanitizedDomain + '_'))
+      .sort()
+      .reverse(); // Most recent first
+    
+    if (files.length === 0) {
+      console.log('[LLM Renderer Cache] No cached renderer for domain:', domainName);
+      return null;
+    }
+    
+    const latestFile = files[0];
+    const filepath = path.join(LLM_RENDERERS_DIR, latestFile);
+    const content = fs.readFileSync(filepath, 'utf-8');
+    
+    // Extract the actual code (skip the header comment)
+    // The code starts after the header comment block
+    const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
+    const code = codeMatch ? codeMatch[1].trim() : content;
+    
+    console.log('[LLM Renderer Cache] Found cached renderer:', latestFile);
+    
+    return {
+      code,
+      filename: latestFile
+    };
+  } catch (error) {
+    console.error('[LLM Renderer Cache] Error reading cache:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear all cached renderers
+ */
+export function clearRendererCache(): { success: boolean; deletedCount: number; error: string | null } {
+  try {
+    ensureRenderersDir();
+    
+    const files = fs.readdirSync(LLM_RENDERERS_DIR)
+      .filter(f => f.endsWith('.ts') && f !== '.gitkeep');
+    
+    let deletedCount = 0;
+    for (const file of files) {
+      const filepath = path.join(LLM_RENDERERS_DIR, file);
+      fs.unlinkSync(filepath);
+      deletedCount++;
+    }
+    
+    console.log('[LLM Renderer Cache] Cleared', deletedCount, 'cached renderers');
+    
+    return {
+      success: true,
+      deletedCount,
+      error: null
+    };
+  } catch (error) {
+    console.error('[LLM Renderer Cache] Error clearing cache:', error);
     return {
       success: false,
-      error: error.message || "Failed to generate renderer",
-      sessionId: sid,
+      deletedCount: 0,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
 
 /**
- * Get generation progress for a session
+ * Get the progress of a generation session
  */
-export { getProgress } from "./generation-progress.js";
+export function getGenerationProgress(progressId?: string): GenerationProgress | null {
+  if (progressId) {
+    return getProgress(progressId);
+  }
+  return getLatestProgress();
+}
+
+// Re-export GenerationProgress type for use in visualizer.ts
+export type { GenerationProgress };

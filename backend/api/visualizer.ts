@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { generateLLMRenderer, checkCachedRenderer, clearRendererCache, getProgress } from "./llm-renderer.js";
+import { generateLLMRenderer, checkLLMRendererStatus, getCachedRenderer, clearRendererCache, getGenerationProgress } from "./llm-renderer.js";
 
 const execAsync = promisify(exec);
 
@@ -316,58 +316,6 @@ export const visualizerRouter = router({
         );
       }
     }),
-      // LLM Renderer Generation
-  generateLLMRenderer: publicProcedure
-    .input(z.object({
-      domainName: z.string(),
-      states: z.array(z.any()),
-    }))
-    .mutation(async ({ input }) => {
-      const { domainName, states } = input;
-      console.log(`[Visualizer API] LLM renderer request for domain: ${domainName}`);
-      
-      const result = await generateLLMRenderer(domainName, states);
-      
-      if (!result.success) {
-        throw new Error(result.error || "Failed to generate LLM renderer");
-      }
-      
-      return {
-        success: true,
-        code: result.code,
-        cached: result.cached,
-        sessionId: result.sessionId,
-      };
-    }),
-
-  // Check for cached LLM renderer
-  checkCachedRenderer: publicProcedure
-    .input(z.object({
-      domainName: z.string(),
-    }))
-    .query(async ({ input }) => {
-      const { domainName } = input;
-      const result = await checkCachedRenderer(domainName);
-      return result;
-    }),
-
-  // Clear LLM renderer cache
-  clearRendererCache: publicProcedure
-    .mutation(async () => {
-      const result = await clearRendererCache();
-      return result;
-    }),
-
-  // Get LLM generation progress
-  getGenerationProgress: publicProcedure
-    .input(z.object({
-      sessionId: z.string(),
-    }))
-    .query(async ({ input }) => {
-      const { sessionId } = input;
-      const progress = getProgress(sessionId);
-      return progress;
-    }),
 
   /**
    * Get list of available domains
@@ -504,5 +452,118 @@ export const visualizerRouter = router({
         console.error(`[getDomainDefinition] Error reading domain file:`, error);
         throw new Error(`Failed to read domain file for ${input.domainName}`);
       }
+    }),
+
+  /**
+   * Generate TypeScript renderer using LLM
+   * NO CACHING - always generates fresh code
+   */
+  generateLLMRenderer: publicProcedure
+    .input(
+      z.object({
+        domainName: z.string(),
+        states: z.array(z.any()),
+        styleHints: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      console.log('[generateLLMRenderer] Starting for domain:', input.domainName);
+      console.log('[generateLLMRenderer] Number of states:', input.states.length);
+      
+      const result = await generateLLMRenderer({
+        domain_name: input.domainName,
+        states: input.states,
+        style_hints: input.styleHints,
+      });
+      
+      console.log('[generateLLMRenderer] Result success:', result.success);
+      if (!result.success) {
+        console.error('[generateLLMRenderer] Error:', result.error);
+      }
+      if (result.saved_file) {
+        console.log('[generateLLMRenderer] Saved to:', result.saved_file);
+      }
+      
+      return {
+        success: result.success,
+        typescript_code: result.typescript_code,
+        error: result.error,
+        saved_file: result.saved_file || null,
+        progress_id: result.progress_id || null,
+      };
+    }),
+
+  /**
+   * Check LLM renderer availability
+   */
+  checkLLMStatus: publicProcedure.query(async () => {
+    return await checkLLMRendererStatus();
+  }),
+
+  /**
+   * Get cached renderer for a domain
+   */
+  getCachedRenderer: publicProcedure
+    .input(z.object({ domainName: z.string() }))
+    .query(({ input }) => {
+      console.log('[getCachedRenderer] Looking for cached renderer for:', input.domainName);
+      const cached = getCachedRenderer(input.domainName);
+      if (cached) {
+        console.log('[getCachedRenderer] Found cached renderer:', cached.filename);
+        return {
+          found: true,
+          code: cached.code,
+          filename: cached.filename
+        };
+      }
+      console.log('[getCachedRenderer] No cached renderer found');
+      return {
+        found: false,
+        code: null,
+        filename: null
+      };
+    }),
+
+  /**
+   * Clear all cached renderers
+   */
+  clearRendererCache: publicProcedure.mutation(async () => {
+    console.log('[clearRendererCache] Clearing all cached renderers');
+    const result = clearRendererCache();
+    console.log('[clearRendererCache] Result:', result);
+    return result;
+  }),
+
+  /**
+   * Get generation progress
+   * Used for polling during LLM renderer generation
+   */
+  getGenerationProgress: publicProcedure
+    .input(z.object({ progressId: z.string().optional() }))
+    .query(({ input }) => {
+      const progress = getGenerationProgress(input.progressId);
+      if (!progress) {
+        return {
+          found: false,
+          progress: null
+        };
+      }
+      return {
+        found: true,
+        progress: {
+          id: progress.id,
+          domainName: progress.domainName,
+          status: progress.status,
+          currentStep: progress.currentStep,
+          totalSteps: progress.totalSteps,
+          percentage: progress.percentage,
+          currentMessage: progress.currentMessage,
+          logs: progress.logs,
+          detailedLogs: progress.detailedLogs || [],
+          startTime: progress.startTime,
+          endTime: progress.endTime,
+          error: progress.error,
+        }
+      };
     }),
 });

@@ -1,114 +1,188 @@
 /**
  * Generation Progress Tracking
- * Tracks the progress of LLM renderer generation for frontend display.
+ * 
+ * This module provides a simple way to track and report progress
+ * during LLM renderer generation. It uses an in-memory store that
+ * can be queried by the frontend via polling.
  */
 
-export interface GenerationStep {
+export interface LogEntry {
+  timestamp: number;
+  source: string;  // e.g., "MCPClient", "LLMOrchestrator", "LLM Renderer"
+  message: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+}
+
+export interface ProgressStep {
+  step: number;
+  totalSteps: number;
+  message: string;
+  timestamp: number;
+}
+
+export interface GenerationProgress {
   id: string;
-  label: string;
-  status: "pending" | "running" | "completed" | "failed";
-  startTime?: number;
+  domainName: string;
+  status: 'pending' | 'running' | 'completed' | 'error';
+  currentStep: number;
+  totalSteps: number;
+  percentage: number;
+  currentMessage: string;
+  logs: ProgressStep[];
+  detailedLogs: LogEntry[];  // Full detailed logs like terminal output
+  startTime: number;
   endTime?: number;
   error?: string;
 }
 
-export interface GenerationProgress {
-  sessionId: string;
-  domainName: string;
-  steps: GenerationStep[];
-  currentStepIndex: number;
-  overallStatus: "pending" | "running" | "completed" | "failed";
-  startTime: number;
-  endTime?: number;
-}
-
-// In-memory storage for progress (could be Redis in production)
+// In-memory store for generation progress
+// In a production app, you might use Redis or similar
 const progressStore = new Map<string, GenerationProgress>();
 
+// Default total steps for the generation process
+const TOTAL_STEPS = 6;
+
 /**
- * Create a new generation progress tracker
+ * Create a new progress tracker for a generation session
  */
-export function createProgress(sessionId: string, domainName: string): GenerationProgress {
+export function createProgress(id: string, domainName: string): GenerationProgress {
   const progress: GenerationProgress = {
-    sessionId,
+    id,
     domainName,
-    steps: [
-      { id: "connect", label: "Connecting to MCP server", status: "pending" },
-      { id: "prompts", label: "Generating prompts", status: "pending" },
-      { id: "llm", label: "Calling Claude API", status: "pending" },
-      { id: "clean", label: "Cleaning generated code", status: "pending" },
-      { id: "validate", label: "Validating renderer", status: "pending" },
-      { id: "save", label: "Saving renderer", status: "pending" },
-    ],
-    currentStepIndex: 0,
-    overallStatus: "pending",
+    status: 'pending',
+    currentStep: 0,
+    totalSteps: TOTAL_STEPS,
+    percentage: 0,
+    currentMessage: 'Initializing...',
+    logs: [],
+    detailedLogs: [],
     startTime: Date.now(),
   };
   
-  progressStore.set(sessionId, progress);
+  progressStore.set(id, progress);
   return progress;
 }
 
 /**
- * Update progress for a specific step
+ * Add a detailed log entry (like terminal output)
+ */
+export function addDetailedLog(
+  id: string,
+  source: string,
+  message: string,
+  level: 'info' | 'success' | 'warning' | 'error' = 'info'
+): void {
+  const progress = progressStore.get(id);
+  if (!progress) return;
+  
+  progress.detailedLogs.push({
+    timestamp: Date.now(),
+    source,
+    message,
+    level,
+  });
+  
+  progressStore.set(id, progress);
+}
+
+/**
+ * Update progress for a generation session
  */
 export function updateProgress(
-  sessionId: string,
-  stepId: string,
-  status: GenerationStep["status"],
-  error?: string
-): GenerationProgress | null {
-  const progress = progressStore.get(sessionId);
-  if (!progress) return null;
+  id: string,
+  step: number,
+  message: string,
+  status?: 'running' | 'completed' | 'error'
+): void {
+  const progress = progressStore.get(id);
+  if (!progress) return;
   
-  const stepIndex = progress.steps.findIndex(s => s.id === stepId);
-  if (stepIndex === -1) return progress;
+  progress.currentStep = step;
+  progress.currentMessage = message;
+  progress.percentage = Math.round((step / progress.totalSteps) * 100);
   
-  const step = progress.steps[stepIndex];
-  step.status = status;
-  
-  if (status === "running") {
-    step.startTime = Date.now();
-    progress.currentStepIndex = stepIndex;
-    progress.overallStatus = "running";
-  } else if (status === "completed") {
-    step.endTime = Date.now();
-  } else if (status === "failed") {
-    step.endTime = Date.now();
-    step.error = error;
-    progress.overallStatus = "failed";
-    progress.endTime = Date.now();
+  if (status) {
+    progress.status = status;
+  } else if (progress.status === 'pending') {
+    progress.status = 'running';
   }
   
-  // Check if all steps completed
-  if (progress.steps.every(s => s.status === "completed")) {
-    progress.overallStatus = "completed";
-    progress.endTime = Date.now();
-  }
-  
-  return progress;
-}
-
-/**
- * Get progress for a session
- */
-export function getProgress(sessionId: string): GenerationProgress | null {
-  return progressStore.get(sessionId) || null;
-}
-
-/**
- * Delete progress for a session
- */
-export function deleteProgress(sessionId: string): void {
-  progressStore.delete(sessionId);
-}
-
-/**
- * Get all active sessions
- */
-export function getActiveSessions(): string[] {
-  return Array.from(progressStore.keys()).filter(id => {
-    const progress = progressStore.get(id);
-    return progress && progress.overallStatus === "running";
+  progress.logs.push({
+    step,
+    totalSteps: progress.totalSteps,
+    message,
+    timestamp: Date.now(),
   });
+  
+  if (status === 'completed' || status === 'error') {
+    progress.endTime = Date.now();
+  }
+  
+  progressStore.set(id, progress);
+}
+
+/**
+ * Mark a generation as complete
+ */
+export function completeProgress(id: string, success: boolean, error?: string): void {
+  const progress = progressStore.get(id);
+  if (!progress) return;
+  
+  progress.status = success ? 'completed' : 'error';
+  progress.currentStep = progress.totalSteps;
+  progress.percentage = 100;
+  progress.currentMessage = success ? 'Generation complete!' : 'Generation failed';
+  progress.endTime = Date.now();
+  
+  if (error) {
+    progress.error = error;
+  }
+  
+  progress.logs.push({
+    step: progress.totalSteps,
+    totalSteps: progress.totalSteps,
+    message: success ? 'Generation complete!' : `Error: ${error}`,
+    timestamp: Date.now(),
+  });
+  
+  progressStore.set(id, progress);
+}
+
+/**
+ * Get progress for a generation session
+ */
+export function getProgress(id: string): GenerationProgress | null {
+  return progressStore.get(id) || null;
+}
+
+/**
+ * Get the most recent progress (useful when only one generation at a time)
+ */
+export function getLatestProgress(): GenerationProgress | null {
+  const entries = Array.from(progressStore.entries());
+  if (entries.length === 0) return null;
+  
+  // Return the most recent one
+  return entries.sort((a, b) => b[1].startTime - a[1].startTime)[0][1];
+}
+
+/**
+ * Clean up old progress entries (older than 5 minutes)
+ */
+export function cleanupOldProgress(): void {
+  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  
+  const entries = Array.from(progressStore.entries());
+  for (const [id, progress] of entries) {
+    if (progress.endTime && progress.endTime < fiveMinutesAgo) {
+      progressStore.delete(id);
+    }
+  }
+}
+
+/**
+ * Generate a unique progress ID
+ */
+export function generateProgressId(): string {
+  return `gen_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }

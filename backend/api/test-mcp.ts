@@ -1,83 +1,121 @@
 /**
- * Test script for MCP architecture
+ * Test script for the MCP architecture with LLM Orchestrator
  * Run with: npx tsx test-mcp.ts
+ * 
+ * This script tests:
+ * 1. MCP client connection to Python server
+ * 2. Tool discovery and execution
+ * 3. LLM Orchestrator integration
+ * 4. MCP sampling capability (optional)
  */
 
-import { getMcpClient, callTool, disconnectMcpClient } from "./mcp-client.js";
+import { createMCPClient, createMCPClientWithSampling } from "./mcp-client.js";
+import { generateRendererWithLLM, LLMOrchestrator } from "./llm-orchestrator.js";
 
-async function testMcpConnection() {
-  console.log("=== MCP Architecture Test ===\n");
-  
-  try {
-    // Test 1: Connect to MCP server
-    console.log("1. Testing MCP connection...");
-    const client = await getMcpClient();
-    console.log("   ✓ Connected to MCP server\n");
-    
-    // Test 2: List available tools
-    console.log("2. Listing available tools...");
-    const tools = await client.listTools();
-    console.log("   Available tools:");
-    for (const tool of tools.tools) {
-      console.log(`   - ${tool.name}: ${tool.description?.slice(0, 50)}...`);
-    }
-    console.log("");
-    
-    // Test 3: Call get_domain_hints tool
-    console.log("3. Testing get_domain_hints tool...");
-    const hintsResult = await callTool("get_domain_hints", {
-      domain_name: "blocks-world"
-    });
-    const hints = JSON.parse(hintsResult);
-    console.log("   Result:", JSON.stringify(hints, null, 2).slice(0, 200) + "...\n");
-    
-    // Test 4: Call get_generation_prompt tool
-    console.log("4. Testing get_generation_prompt tool...");
-    const promptResult = await callTool("get_generation_prompt", {
-      domain_name: "test-domain",
-      example_state: JSON.stringify({
-        objects: { block1: { type: "block" } },
-        predicates: { on: [["block1", "table"]] }
-      }),
-      style_hints: "Use blue colors"
-    });
-    const prompts = JSON.parse(promptResult);
-    console.log("   Success:", prompts.success);
-    console.log("   Domain Pascal:", prompts.domain_pascal);
-    console.log("   System prompt length:", prompts.system_prompt?.length || 0);
-    console.log("   User prompt length:", prompts.user_prompt?.length || 0);
-    console.log("");
-    
-    // Test 5: Call clean_code tool
-    console.log("5. Testing clean_code tool...");
-    const cleanResult = await callTool("clean_code", {
-      code: "```javascript\nfunction test(x: number): void { console.log(x); }\n```"
-    });
-    const cleaned = JSON.parse(cleanResult);
-    console.log("   Success:", cleaned.success);
-    console.log("   Cleaned code:", cleaned.code?.slice(0, 100) + "...\n");
-    
-    // Test 6: Call validate_renderer tool
-    console.log("6. Testing validate_renderer tool...");
-    const validateResult = await callTool("validate_renderer", {
-      code: "function renderTestDomain(ctx, state) { ctx.fillRect(0,0,100,100); }\nfunction renderTestDomainLegend(ctx, x, y) { }",
-      domain_name: "test-domain"
-    });
-    const validation = JSON.parse(validateResult);
-    console.log("   Valid:", validation.valid);
-    console.log("   Errors:", validation.errors);
-    console.log("   Warnings:", validation.warnings);
-    console.log("");
-    
-    console.log("=== All tests passed! ===\n");
-    
-  } catch (error) {
-    console.error("Test failed:", error);
-  } finally {
-    await disconnectMcpClient();
-    console.log("Disconnected from MCP server");
+async function main() {
+  console.log("=== Testing MCP Architecture with LLM Orchestrator ===\n");
+
+  // Check API key
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error("ERROR: ANTHROPIC_API_KEY not set");
+    console.log("Set it with: export ANTHROPIC_API_KEY=your-key");
+    process.exit(1);
   }
+  console.log("✓ ANTHROPIC_API_KEY is set\n");
+
+  // Test 1: Connect to MCP server (basic)
+  console.log("Test 1: Connecting to MCP server (basic)...");
+  let mcpClient;
+  try {
+    mcpClient = await createMCPClient();
+    console.log("✓ Connected to MCP server");
+    console.log(`✓ Found ${mcpClient.getToolNames().length} tools: ${mcpClient.getToolNames().join(", ")}\n`);
+  } catch (error) {
+    console.error("✗ Failed to connect:", error);
+    process.exit(1);
+  }
+
+  // Test 2: Call get_domain_hints tool
+  console.log("Test 2: Calling get_domain_hints...");
+  try {
+    const result = await mcpClient.callTool("get_domain_hints", { domain_name: "hanoi" });
+    const data = JSON.parse(result.content);
+    console.log(`✓ Domain hints: ${data.found ? "found" : "not found"}`);
+    console.log(`  Description: ${data.hints?.description || "N/A"}\n`);
+  } catch (error) {
+    console.error("✗ Failed:", error);
+  }
+
+  // Test 3: Call get_generation_prompt tool
+  console.log("Test 3: Calling get_generation_prompt...");
+  try {
+    const exampleState = {
+      objects: { disk: ["d1", "d2"], peg: ["peg1", "peg2", "peg3"] },
+      predicates: { on: [["d1", "d2"]], smaller: [["d1", "d2"]] }
+    };
+    const result = await mcpClient.callTool("get_generation_prompt", {
+      domain_name: "hanoi",
+      example_state: JSON.stringify(exampleState),
+      style_hints: ""
+    });
+    const data = JSON.parse(result.content);
+    console.log(`✓ Got prompts: ${data.success}`);
+    console.log(`  Domain PascalCase: ${data.domain_pascal}\n`);
+  } catch (error) {
+    console.error("✗ Failed:", error);
+  }
+
+  // Disconnect basic client
+  await mcpClient.disconnect();
+  console.log("✓ Disconnected basic MCP client\n");
+
+  // Test 4: Connect with sampling support
+  console.log("Test 4: Connecting to MCP server with sampling support...");
+  const orchestrator = new LLMOrchestrator();
+  console.log(`  Provider: ${orchestrator.getProvider().getProviderName()}`);
+  console.log(`  Model: ${orchestrator.getProvider().getModelName()}`);
+  
+  let samplingClient;
+  try {
+    samplingClient = await createMCPClientWithSampling(orchestrator);
+    console.log("✓ Connected with sampling support");
+    console.log(`✓ Sampling enabled: ${samplingClient.isSamplingEnabled()}\n`);
+  } catch (error) {
+    console.error("✗ Failed to connect with sampling:", error);
+    process.exit(1);
+  }
+
+  // Test 5: Full generation (optional - takes time)
+  const runFullTest = process.argv.includes("--full");
+  if (runFullTest) {
+    console.log("Test 5: Full renderer generation with LLM Orchestrator...");
+    try {
+      const exampleState = {
+        objects: { disk: ["d1", "d2", "d3"], peg: ["peg1", "peg2", "peg3"] },
+        predicates: { 
+          on: [["d1", "d2"], ["d2", "d3"]], 
+          smaller: [["d1", "d2"], ["d2", "d3"]],
+          clear: [["d1"], ["peg2"], ["peg3"]]
+        }
+      };
+      
+      const result = await generateRendererWithLLM(samplingClient, "hanoi", exampleState);
+      console.log(`✓ Generation success: ${result.success}`);
+      console.log(`  Code length: ${result.code?.length || 0} chars`);
+      if (result.error) {
+        console.log(`  Error: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("✗ Failed:", error);
+    }
+  } else {
+    console.log("Test 5: Skipped (run with --full to test generation)\n");
+  }
+
+  // Cleanup
+  await samplingClient.disconnect();
+  console.log("✓ Disconnected sampling MCP client");
+  console.log("\n=== All tests completed ===");
 }
 
-// Run tests
-testMcpConnection();
+main().catch(console.error);
