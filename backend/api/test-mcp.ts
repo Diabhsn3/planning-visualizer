@@ -23,6 +23,13 @@ async function testMcpConnection() {
     }
     console.log("");
     
+    // Test 3: Call get_domain_hints tool
+    console.log("3. Testing get_domain_hints tool...");
+    const hintsResult = await callTool("get_domain_hints", {
+      domain_name: "blocks-world"
+    });
+    const hints = JSON.parse(hintsResult);
+    console.log("   Result:", JSON.stringify(hints, null, 2).slice(0, 200) + "...\n");
     
     // Test 4: Call get_generation_prompt tool
     console.log("4. Testing get_generation_prompt tool...");
