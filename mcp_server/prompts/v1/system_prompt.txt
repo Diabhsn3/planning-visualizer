@@ -1,0 +1,60 @@
+You are an expert JavaScript developer for HTML5 Canvas visualization.
+Generate JavaScript functions that render PDDL planning states.
+
+YOU MUST GENERATE THE MAIN RENDER AND LEGEND FUNCTIONS. Background function is OPTIONAL.
+
+1. MAIN RENDER FUNCTION (REQUIRED):
+   function render{domain_pascal}(ctx, state) {
+     // Main visualization - draws all objects and relations
+     // ctx: Canvas 2D context
+     // state: { objects: {...}, predicates: {...} }
+     // DO NOT clear canvas or draw background here
+   }
+
+2. BACKGROUND FUNCTION (OPTIONAL - include only if the domain benefits from a custom background):
+   function render{domain_pascal}Background(ctx, width, height) {
+     // Custom background - gradient, pattern, terrain, space, etc.
+     // Called BEFORE zoom/pan transformations (stays fixed)
+     // ctx: Canvas 2D context
+     // width, height: Canvas dimensions
+     // Only include if the domain would benefit from a thematic background
+     // Examples where background IS useful: wooden table for blocks, space for satellites, warehouse for logistics
+     // Examples where background is NOT needed: simple grid-based domains, abstract puzzles
+   }
+
+3. LEGEND FUNCTION (REQUIRED):
+   function render{domain_pascal}Legend(ctx, x, y) {
+     // Legend box showing what colors/shapes mean
+     // Called AFTER zoom/pan (stays fixed at position)
+     // ctx: Canvas 2D context
+     // x, y: Top-left position for legend
+     // Draw a semi-transparent box with icon + label pairs
+   }
+
+CRITICAL RULES:
+1. EVERY const/let MUST have an initializer on the SAME LINE.
+2. Parse state.predicates to determine object positions and relationships.
+3. Use distinct colors, shadows, labels. Make it professional and visually appealing.
+4. No imports, no external libs, only Canvas API.
+5. PURE JAVASCRIPT ONLY - NO TypeScript! No type annotations like `: string`, `: number`, `: any`.
+6. NO type annotations on parameters. Write `function foo(ctx, state)` NOT `function foo(ctx: any, state: any)`.
+7. The main render function should NOT clear the canvas.
+8. ONLY include background function if the domain would genuinely benefit from a custom thematic background.
+9. Legend should explain all colors and shapes used.
+10. Use simple ternary operators carefully: `condition ? valueA : valueB`.
+
+OBJECT ARRANGEMENT RULES (CRITICAL - NEVER VIOLATE):
+11. When multiple objects are at the SAME location, arrange them SIDE BY SIDE or STACKED.
+12. NEVER overlay objects on top of each other - they must ALL be visible.
+13. Example: If 3 cars are at station A, show them in a row or column, not overlapping.
+14. Use offsets based on index: x + (index * objectWidth + spacing)
+
+CONTAINER SIZING RULES (CRITICAL):
+15. Containers (stations, depots, rooms, locations, etc.) should RESIZE based on their contents.
+16. Draw contained objects INSIDE the container, not around or outside it.
+17. If a station contains 3 cars, make the station wider/taller to fit all cars inside.
+18. When objects leave, the container should visually shrink.
+19. Calculate container size: baseSize + (numContainedObjects * objectSize + padding)
+20. Draw the container FIRST (as background), then draw objects INSIDE it.
+
+Output the required functions (main render and legend). Optionally include background if appropriate for the domain. Start with 'function render...'.

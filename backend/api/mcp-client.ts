@@ -2,17 +2,14 @@
  * MCP Client for Node.js Backend
  * 
  * This module provides an MCP client that connects to the Python MCP server
- * via stdio transport and executes tools.
- * 
- * MCP Sampling Support:
- * - The client declares sampling capability during initialization
- * - When the server requests LLM generation via sampling/createMessage,
- *   the client handles it using the LLM orchestrator
+ * via stdio transport and executes tools and reads resources.
  * 
  * Architecture:
  * - Uses @modelcontextprotocol/sdk for MCP protocol handling
  * - Connects to Python MCP server via stdio transport
- * - Supports both tool calls (client -> server) and sampling (server -> client)
+ * - Supports tool calls (client -> server) for executing functions
+ * - Supports resource reads (client -> server) for fetching versioned prompts
+ * - Supports sampling (server -> client) for LLM generation requests
  */
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -42,8 +39,21 @@ export interface MCPTool {
   };
 }
 
+export interface MCPResource {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+}
+
 export interface ToolResult {
   content: string;
+  isError: boolean;
+}
+
+export interface ResourceResult {
+  content: string;
+  mimeType: string;
   isError: boolean;
 }
 
@@ -66,6 +76,7 @@ export class MCPClient {
   private client: Client | null = null;
   private transport: StdioClientTransport | null = null;
   private tools: MCPTool[] = [];
+  private resources: MCPResource[] = [];
   private connected: boolean = false;
   private options: MCPClientOptions;
   private orchestrator: LLMOrchestrator | null = null;
@@ -138,6 +149,21 @@ export class MCPClient {
       inputSchema: (tool.inputSchema as MCPTool['inputSchema']) || { type: "object", properties: {} },
     }));
 
+    // Discover resources
+    try {
+      const resourcesResult = await this.client!.listResources();
+      this.resources = resourcesResult.resources.map((resource: { uri: string; name: string; description?: string; mimeType?: string }) => ({
+        uri: resource.uri,
+        name: resource.name,
+        description: resource.description,
+        mimeType: resource.mimeType,
+      }));
+      console.log('[MCPClient] Discovered resources:', this.resources.map(r => r.uri));
+    } catch (e) {
+      console.log('[MCPClient] No resources discovered (server may not expose any)');
+      this.resources = [];
+    }
+
     console.log('[MCPClient] Connected to MCP server');
     console.log('[MCPClient] Discovered tools:', this.tools.map(t => t.name));
   }
@@ -198,6 +224,7 @@ export class MCPClient {
 
     this.connected = false;
     this.tools = [];
+    this.resources = [];
     console.log('[MCPClient] Disconnected from MCP server');
   }
 
@@ -263,6 +290,61 @@ export class MCPClient {
         isError: true,
       };
     }
+  }
+
+  /**
+   * Read a resource from the MCP server
+   * 
+   * Resources are read-only data sources exposed by the server.
+   * Use this to fetch versioned prompts, configuration, etc.
+   * 
+   * @param uri The resource URI (e.g., "prompt://renderer/system/v1")
+   */
+  async readResource(uri: string): Promise<ResourceResult> {
+    if (!this.connected || !this.client) {
+      throw new Error("MCP client not connected");
+    }
+
+    console.log(`[MCPClient] Reading resource: ${uri}`);
+
+    try {
+      const result = await this.client.readResource({ uri });
+      
+      // Extract content from result
+      let content = "";
+      let mimeType = "text/plain";
+      
+      if (result.contents && Array.isArray(result.contents)) {
+        for (const item of result.contents) {
+          if ((item as { text?: string }).text) {
+            content += (item as { text: string }).text;
+          }
+          if ((item as { mimeType?: string }).mimeType) {
+            mimeType = (item as { mimeType: string }).mimeType;
+          }
+        }
+      }
+
+      return {
+        content,
+        mimeType,
+        isError: false,
+      };
+    } catch (error) {
+      console.error(`[MCPClient] Resource read error:`, error);
+      return {
+        content: error instanceof Error ? error.message : "Unknown error",
+        mimeType: "text/plain",
+        isError: true,
+      };
+    }
+  }
+
+  /**
+   * List available resources from the MCP server
+   */
+  getResources(): MCPResource[] {
+    return this.resources;
   }
 
   /**

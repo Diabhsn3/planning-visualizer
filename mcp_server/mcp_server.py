@@ -1,9 +1,13 @@
 """
 MCP Server for Planning Visualizer
-Exposes tools for generating JavaScript renderers.
+Exposes tools and resources for generating JavaScript renderers.
+
+Architecture:
+- Resources: Versioned prompts for reproducibility (prompt://renderer/system/{version})
+- Tools: Utility functions for code generation, validation, and cleaning
 
 This is a PURE TOOL SERVER - it does NOT call Claude.
-Claude orchestration happens in the Node.js backend.
+Claude orchestration happens in the Node.js backend via an agentic loop.
 """
 
 import os
@@ -11,6 +15,7 @@ import json
 import re
 import subprocess
 import tempfile
+from pathlib import Path
 from pydantic import Field
 from typing import Union
 from mcp.server.fastmcp import FastMCP
@@ -18,99 +23,82 @@ from mcp.server.fastmcp import FastMCP
 # Create the MCP server
 mcp = FastMCP("PlanningVisualizerMCP", log_level="ERROR")
 
+# Directory containing versioned prompts
+PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-def get_system_prompt(domain_pascal: str) -> str:
-    """Get the system prompt for code generation."""
-    return f"""You are an expert JavaScript developer for HTML5 Canvas visualization.
-Generate JavaScript functions that render PDDL planning states.
 
-YOU MUST GENERATE THE MAIN RENDER AND LEGEND FUNCTIONS. Background function is OPTIONAL.
+# =============================================================================
+# MCP RESOURCES - Versioned prompts for reproducibility
+# =============================================================================
 
-1. MAIN RENDER FUNCTION (REQUIRED):
-   function render{domain_pascal}(ctx, state) {{
-     // Main visualization - draws all objects and relations
-     // ctx: Canvas 2D context
-     // state: {{ objects: {{...}}, predicates: {{...}} }}
-     // DO NOT clear canvas or draw background here
-   }}
+@mcp.resource("prompt://renderer/system/{version}")
+def get_system_prompt_resource(version: str) -> str:
+    """
+    Reads a versioned system prompt from the filesystem.
+    
+    URI: prompt://renderer/system/v1
+    
+    The prompt contains {domain_pascal} placeholder that should be replaced
+    by the client with the actual PascalCase domain name.
+    """
+    prompt_path = PROMPTS_DIR / version / "system_prompt.txt"
+    if not prompt_path.exists():
+        available = [d.name for d in PROMPTS_DIR.iterdir() if d.is_dir()]
+        raise ValueError(f"Prompt version '{version}' not found. Available: {available}")
+    with open(prompt_path, "r") as f:
+        return f.read()
 
-2. BACKGROUND FUNCTION (OPTIONAL - include only if the domain benefits from a custom background):
-   function render{domain_pascal}Background(ctx, width, height) {{
-     // Custom background - gradient, pattern, terrain, space, etc.
-     // Called BEFORE zoom/pan transformations (stays fixed)
-     // ctx: Canvas 2D context
-     // width, height: Canvas dimensions
-     // Only include if the domain would benefit from a thematic background
-     // Examples where background IS useful: wooden table for blocks, space for satellites, warehouse for logistics
-     // Examples where background is NOT needed: simple grid-based domains, abstract puzzles
-   }}
 
-3. LEGEND FUNCTION (REQUIRED):
-   function render{domain_pascal}Legend(ctx, x, y) {{
-     // Legend box showing what colors/shapes mean
-     // Called AFTER zoom/pan (stays fixed at position)
-     // ctx: Canvas 2D context
-     // x, y: Top-left position for legend
-     // Draw a semi-transparent box with icon + label pairs
-   }}
+@mcp.resource("prompt://renderer/versions")
+def list_prompt_versions() -> dict:
+    """
+    Lists all available prompt versions.
+    
+    URI: prompt://renderer/versions
+    
+    Returns a dict with available versions and the recommended default.
+    """
+    versions = [d.name for d in PROMPTS_DIR.iterdir() if d.is_dir()]
+    return {
+        "available_versions": sorted(versions),
+        "default": "v1",
+        "description": "Use prompt://renderer/system/{version} to fetch a specific version"
+    }
 
-CRITICAL RULES:
-1. EVERY const/let MUST have an initializer on the SAME LINE.
-2. Parse state.predicates to determine object positions and relationships.
-3. Use distinct colors, shadows, labels. Make it professional and visually appealing.
-4. No imports, no external libs, only Canvas API.
-5. PURE JAVASCRIPT ONLY - NO TypeScript! No type annotations like `: string`, `: number`, `: any`.
-6. NO type annotations on parameters. Write `function foo(ctx, state)` NOT `function foo(ctx: any, state: any)`.
-7. The main render function should NOT clear the canvas.
-8. ONLY include background function if the domain would genuinely benefit from a custom thematic background.
-9. Legend should explain all colors and shapes used.
-10. Use simple ternary operators carefully: `condition ? valueA : valueB`.
 
-OBJECT ARRANGEMENT RULES (CRITICAL - NEVER VIOLATE):
-11. When multiple objects are at the SAME location, arrange them SIDE BY SIDE or STACKED.
-12. NEVER overlay objects on top of each other - they must ALL be visible.
-13. Example: If 3 cars are at station A, show them in a row or column, not overlapping.
-14. Use offsets based on index: x + (index * objectWidth + spacing)
-
-CONTAINER SIZING RULES (CRITICAL):
-15. Containers (stations, depots, rooms, locations, etc.) should RESIZE based on their contents.
-16. Draw contained objects INSIDE the container, not around or outside it.
-17. If a station contains 3 cars, make the station wider/taller to fit all cars inside.
-18. When objects leave, the container should visually shrink.
-19. Calculate container size: baseSize + (numContainedObjects * objectSize + padding)
-20. Draw the container FIRST (as background), then draw objects INSIDE it.
-
-Output the required functions (main render and legend). Optionally include background if appropriate for the domain. Start with 'function render...'."""
-
+# =============================================================================
+# MCP TOOLS - Utility functions for the LLM agent
+# =============================================================================
 
 @mcp.tool(
     name="prepare_generation_artifacts",
-    description="Prepare the system prompt, user prompt, and PascalCase domain name for renderer generation.",
+    description="Prepare the user prompt and PascalCase domain name for renderer generation. Call this first to get the initial prompt for the LLM.",
 )
 def prepare_generation_artifacts(
     domain_name: str = Field(description="Name of the planning domain"),
     example_state: Union[str, dict] = Field(description="JSON string or dict containing an example state"),
     style_hints: str = Field(default="", description="Optional style hints"),
 ) -> str:
-    """Prepare all artifacts needed for the LLM to generate a renderer."""
+    """
+    Prepares the user prompt part of the generation request.
+    
+    The system prompt should be fetched separately from the prompt://renderer/system/{version} resource.
+    """
     try:
         state_data = json.loads(example_state) if isinstance(example_state, str) else example_state
         
         # Convert domain name to PascalCase for function names
         domain_pascal = ''.join(word.capitalize() for word in domain_name.replace('-', ' ').replace('_', ' ').split())
         
-        system_prompt = get_system_prompt(domain_pascal)
-        
         user_prompt = f'Generate renderer functions for "{domain_name}" domain.\n'
         user_prompt += f"Use PascalCase name: {domain_pascal}\n\n"
         user_prompt += f"EXAMPLE STATE:\n{json.dumps(state_data, indent=2)}\n\n"
         if style_hints:
             user_prompt += f"STYLE HINTS: {style_hints}\n\n"
-        user_prompt += "Generate ALL THREE JavaScript functions (render, background, legend)."
+        user_prompt += "Generate the required JavaScript functions (main render and legend). Include background function only if appropriate for this domain."
         
         return json.dumps({
             "success": True,
-            "system_prompt": system_prompt,
             "user_prompt": user_prompt,
             "domain_pascal": domain_pascal
         })
@@ -124,7 +112,7 @@ def prepare_generation_artifacts(
 
 @mcp.tool(
     name="validate_renderer",
-    description="Validate JavaScript renderer code for syntax errors.",
+    description="Validate JavaScript renderer code for syntax errors. Use this to check if generated code is valid before returning it.",
 )
 def validate_renderer(
     code: str = Field(description="The JavaScript renderer code to validate"),
@@ -183,7 +171,7 @@ def validate_renderer(
 
 @mcp.tool(
     name="clean_code",
-    description="Clean generated code by removing markdown code blocks, TypeScript annotations, and extra whitespace.",
+    description="Clean generated code by removing markdown code blocks, TypeScript annotations, and extra whitespace. Use this before validation if the LLM output contains markdown formatting.",
 )
 def clean_code(
     code: str = Field(description="The raw code to clean"),
@@ -262,7 +250,7 @@ def clean_code(
 
 @mcp.tool(
     name="get_domain_hints",
-    description="Get visualization hints for a specific planning domain.",
+    description="Get visualization hints for a specific planning domain. Use this to get styling suggestions for known domains.",
 )
 def get_domain_hints(
     domain_name: str = Field(description="Name of the planning domain"),
