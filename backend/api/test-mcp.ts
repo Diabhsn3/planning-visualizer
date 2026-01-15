@@ -48,7 +48,14 @@ async function testMcpConnection() {
     console.log("   User prompt length:", prompts.user_prompt?.length || 0);
     console.log("");
     
-    
+    // Test 5: Call clean_code tool
+    console.log("5. Testing clean_code tool...");
+    const cleanResult = await callTool("clean_code", {
+      code: "```javascript\nfunction test(x: number): void { console.log(x); }\n```"
+    });
+    const cleaned = JSON.parse(cleanResult);
+    console.log("   Success:", cleaned.success);
+    console.log("   Cleaned code:", cleaned.code?.slice(0, 100) + "...\n");
     
     // Test 6: Call validate_renderer tool
     console.log("6. Testing validate_renderer tool...");
