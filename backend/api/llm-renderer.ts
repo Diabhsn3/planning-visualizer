@@ -3,14 +3,17 @@
  * Orchestrates the generation of visualization renderers using LLM.
  */
 
+import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { generateRendererCode, isLlmAvailable } from "./llm-orchestrator.js";
 import { createProgress, updateProgress, getProgress } from "./generation-progress.js";
-import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Directory for cached renderers
+const CACHE_DIR = path.resolve(__dirname, "llm_renderers");
 
 export interface LLMRendererResult {
   success: boolean;
@@ -20,9 +23,77 @@ export interface LLMRendererResult {
   sessionId?: string;
 }
 
-// Simple UUID generator if uuid package not available
+// Simple session ID generator
 function generateSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Get the cache file path for a domain
+ */
+function getCachePath(domainName: string): string {
+  const safeName = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
+  return path.join(CACHE_DIR, `${safeName}.ts`);
+}
+
+/**
+ * Ensure cache directory exists
+ */
+async function ensureCacheDir(): Promise<void> {
+  try {
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+  } catch (error) {
+    // Directory may already exist
+  }
+}
+
+/**
+ * Check if a cached renderer exists for a domain
+ */
+export async function checkCachedRenderer(domainName: string): Promise<{ found: boolean; code: string | null }> {
+  try {
+    const cachePath = getCachePath(domainName);
+    const code = await fs.readFile(cachePath, "utf-8");
+    console.log(`[LLM Renderer] Found cached renderer for ${domainName}`);
+    return { found: true, code };
+  } catch (error) {
+    return { found: false, code: null };
+  }
+}
+
+/**
+ * Save renderer to cache
+ */
+async function saveToCache(domainName: string, code: string): Promise<void> {
+  await ensureCacheDir();
+  const cachePath = getCachePath(domainName);
+  
+  // Add header comment
+  const header = `// LLM-generated renderer for ${domainName}\n// Generated at: ${new Date().toISOString()}\n\n`;
+  await fs.writeFile(cachePath, header + code, "utf-8");
+  
+  console.log(`[LLM Renderer] Saved renderer to cache: ${cachePath}`);
+}
+
+/**
+ * Clear cached renderers
+ */
+export async function clearRendererCache(): Promise<{ cleared: number }> {
+  try {
+    await ensureCacheDir();
+    const files = await fs.readdir(CACHE_DIR);
+    const tsFiles = files.filter(f => f.endsWith(".ts") && f !== ".gitkeep");
+    
+    for (const file of tsFiles) {
+      await fs.unlink(path.join(CACHE_DIR, file));
+    }
+    
+    console.log(`[LLM Renderer] Cleared ${tsFiles.length} cached renderers`);
+    return { cleared: tsFiles.length };
+  } catch (error) {
+    console.error("[LLM Renderer] Error clearing cache:", error);
+    return { cleared: 0 };
+  }
 }
 
 /**
@@ -78,8 +149,9 @@ export async function generateLLMRenderer(
       
       console.log(`[LLM Renderer] Generation successful after ${result.attempts} attempt(s)`);
       
-      // Step 6: Save (no-op for now, caching coming next)
+      // Step 6: Save to cache
       updateProgress(sid, "save", "running");
+      await saveToCache(domainName, result.code);
       updateProgress(sid, "save", "completed");
       
       return {
@@ -107,22 +179,6 @@ export async function generateLLMRenderer(
       sessionId: sid,
     };
   }
-}
-
-/**
- * Check if a cached renderer exists for a domain
- */
-export async function checkCachedRenderer(domainName: string): Promise<{ found: boolean; code: string | null }> {
-  // No caching yet - will be added in next commit
-  return { found: false, code: null };
-}
-
-/**
- * Clear cached renderers
- */
-export async function clearRendererCache(): Promise<{ cleared: number }> {
-  // No caching yet - will be added in next commit
-  return { cleared: 0 };
 }
 
 /**
