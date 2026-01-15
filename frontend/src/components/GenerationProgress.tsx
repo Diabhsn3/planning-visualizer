@@ -44,11 +44,12 @@ export function GenerationProgress({ isGenerating, onComplete, onShowResult }: G
   const logsContainerRef = useRef<HTMLDivElement>(null);
 
   // Poll for progress updates
+  // Keep polling even after isGenerating becomes false to catch the final status
   const { data } = trpc.visualizer.getGenerationProgress.useQuery(
     { progressId: undefined },
     {
-      enabled: isGenerating || (isFinished && !userDismissed),
-      refetchInterval: isGenerating ? 300 : false, // Poll every 300ms for smoother updates
+      enabled: !userDismissed, // Keep polling until user dismisses
+      refetchInterval: (!isFinished || isGenerating) ? 300 : false, // Poll every 300ms until finished
     }
   );
 
