@@ -586,11 +586,19 @@ The final output should start with 'function render...' and contain only JavaScr
         
       } else {
         // LLM returned text (no tool calls) - this should be the final code
-        finalCode = orchestrator.extractText(llmResponse);
-        log('LLMOrchestrator', `LLM returned final output (${finalCode.length} chars)`);
+        let rawOutput = orchestrator.extractText(llmResponse);
+        log('LLMOrchestrator', `LLM returned final output (${rawOutput.length} chars)`);
         
         // Check if it looks like valid code
-        if (finalCode.includes('function render')) {
+        if (rawOutput.includes('function render')) {
+          // Extract just the code portion - strip any conversational preamble
+          // This handles cases like "Here's the code:\n\nfunction render..."
+          const functionMatch = rawOutput.match(/function\s+render\w*\s*\(/);
+          if (functionMatch && functionMatch.index !== undefined && functionMatch.index > 0) {
+            log('LLMOrchestrator', `Stripping ${functionMatch.index} chars of preamble before code`);
+            rawOutput = rawOutput.substring(functionMatch.index);
+          }
+          finalCode = rawOutput;
           log('LLMOrchestrator', 'Final output contains render function - accepting as final code', 'success');
           break;
         } else {

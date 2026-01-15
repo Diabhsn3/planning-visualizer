@@ -171,16 +171,22 @@ def validate_renderer(
 
 @mcp.tool(
     name="clean_code",
-    description="Clean generated code by removing markdown code blocks, TypeScript annotations, and extra whitespace. Use this before validation if the LLM output contains markdown formatting.",
+    description="Clean generated code by removing markdown code blocks, TypeScript annotations, conversational preamble, and extra whitespace. Use this before validation if the LLM output contains markdown formatting or explanatory text.",
 )
 def clean_code(
     code: str = Field(description="The raw code to clean"),
 ) -> str:
-    """Clean code by removing markdown formatting and TypeScript annotations."""
+    """Clean code by removing markdown formatting, conversational text, and TypeScript annotations."""
     try:
         # Remove markdown code blocks
         cleaned = re.sub(r'^```(?:javascript|typescript|js|ts)?\s*\n?', '', code, flags=re.MULTILINE)
         cleaned = re.sub(r'\n?```\s*$', '', cleaned)
+        
+        # CRITICAL: Strip any conversational preamble before the first 'function' keyword
+        # This handles cases where LLM outputs text like "Here's the code:\n\nfunction render..."
+        function_match = re.search(r'(function\s+render\w*\s*\()', cleaned)
+        if function_match:
+            cleaned = cleaned[function_match.start():]
         
         # Remove TypeScript interface and type declarations
         cleaned = re.sub(r'^\s*(interface|type)\s+\w+[^{]*\{[^}]*\}\s*;?\s*$', '', cleaned, flags=re.MULTILINE)
