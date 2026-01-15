@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { generateLLMRenderer, checkCachedRenderer, clearRendererCache, getProgress } from "./llm-renderer.js";
 
 const execAsync = promisify(exec);
 
@@ -314,6 +315,58 @@ export const visualizerRouter = router({
             : "Failed to process uploaded files"
         );
       }
+    }),
+      // LLM Renderer Generation
+  generateLLMRenderer: publicProcedure
+    .input(z.object({
+      domainName: z.string(),
+      states: z.array(z.any()),
+    }))
+    .mutation(async ({ input }) => {
+      const { domainName, states } = input;
+      console.log(`[Visualizer API] LLM renderer request for domain: ${domainName}`);
+      
+      const result = await generateLLMRenderer(domainName, states);
+      
+      if (!result.success) {
+        throw new Error(result.error || "Failed to generate LLM renderer");
+      }
+      
+      return {
+        success: true,
+        code: result.code,
+        cached: result.cached,
+        sessionId: result.sessionId,
+      };
+    }),
+
+  // Check for cached LLM renderer
+  checkCachedRenderer: publicProcedure
+    .input(z.object({
+      domainName: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const { domainName } = input;
+      const result = await checkCachedRenderer(domainName);
+      return result;
+    }),
+
+  // Clear LLM renderer cache
+  clearRendererCache: publicProcedure
+    .mutation(async () => {
+      const result = await clearRendererCache();
+      return result;
+    }),
+
+  // Get LLM generation progress
+  getGenerationProgress: publicProcedure
+    .input(z.object({
+      sessionId: z.string(),
+    }))
+    .query(async ({ input }) => {
+      const { sessionId } = input;
+      const progress = getProgress(sessionId);
+      return progress;
     }),
 
   /**
