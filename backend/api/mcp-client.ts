@@ -135,3 +135,22 @@ export async function callTool(toolName: string, args: Record<string, unknown>):
 
   return JSON.stringify(result);
 }
+
+/**
+ * Create a sampling message (for MCP sampling support)
+ * This allows the server to request LLM completions through the client
+ */
+export async function createSamplingMessage(
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens: number = 4096
+): Promise<string> {
+  // This is a placeholder for MCP sampling
+  // In a full implementation, this would be called by the server
+  // For now, we handle LLM calls directly in the orchestrator
+  console.log("[MCP Client] Sampling message requested");
+  return JSON.stringify({
+    role: "assistant",
+    content: "Sampling not implemented - use orchestrator directly"
+  });
+}
