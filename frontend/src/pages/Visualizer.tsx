@@ -1057,10 +1057,11 @@ export default function Visualizer() {
                 {/* Canvas */}
                 <div className="p-6">
                   <StateCanvas 
-                    state={renderedStates[currentStateIndex]} 
-                    isFirst={currentStateIndex === 0} 
-                    isLast={currentStateIndex === renderedStates.length - 1}
-                  />
+                      state={renderedStates[currentStateIndex]} 
+                      isFirst={currentStateIndex === 0} 
+                      isLast={currentStateIndex === renderedStates.length - 1}
+                      llmCode={visualizationMode === "llm" ? llmCode : null}
+                    />
                 </div>
 
                 {/* Controls */}

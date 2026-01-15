@@ -95,10 +95,11 @@ interface StateCanvasProps {
   height?: number;
   isFirst?: boolean;
   isLast?: boolean;
+  llmCode?: string | null;
 }
 
 
-export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false }: StateCanvasProps) {
+export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmCode = null }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
