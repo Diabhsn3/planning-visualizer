@@ -186,10 +186,10 @@ def list_available_domains() -> str:
     name="get_domain_hints",
     description="""Get visualization style hints for known planning domains.
 
-USE THIS TOOL WHEN: You want styling suggestions (colors, layout, background) for a domain.
+USE THIS TOOL: OPTIONAL - only if you need styling ideas before generating code.
+Most domains work fine without calling this tool.
 
-RETURNS: Hints about visual style, layout approach, background, and legend content.
-For unknown domains, returns generic suggestions.""",
+RETURNS: Hints about visual style, layout approach, background, and legend content.""",
 )
 def get_domain_hints(
     domain_name: str = Field(description="Name of the planning domain"),
@@ -313,12 +313,17 @@ def prepare_generation_artifacts(
     name="validate_renderer",
     description="""Validate JavaScript renderer code for syntax errors and required functions.
 
-USE THIS TOOL WHEN: You have generated code and want to check if it's valid before returning it.
+IMPORTANT: Only call this AFTER you have written complete JavaScript code.
+DO NOT call this tool before generating code - you need code to validate first!
+
+WORKFLOW:
+1. First, generate the JavaScript renderer functions
+2. Then, call this tool with your generated code
+3. If validation fails, fix the errors and validate again
 
 CHECKS:
 - JavaScript syntax (using Node.js --check)
-- Required functions: renderDomainName(ctx, state), renderDomainNameLegend(ctx, state)
-- Optional function: renderDomainNameBackground(ctx, width, height)
+- Required functions: renderDomainName(ctx, state), renderDomainNameLegend(ctx, x, y)
 - Presence of 'ctx' parameter
 
 RETURNS: JSON with valid (boolean), errors (array), and warnings (array).""",
@@ -381,15 +386,14 @@ def validate_renderer(
 
 @mcp.tool(
     name="clean_code",
-    description="""Clean generated code by removing markdown formatting, TypeScript annotations, and conversational text.
+    description="""Clean generated code by removing markdown formatting and TypeScript annotations.
 
-USE THIS TOOL WHEN: Your generated code contains markdown code blocks (```), TypeScript types, or explanatory text before the actual code.
+IMPORTANT: Only call this AFTER you have written code that needs cleaning.
+If your code is already clean JavaScript, you don't need this tool.
 
 REMOVES:
 - Markdown code block markers (```)
 - TypeScript type annotations (: string, : number, etc.)
-- TypeScript interfaces and type declarations
-- 'as Type' casts
 - Any text before 'function render...'
 
 RETURNS: JSON with success (boolean) and code (cleaned JavaScript).""",
