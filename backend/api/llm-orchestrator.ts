@@ -449,14 +449,16 @@ export async function generateRendererWithLLM(
     const availableTools = mcpClient.getToolsForLLM();
     log('LLMOrchestrator', `Available MCP tools: ${availableTools.map(t => t.name).join(', ')}`);
     
-    // Build a simple, minimal user prompt - just the task and data
-    // NO workflow instructions - let LLM figure it out from tool descriptions
+    // Build a focused user prompt with all necessary data upfront
+    // This reduces the need for tool calls and speeds up generation
     let userPrompt = `Generate JavaScript renderer functions for the "${domainName}" domain.
 
-The renderer must use PascalCase name: ${domainPascal}
-(e.g., function render${domainPascal}(ctx, state) { ... })
+FUNCTION NAMES (use exactly):
+- render${domainPascal}(ctx, state)
+- render${domainPascal}Legend(ctx, x, y)
+- render${domainPascal}Background(ctx, width, height) [optional]
 
-EXAMPLE STATE DATA:
+STATE DATA YOUR RENDERER WILL RECEIVE:
 ${JSON.stringify(exampleState, null, 2)}
 `;
 
@@ -465,12 +467,13 @@ ${JSON.stringify(exampleState, null, 2)}
     }
 
     userPrompt += `
-Use the available tools to:
-- Understand the domain better (check for existing rendered data, get hints)
-- Validate your generated code before returning it
-- Clean any formatting issues from your code
+INSTRUCTIONS:
+1. Generate the JavaScript functions following the system prompt rules
+2. Use validate_renderer tool to check your code BEFORE returning it
+3. If validation fails, fix the issues and validate again
+4. Output ONLY the final JavaScript code (no markdown, no explanations)
 
-When you have valid, working code, output ONLY the JavaScript functions (no explanations).`;
+Generate the code now:`;
 
     // Initialize message history
     const messages: Message[] = [
