@@ -21,5 +21,38 @@
     "When hoist is holding a crate, draw the crate near the hoist gripper!",
     "Build location maps FIRST: pileAtDepot, craneAtDepot, truckAtDepot"
   ],
+  "visual_feedback": {
+    "lift": {
+      "description": "When hoist lifts a crate from pile or truck",
+      "visual": "Crate moves UP to hoist gripper, hoist arm highlighted/glowing",
+      "code_hint": "// Draw crate at hoist position, not on pile; highlight hoist arm in yellow"
+    },
+    "drop": {
+      "description": "When hoist drops a crate onto pile or truck",
+      "visual": "Crate moves DOWN from hoist to target, hoist arm returns to idle color",
+      "code_hint": "// Draw crate at pile/truck position; hoist arm back to normal color"
+    },
+    "load": {
+      "description": "When crate is loaded into truck",
+      "visual": "Crate appears ON the truck bed, truck shows 'loaded' state",
+      "code_hint": "// Draw crate inside truck bounds; optionally add weight indicator"
+    },
+    "unload": {
+      "description": "When crate is unloaded from truck",
+      "visual": "Crate moves from truck to hoist/pile",
+      "code_hint": "// Remove crate from truck, show at new position"
+    },
+    "drive": {
+      "description": "When truck moves between depots",
+      "visual": "Truck position changes to new depot, optionally show motion trail",
+      "code_hint": "// Update truck position based on at-truck relation"
+    }
+  },
+  "state_indicators": {
+    "hoist_holding": "Hoist arm glows yellow/orange when holding a crate",
+    "hoist_idle": "Hoist arm is gray/neutral when not holding",
+    "truck_loaded": "Truck shows crates on bed when loaded",
+    "truck_empty": "Truck bed is empty/flat when no crates"
+  },
   "code_pattern": "// DEPOT: Build location maps from at-X relations\nconst pileAtDepot = new Map();\nconst craneAtDepot = new Map();\nconst truckAtDepot = new Map();\n\nfor (const rel of state.relations) {\n  if (rel.type === 'at-pile') pileAtDepot.set(rel.source, rel.target);\n  if (rel.type === 'at-crane') craneAtDepot.set(rel.source, rel.target);\n  if (rel.type === 'at-truck') truckAtDepot.set(rel.source, rel.target);\n}\n\n// Draw each depot, then draw ONLY objects that belong to THAT depot\nfor (const depot of depots) {\n  const [dx, dy] = depot.position;\n  drawDepot(ctx, depot, dx, dy);\n  \n  // Get objects at THIS depot\n  const pilesHere = piles.filter(p => pileAtDepot.get(p.id) === depot.id);\n  const cranesHere = cranes.filter(c => craneAtDepot.get(c.id) === depot.id);\n  const trucksHere = trucks.filter(t => truckAtDepot.get(t.id) === depot.id);\n  \n  // Draw them at this depot's location\n  pilesHere.forEach((pile, i) => drawPile(ctx, pile, dx + 20 + i*60, dy + 50));\n  cranesHere.forEach(crane => drawCrane(ctx, crane, dx + 50, dy - 30));\n  trucksHere.forEach(truck => drawTruck(ctx, truck, dx + 100, dy + 80));\n}"
 }

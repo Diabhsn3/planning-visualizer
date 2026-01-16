@@ -12,6 +12,7 @@
     "have_soil_analysis": "rover have_soil_analysis waypoint means rover analyzed soil from waypoint",
     "have_rock_analysis": "rover have_rock_analysis waypoint means rover analyzed rock from waypoint",
     "have_image": "rover have_image objective mode means rover captured image",
+    "calibrated": "camera calibrated objective means camera is calibrated for that objective",
     "communicated_soil_data": "waypoint communicated_soil_data means soil data was transmitted",
     "communicated_rock_data": "waypoint communicated_rock_data means rock data was transmitted",
     "communicated_image_data": "objective communicated_image_data means image data was transmitted",
@@ -24,5 +25,54 @@
     "Show sample locations with distinct markers",
     "Indicate communicated data with visual feedback (checkmarks, colors)",
     "Draw traversable paths between waypoints"
-  ]
+  ],
+  "visual_feedback": {
+    "calibrate": {
+      "description": "When camera/instrument is calibrated",
+      "visual": "Draw crosshair marks on the camera, add 'CAL' badge in green",
+      "code_hint": "ctx.strokeStyle = '#4CAF50'; drawCrosshair(ctx, camX, camY, 8); ctx.fillText('CAL', camX+10, camY-5);"
+    },
+    "take_image": {
+      "description": "When rover takes an image of an objective",
+      "visual": "Draw camera flash effect, add camera icon (📷) near objective, mark objective as 'captured'",
+      "code_hint": "ctx.fillStyle = '#FFD700'; ctx.fillText('📷', objX, objY-10); // Or draw camera icon shape"
+    },
+    "communicate_image_data": {
+      "description": "When image data is transmitted to lander",
+      "visual": "Draw transmission waves from rover to lander, add 'TX' badge, show data link line",
+      "code_hint": "drawWaves(ctx, roverX, roverY, 3); ctx.setLineDash([5,5]); ctx.moveTo(roverX, roverY); ctx.lineTo(landerX, landerY);"
+    },
+    "communicate_soil_data": {
+      "description": "When soil analysis data is transmitted",
+      "visual": "Draw transmission effect, mark waypoint with checkmark for 'soil sent'",
+      "code_hint": "ctx.fillStyle = '#8B4513'; ctx.fillText('✓', wpX+15, wpY); // Brown checkmark for soil"
+    },
+    "communicate_rock_data": {
+      "description": "When rock analysis data is transmitted",
+      "visual": "Draw transmission effect, mark waypoint with checkmark for 'rock sent'",
+      "code_hint": "ctx.fillStyle = '#696969'; ctx.fillText('✓', wpX+20, wpY); // Gray checkmark for rock"
+    },
+    "sample_soil": {
+      "description": "When rover collects soil sample",
+      "visual": "Draw sample collection animation, add soil sample icon to rover inventory",
+      "code_hint": "ctx.fillStyle = '#8B4513'; ctx.beginPath(); ctx.arc(roverX+20, roverY, 5, 0, Math.PI*2); ctx.fill(); // Soil sample dot"
+    },
+    "sample_rock": {
+      "description": "When rover collects rock sample",
+      "visual": "Draw sample collection animation, add rock sample icon to rover inventory",
+      "code_hint": "ctx.fillStyle = '#696969'; ctx.fillRect(roverX+25, roverY-5, 8, 8); // Rock sample square"
+    },
+    "drop": {
+      "description": "When rover drops a sample at lander",
+      "visual": "Show sample moving from rover to lander drop zone",
+      "code_hint": "// Draw sample at lander position instead of rover"
+    }
+  },
+  "state_indicators": {
+    "calibrated_camera": "Green border or 'CAL' badge on camera",
+    "has_image": "Camera icon or 'IMG' badge on objective",
+    "has_soil_analysis": "Brown dot indicator on rover",
+    "has_rock_analysis": "Gray square indicator on rover",
+    "communicated": "Checkmark (✓) on the data source, dashed line to lander"
+  }
 }

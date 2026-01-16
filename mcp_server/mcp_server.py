@@ -394,30 +394,90 @@ def get_generation_context(
         # Get domain hints
         domain_hints = _get_domain_hints(domain_name)
         
-        # Analyze action context for implicit states
+        # Analyze action context for implicit states and visual feedback
         action_insights = []
-        if action_context:
+        visual_feedback_suggestions = []
+        
+        # Check if action_context is a valid string (not None, not empty, not FieldInfo)
+        if action_context and isinstance(action_context, str) and action_context.strip():
             action_lower = action_context.lower()
+            
+            # === MOVEMENT ACTIONS ===
             # Detect lift/unstack actions that imply holding
             if any(word in action_lower for word in ["lift", "unstack", "pick-up", "pickup", "grab"]):
                 action_insights.append("IMPLICIT HOLDING: This action implies an object is being held/lifted.")
                 action_insights.append("TIP: After lift/unstack, the object should be shown attached to the hoist/gripper, not on any surface.")
+            
             # Detect drop/stack actions that imply releasing
             if any(word in action_lower for word in ["drop", "stack", "put-down", "putdown", "release"]):
                 action_insights.append("IMPLICIT RELEASE: This action implies an object is being placed down.")
+            
             # Detect load/unload for trucks
             if "load" in action_lower:
                 action_insights.append("LOADING: Object is being moved into a vehicle/container.")
                 action_insights.append("TIP: Show the object INSIDE the truck/container after loading.")
             if "unload" in action_lower:
                 action_insights.append("UNLOADING: Object is being moved out of a vehicle/container.")
+            
+            # Detect navigation/movement
+            if any(word in action_lower for word in ["move", "drive", "navigate", "travel", "go", "walk"]):
+                action_insights.append("MOVEMENT: Object is changing location.")
+            
+            # === NON-MOVEMENT ACTIONS (need visual feedback!) ===
+            # Calibration actions
+            if any(word in action_lower for word in ["calibrate", "calibration", "align"]):
+                visual_feedback_suggestions.append("CALIBRATE ACTION: Draw crosshair/alignment marks on the calibrated instrument.")
+                visual_feedback_suggestions.append("TIP: Add a 'CAL' badge or green checkmark to show calibration complete.")
+            
+            # Image/photo actions
+            if any(word in action_lower for word in ["take-image", "take_image", "photograph", "capture", "image", "photo", "picture"]):
+                visual_feedback_suggestions.append("IMAGE ACTION: Draw a camera flash effect or camera icon near the target.")
+                visual_feedback_suggestions.append("TIP: Add an 'IMG' badge or camera emoji (📷) on photographed objects.")
+            
+            # Communication/transmission actions
+            if any(word in action_lower for word in ["communicate", "transmit", "send", "broadcast", "relay"]):
+                visual_feedback_suggestions.append("COMMUNICATE ACTION: Draw transmission waves or a data link line.")
+                visual_feedback_suggestions.append("TIP: Add a 'TX' badge or antenna icon, draw curved lines emanating from transmitter.")
+            
+            # Sample collection actions
+            if any(word in action_lower for word in ["sample", "collect", "gather", "extract", "drill"]):
+                visual_feedback_suggestions.append("SAMPLE ACTION: Draw a sample container or collection indicator.")
+                visual_feedback_suggestions.append("TIP: Add a sample vial icon or counter badge showing samples collected.")
+            
+            # Power/activation actions
+            if any(word in action_lower for word in ["power", "switch", "turn-on", "turn_on", "activate", "enable"]):
+                visual_feedback_suggestions.append("POWER ACTION: Show the object glowing or with a power indicator.")
+                visual_feedback_suggestions.append("TIP: Add a green LED dot or glow effect to powered-on objects.")
+            
+            # Analysis/processing actions
+            if any(word in action_lower for word in ["analyze", "process", "compute", "scan"]):
+                visual_feedback_suggestions.append("ANALYSIS ACTION: Show processing indicator or results badge.")
+                visual_feedback_suggestions.append("TIP: Add a progress bar, spinning indicator, or 'DONE' checkmark.")
+            
+            # Pointing/aiming actions
+            if any(word in action_lower for word in ["point", "aim", "turn", "rotate", "orient"]):
+                visual_feedback_suggestions.append("POINTING ACTION: Draw an arrow or line showing the pointing direction.")
+                visual_feedback_suggestions.append("TIP: Use a dashed line from the object to its target direction.")
+        
+        # Always add the critical reminder about visual feedback
+        visual_feedback_reminder = [
+            "CRITICAL: Every action MUST produce a visible change in the visualization!",
+            "For non-movement actions (calibrate, take-image, communicate, etc.), use:",
+            "  - Status badges (CAL, IMG, TX) on affected objects",
+            "  - Color changes (glow, highlight) to show state changes",
+            "  - Icons/symbols (camera, antenna, checkmark) near objects",
+            "  - Visual effects (flash, waves, sparkles) during action",
+            "Users watch the plan step-by-step - if nothing changes visually, they think it's broken!"
+        ]
         
         return json.dumps({
             "success": True,
             "state_analysis": state_analysis,
             "domain_hints": domain_hints,
             "action_insights": action_insights,
-            "next_step": "Now generate the complete JavaScript renderer code using this context."
+            "visual_feedback_suggestions": visual_feedback_suggestions,
+            "visual_feedback_reminder": visual_feedback_reminder,
+            "next_step": "Now generate the complete JavaScript renderer code using this context. REMEMBER: Every action must have visible feedback!"
         }, indent=2)
         
     except Exception as e:

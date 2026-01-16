@@ -16,5 +16,33 @@
     "Stacked blocks should be drawn vertically with 'on' block above target",
     "Held blocks should be shown near the robot arm/gripper",
     "Use consistent block sizes for visual clarity"
-  ]
+  ],
+  "visual_feedback": {
+    "pick-up": {
+      "description": "When arm picks up a block from table",
+      "visual": "Block moves UP to gripper, arm closes around block",
+      "code_hint": "// Draw block at arm position, arm in 'gripping' state"
+    },
+    "put-down": {
+      "description": "When arm puts block down on table",
+      "visual": "Block moves DOWN to table, arm opens",
+      "code_hint": "// Draw block on table, arm in 'open' state"
+    },
+    "stack": {
+      "description": "When arm stacks block on another block",
+      "visual": "Block moves from arm to top of target block",
+      "code_hint": "// Draw block on top of target block, arm releases"
+    },
+    "unstack": {
+      "description": "When arm picks up block from stack",
+      "visual": "Block moves UP from stack to gripper",
+      "code_hint": "// Draw block at arm position, removed from stack"
+    }
+  },
+  "state_indicators": {
+    "arm_holding": "Arm gripper closed, block attached to arm",
+    "arm_empty": "Arm gripper open, no block",
+    "block_clear": "No visual indicator needed (absence of block on top)",
+    "block_on_table": "Block at table level"
+  }
 }
