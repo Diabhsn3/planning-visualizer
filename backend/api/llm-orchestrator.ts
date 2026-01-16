@@ -257,7 +257,7 @@ export async function generateRendererWithLLM(
     
     reportProgress("Discovering available tools...");
     
-    const mcpTools = await mcpClient.listTools();
+    const mcpTools = mcpClient.getToolsForLLM();
     const anthropicTools = mcpToolsToAnthropicFormat(mcpTools);
     
     log('LLMOrchestrator', `Available tools: ${mcpTools.map((t: any) => t.name).join(', ')}`);
