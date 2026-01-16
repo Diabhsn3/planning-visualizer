@@ -792,6 +792,17 @@ def analyze_state_structure(state_json: str) -> str:
         insights.append("Held objects should be drawn near/attached to their holder.")
         recommendations.append("MUST USE get_spatial_relationship_guidelines for held object positioning")
     
+    # Detect 'at' location relations (at-pile, at-crane, at-truck, at-depot, etc.)
+    at_relations = [r for r in relation_types if r.lower().startswith("at") or r.lower().startswith("at-")]
+    if at_relations:
+        insights.append(f"LOCATION RELATIONS DETECTED: Found 'at' relations: {at_relations}")
+        insights.append("CRITICAL: Objects with 'at-X' relations should be drawn AT the location of their target!")
+        insights.append("Example: 'pile1 at-pile d1' means pile1 should be drawn at depot d1's location.")
+        insights.append("Example: 'c1 at-crane d1' means crane c1 should be drawn at depot d1's location.")
+        insights.append("Example: 't1 at-truck d2' means truck t1 should be drawn at depot d2's location.")
+        insights.append("WORKFLOW: 1) Draw locations (depots) first, 2) Position other objects AT their location based on 'at-X' relations.")
+        recommendations.append("MUST USE get_spatial_relationship_guidelines for location-based positioning")
+    
     # Check for position data
     positioned_types = [t for t, info in object_types.items() if info["has_position"]]
     if positioned_types:
@@ -824,24 +835,26 @@ def analyze_state_structure(state_json: str) -> str:
 
 @mcp.tool(
     name="get_spatial_relationship_guidelines",
-    description="""Get guidelines for handling spatial relationships: 'in' (containment) and 'on' (stacking).
+    description="""Get guidelines for handling spatial relationships: 'in' (containment), 'on' (stacking), and 'at' (location).
 
-USE THIS TOOL WHEN: You see relations like 'in', 'on', 'holding', 'contains', or similar.
+USE THIS TOOL WHEN: You see relations like 'in', 'on', 'at-pile', 'at-crane', 'at-truck', 'holding', 'contains', or similar.
 This tool teaches you how to:
 - Draw containers that RESIZE based on number of contents
 - Draw contained objects INSIDE their container
 - Stack objects VERTICALLY when one is 'on' another
+- Position objects AT their location based on 'at-X' relations
 - Handle multiple objects at the same logical position
 
-RETURNS: Code patterns for containment and stacking relationships.""",
+RETURNS: Code patterns for containment, stacking, and location-based positioning.""",
 )
 def get_spatial_relationship_guidelines() -> str:
     """Get guidelines for handling spatial relationships."""
     return json.dumps({
-        "description": "Guidelines for handling 'in' (containment) and 'on' (stacking) relationships",
+        "description": "Guidelines for handling 'in' (containment), 'on' (stacking), and 'at' (location) relationships",
         "overview": {
             "in_relations": "When A is 'in' B, A should be drawn INSIDE B. B is the container and should resize based on contents.",
             "on_relations": "When A is 'on' B, A should be drawn ABOVE B (vertically stacked). Build stacks from bottom to top.",
+            "at_relations": "When A 'at-X' B, A should be drawn AT B's location. Example: 'pile1 at-pile d1' means pile1 is at depot d1.",
             "key_insight": "Objects at the same logical position are NOT overlapping - they have spatial relationships that determine their visual arrangement!"
         },
         "critical_rules": [
@@ -1014,15 +1027,123 @@ function renderWithRelationships(ctx, state) {
   // Draw free objects at their positions
 }'''
         },
+        "location_pattern": {
+            "description": "For 'at-X' relations: position objects at their location's coordinates",
+            "code": '''// LOCATION: Objects 'at' a location (at-pile, at-crane, at-truck)
+function renderWithLocations(ctx, state) {
+  // Step 1: Build location maps from 'at-X' relations
+  const objectLocation = new Map(); // objectId -> locationId
+  const locationObjects = new Map(); // locationId -> {piles: [], cranes: [], trucks: [], packages: []}
+  
+  for (const rel of state.relations) {
+    const relType = rel.type.toLowerCase();
+    
+    // Handle 'at-pile', 'at-crane', 'at-truck', 'at' relations
+    if (relType.startsWith('at-') || relType === 'at') {
+      const objectId = rel.source;  // The object that is AT somewhere
+      const locationId = rel.target; // The location (usually a depot)
+      
+      objectLocation.set(objectId, locationId);
+      
+      if (!locationObjects.has(locationId)) {
+        locationObjects.set(locationId, { piles: [], cranes: [], trucks: [], packages: [] });
+      }
+      
+      // Categorize by relation type
+      const obj = state.objects.find(o => o.id === objectId);
+      if (obj) {
+        if (relType === 'at-pile') locationObjects.get(locationId).piles.push(obj);
+        else if (relType === 'at-crane') locationObjects.get(locationId).cranes.push(obj);
+        else if (relType === 'at-truck') locationObjects.get(locationId).trucks.push(obj);
+        else if (relType === 'at') locationObjects.get(locationId).packages.push(obj);
+      }
+    }
+  }
+  
+  // Step 2: Draw locations (depots) first, then objects AT each location
+  const locations = state.objects.filter(o => o.type === 'depot' || o.type === 'location');
+  
+  for (const location of locations) {
+    const [x, y] = location.position || [0, 0];
+    const pixelX = x * gridSize;
+    const pixelY = y * gridSize;
+    
+    // Draw the depot/location
+    drawDepot(ctx, location, pixelX, pixelY);
+    
+    // Get objects at this location
+    const atThisLocation = locationObjects.get(location.id) || { piles: [], cranes: [], trucks: [], packages: [] };
+    
+    // Draw cranes at this location (e.g., top of depot)
+    atThisLocation.cranes.forEach((crane, index) => {
+      const craneX = pixelX + 20 + index * 40;
+      const craneY = pixelY - 30; // Above depot
+      drawCrane(ctx, crane, craneX, craneY);
+    });
+    
+    // Draw piles at this location (e.g., inside depot)
+    atThisLocation.piles.forEach((pile, index) => {
+      const pileX = pixelX + 30 + index * 60;
+      const pileY = pixelY + 80; // Inside depot
+      drawPile(ctx, pile, pileX, pileY);
+    });
+    
+    // Draw trucks at this location (e.g., outside depot)
+    atThisLocation.trucks.forEach((truck, index) => {
+      const truckX = pixelX + 100 + index * 80;
+      const truckY = pixelY + 120; // Below depot
+      drawTruck(ctx, truck, truckX, truckY);
+    });
+  }
+}
+
+// IMPORTANT: Combine with 'on' relations for stacking!
+// Example: If 'p1 on p2' and 'p2 on-pile pile1' and 'pile1 at-pile d1'
+// Then: Draw d1 depot, draw pile1 at d1, draw p2 on pile1, draw p1 on p2
+function getObjectDrawPosition(objId, state, objectLocation, drawnPositions) {
+  // Check if object is ON something
+  const onRel = state.relations.find(r => 
+    (r.type === 'on' || r.type === 'on-pile') && r.source === objId
+  );
+  
+  if (onRel) {
+    // Object is on something - get that thing's position first
+    const basePos = getObjectDrawPosition(onRel.target, state, objectLocation, drawnPositions);
+    return { x: basePos.x, y: basePos.y - objectHeight }; // Stack above
+  }
+  
+  // Check if object is AT a location
+  const locationId = objectLocation.get(objId);
+  if (locationId) {
+    const location = state.objects.find(o => o.id === locationId);
+    if (location && location.position) {
+      const [lx, ly] = location.position;
+      return { x: lx * gridSize + offset, y: ly * gridSize + offset };
+    }
+  }
+  
+  // Fallback to object's own position
+  const obj = state.objects.find(o => o.id === objId);
+  if (obj && obj.position) {
+    const [x, y] = obj.position;
+    return { x: x * gridSize, y: y * gridSize };
+  }
+  
+  return { x: 0, y: 0 };
+}'''
+        },
         "common_mistakes": [
+            "Drawing objects at their raw position without checking 'at-X' relations",
             "Drawing objects at their raw position without checking 'on'/'in' relations",
             "Not building relationship maps before drawing",
             "Fixed container sizes that don't adapt to contents",
             "Drawing stacked objects at same Y position instead of offset",
             "Drawing contained objects outside their container bounds",
-            "Not handling the draw order (base before stack, container before contents)"
+            "Not handling the draw order (base before stack, container before contents)",
+            "Ignoring 'at-pile', 'at-crane', 'at-truck' relations and drawing objects at wrong depot",
+            "Drawing pile1 at d2 when 'pile1 at-pile d1' says it should be at d1"
         ],
-        "key_insight": "The position property gives the LOGICAL location. Relations tell you the SPATIAL arrangement at that location!"
+        "key_insight": "The position property gives the LOGICAL location. Relations tell you the SPATIAL arrangement at that location! 'at-X' relations tell you WHICH location an object belongs to!"
     })
 
 
