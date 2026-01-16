@@ -56,15 +56,30 @@ CRITICAL CODE RULES - FOLLOW EXACTLY:
           x = 5;
    RIGHT: let x = 5;
 
-3. No imports, no external libs, only Canvas API.
+3. NO IMAGES - DRAW EVERYTHING WITH CANVAS SHAPES!
+   FORBIDDEN: new Image(), .src =, drawImage(), img.onload
+   REQUIRED: Use ONLY Canvas drawing methods:
+   - ctx.fillRect(), ctx.strokeRect() for rectangles
+   - ctx.arc(), ctx.beginPath(), ctx.fill() for circles
+   - ctx.moveTo(), ctx.lineTo() for lines and polygons
+   - ctx.fillText() for labels
+   - ctx.createLinearGradient() for gradients
+   
+   Draw trucks as rectangles with wheels (circles)
+   Draw cranes as lines with a hook shape
+   Draw buildings as rectangles with roofs (triangles)
+   Draw packages as small colored squares
+   BE CREATIVE with shapes - no images allowed!
 
-4. The main render function should NOT clear the canvas.
+4. No imports, no external libs, only Canvas API.
 
-5. ALWAYS check for null/undefined before accessing properties:
+5. The main render function should NOT clear the canvas.
+
+6. ALWAYS check for null/undefined before accessing properties:
    if (!state || !state.objects) return;
    const color = obj.properties?.color || '#888';
 
-6. Use distinct colors, shadows, labels. Make it professional.
+7. Use distinct colors, shadows, labels. Make it professional.
 
 STATE DATA FORMAT - Your renderer will receive:
 {
@@ -95,6 +110,57 @@ OBJECT ARRANGEMENT RULES:
 CONTAINER SIZING RULES:
 - Containers should RESIZE based on contents
 - Draw contained objects INSIDE the container
+
+DRAWING EXAMPLES (use these patterns):
+
+// Draw a truck (rectangle + wheels)
+function drawTruck(ctx, x, y, color) {
+  // Body
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 80, 40);
+  // Cab
+  ctx.fillRect(x + 60, y - 15, 25, 25);
+  // Wheels
+  ctx.fillStyle = '#333';
+  ctx.beginPath();
+  ctx.arc(x + 15, y + 40, 10, 0, Math.PI * 2);
+  ctx.arc(x + 55, y + 40, 10, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Draw a crane (pole + arm + hook)
+function drawCrane(ctx, x, y, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  // Vertical pole
+  ctx.beginPath();
+  ctx.moveTo(x, y + 60);
+  ctx.lineTo(x, y);
+  // Horizontal arm
+  ctx.lineTo(x + 40, y);
+  // Hook
+  ctx.lineTo(x + 40, y + 20);
+  ctx.stroke();
+  // Hook curve
+  ctx.beginPath();
+  ctx.arc(x + 40, y + 25, 5, 0, Math.PI);
+  ctx.stroke();
+}
+
+// Draw a building/depot (rectangle + roof)
+function drawBuilding(ctx, x, y, width, height, color) {
+  // Building body
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, width, height);
+  // Roof (triangle)
+  ctx.fillStyle = '#8B0000';
+  ctx.beginPath();
+  ctx.moveTo(x - 5, y);
+  ctx.lineTo(x + width/2, y - 30);
+  ctx.lineTo(x + width + 5, y);
+  ctx.closePath();
+  ctx.fill();
+}
 
 OUTPUT FORMAT:
 When ready, output ONLY the JavaScript functions.

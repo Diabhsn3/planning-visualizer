@@ -469,5 +469,74 @@ def clean_code(
         })
 
 
+# =============================================================================
+# EXAMPLE RENDERER RESOURCE AND TOOL
+# =============================================================================
+
+EXAMPLES_DIR = Path(__file__).parent / "examples"
+
+@mcp.resource("example://renderer/blocks_world")
+def get_example_renderer_resource() -> str:
+    """
+    Get a complete working example of a renderer implementation.
+    
+    URI: example://renderer/blocks_world
+    
+    This shows the correct structure, patterns, and Canvas API usage
+    for generating renderer functions.
+    """
+    example_path = EXAMPLES_DIR / "example_renderer.js"
+    if not example_path.exists():
+        raise ValueError("Example renderer not found")
+    with open(example_path, "r") as f:
+        return f.read()
+
+
+@mcp.tool(
+    name="get_example_renderer",
+    description="""Get a complete working example of a renderer implementation.
+
+USE THIS TOOL WHEN: You want to see a working example of how to structure renderer code.
+The example shows correct patterns for:
+- Null-checking state data
+- Filtering objects by type
+- Using positions and properties
+- Drawing with Canvas API (fillRect, strokeRect, fillText, etc.)
+- Creating a legend box
+- Creating a custom background
+
+RETURNS: Complete JavaScript code for a blocks_world renderer with comments.
+Study this example to understand the expected code structure before generating your own.""",
+)
+def get_example_renderer() -> str:
+    """Get a complete working example of a renderer implementation."""
+    example_path = EXAMPLES_DIR / "example_renderer.js"
+    if not example_path.exists():
+        return json.dumps({
+            "found": False,
+            "error": "Example renderer not found"
+        })
+    
+    with open(example_path, "r") as f:
+        code = f.read()
+    
+    return json.dumps({
+        "found": True,
+        "domain": "blocks_world",
+        "description": "Complete working example showing correct renderer structure",
+        "patterns_demonstrated": [
+            "Null-checking state data",
+            "Filtering objects by type",
+            "Using object positions and properties",
+            "Drawing shapes with Canvas API",
+            "Adding shadows and borders",
+            "Drawing text labels",
+            "Creating a legend box",
+            "Creating gradient backgrounds"
+        ],
+        "code": code
+    })
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
