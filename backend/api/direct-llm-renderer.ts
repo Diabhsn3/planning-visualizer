@@ -85,9 +85,9 @@ ${code}
 `;
     
     fs.writeFileSync(filepath, fileContent, 'utf-8');
-    console.log('[Direct LLM Renderer] Saved to file:', filepath);
+    console.log('[Direct LLM Renderer] Saved:', filename);
     
-    return filepath;
+    return filename;
   } catch (error) {
     console.error('[Direct LLM Renderer] Failed to save file:', error);
     return null;

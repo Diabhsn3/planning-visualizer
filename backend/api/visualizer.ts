@@ -489,7 +489,7 @@ export const visualizerRouter = router({
           console.error('[generateLLMRenderer] Error:', result.error);
         }
         if (result.saved_file) {
-          console.log('[generateLLMRenderer] Saved to:', result.saved_file);
+          console.log('[generateLLMRenderer] Saved:', result.saved_file);
         }
         
         return {
@@ -512,7 +512,7 @@ export const visualizerRouter = router({
           console.error('[generateLLMRenderer] Error:', result.error);
         }
         if (result.saved_file) {
-          console.log('[generateLLMRenderer] Saved to:', result.saved_file);
+          console.log('[generateLLMRenderer] Saved:', result.saved_file);
         }
         
         return {

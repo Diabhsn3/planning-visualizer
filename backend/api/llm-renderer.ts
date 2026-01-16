@@ -109,9 +109,9 @@ ${code}
     
     fs.writeFileSync(filepath, fileContent, 'utf-8');
     
-    console.log('[LLM Renderer] Saved to file:', filepath);
+    console.log('[LLM Renderer] Saved:', filename);
     
-    return filepath;
+    return filename;
   } catch (error) {
     console.error('[LLM Renderer] Failed to save file:', error);
     return null;
@@ -207,7 +207,7 @@ export async function generateLLMRenderer(
     if (result.success && result.code) {
       savedFile = saveRendererToFile(result.code, request.domain_name);
       if (savedFile) {
-        logDetail('LLM Renderer', `Saved to file: ${savedFile}`, 'success');
+        logDetail('LLM Renderer', `💾 Saved: ${savedFile}`, 'success');
       }
     }
     

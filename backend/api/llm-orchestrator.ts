@@ -374,15 +374,35 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
         // Execute each tool and collect results
         const toolResults: any[] = [];
         for (const toolCall of toolCalls) {
-          const inputSummary = Object.keys(toolCall.input || {}).length > 0 
-            ? ` with ${Object.keys(toolCall.input).join(', ')}` 
+          const toolInput = (toolCall.input || {}) as Record<string, unknown>;
+          const inputSummary = Object.keys(toolInput).length > 0 
+            ? ` with ${Object.keys(toolInput).join(', ')}` 
             : '';
           log('MCPClient', `→ ${toolCall.name}${inputSummary}`);
           
           try {
             const result = await mcpClient.callTool(toolCall.name, toolCall.input as Record<string, unknown>);
-            const resultLen = result.content.length;
-            log('MCPClient', `✓ ${toolCall.name} returned ${resultLen} chars`);
+            
+            // Format result message based on tool type
+            let resultMsg = '';
+            if (toolCall.name === 'validate_renderer') {
+              try {
+                const validation = JSON.parse(result.content);
+                if (validation.valid) {
+                  resultMsg = '✓ validate_renderer: VALID';
+                  if (validation.warnings?.length > 0) {
+                    resultMsg += ` (${validation.warnings.length} warnings)`;
+                  }
+                } else {
+                  resultMsg = `✗ validate_renderer: INVALID - ${validation.errors?.join(', ') || 'unknown error'}`;
+                }
+              } catch {
+                resultMsg = `✓ validate_renderer returned ${result.content.length} chars`;
+              }
+            } else {
+              resultMsg = `✓ ${toolCall.name} returned ${result.content.length} chars`;
+            }
+            log('MCPClient', resultMsg);
             
             toolResults.push({
               type: "tool_result",
