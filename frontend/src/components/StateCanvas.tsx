@@ -96,10 +96,11 @@ interface StateCanvasProps {
   isFirst?: boolean;
   isLast?: boolean;
   llmCode?: string | null;
+  isLlmGenerating?: boolean;
 }
 
 
-export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmCode = null }: StateCanvasProps) {
+export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmCode = null, isLlmGenerating = false }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -311,8 +312,8 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
       }
     }
     
-    if (!usedLlm) {
-      // Use basic domain-specific renderers
+    if (!usedLlm && !isLlmGenerating) {
+      // Use basic domain-specific renderers (skip if LLM is generating to prevent overlap)
       if (state.domain === "blocks-world") {
         renderBlocksWorld(ctx, state);
       } else if (state.domain === "gripper") {
@@ -354,7 +355,7 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     }
     // Add more domain legends here as needed
     
-    }, [state, width, height, scale, offset, isFirst, isLast, llmCode]);
+    }, [state, width, height, scale, offset, isFirst, isLast, llmCode, isLlmGenerating]);
 
   // Handle mouse down for panning
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {

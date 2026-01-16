@@ -1168,6 +1168,7 @@ export default function Visualizer() {
                       isFirst={currentStateIndex === 0} 
                       isLast={currentStateIndex === renderedStates.length - 1}
                       llmCode={visualizationMode === "llm" ? llmCode : null}
+                      isLlmGenerating={visualizationMode === "llm" && isLlmGenerating}
                     />
                   </div>
                 </div>
