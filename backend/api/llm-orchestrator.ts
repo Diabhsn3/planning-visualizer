@@ -374,7 +374,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     
     while (iteration < MAX_ITERATIONS) {
       iteration++;
-      log('LLMOrchestrator', `━━━ Iteration ${iteration}/${MAX_ITERATIONS} ━━━`);
+      log('LLMOrchestrator', `━━━ Iteration ${iteration} ━━━`);
       
       // Make LLM call with tools available
       const llmResponse = await orchestrator.chat(messages, systemPrompt, anthropicTools);
@@ -406,26 +406,11 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
           try {
             const result = await mcpClient.callTool(toolCall.name, toolCall.input as Record<string, unknown>);
             
-            // Format result message based on tool type
-            let resultMsg = '';
-            if (toolCall.name === 'validate_renderer') {
-              try {
-                const validation = JSON.parse(result.content);
-                if (validation.valid) {
-                  resultMsg = '✓ validate_renderer: VALID';
-                  if (validation.warnings?.length > 0) {
-                    resultMsg += ` (${validation.warnings.length} warnings)`;
-                  }
-                } else {
-                  resultMsg = `✗ validate_renderer: INVALID - ${validation.errors?.join(', ') || 'unknown error'}`;
-                }
-              } catch {
-                resultMsg = `✓ validate_renderer returned ${result.content.length} chars`;
-              }
-            } else {
-              resultMsg = `✓ ${toolCall.name} returned ${result.content.length} chars`;
-            }
-            log('MCPClient', resultMsg);
+            // Log actual tool output (truncated for readability)
+            const truncatedOutput = result.content.length > 500 
+              ? result.content.substring(0, 500) + '... [truncated]'
+              : result.content;
+            log('MCPClient', `✓ ${toolCall.name} output:\n${truncatedOutput}`);
             
             toolResults.push({
               type: "tool_result",
