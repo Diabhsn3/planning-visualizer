@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { generateLLMRenderer, checkLLMRendererStatus, getCachedRenderer, clearRendererCache, getGenerationProgress } from "./llm-renderer.js";
-import { generateDirectLLMRenderer } from "./direct-llm-renderer.js";
+import { generateDirectLLMRenderer, getCachedDirectRenderer, clearDirectRendererCache } from "./direct-llm-renderer.js";
 
 const execAsync = promisify(exec);
 
@@ -557,12 +557,46 @@ export const visualizerRouter = router({
     }),
 
   /**
-   * Clear all cached renderers
+   * Clear all cached MCP renderers
    */
   clearRendererCache: publicProcedure.mutation(async () => {
-    console.log('[clearRendererCache] Clearing all cached renderers');
+    console.log('[clearRendererCache] Clearing all cached MCP renderers');
     const result = clearRendererCache();
     console.log('[clearRendererCache] Result:', result);
+    return result;
+  }),
+
+  /**
+   * Get cached direct (non-MCP) renderer for a domain
+   */
+  getCachedDirectRenderer: publicProcedure
+    .input(z.object({ domainName: z.string() }))
+    .query(({ input }) => {
+      console.log('[getCachedDirectRenderer] Looking for cached direct renderer for:', input.domainName);
+      const cached = getCachedDirectRenderer(input.domainName);
+      if (cached) {
+        console.log('[getCachedDirectRenderer] Found cached direct renderer:', cached.filename);
+        return {
+          found: true,
+          code: cached.code,
+          filename: cached.filename
+        };
+      }
+      console.log('[getCachedDirectRenderer] No cached direct renderer found');
+      return {
+        found: false,
+        code: null,
+        filename: null
+      };
+    }),
+
+  /**
+   * Clear all cached direct (non-MCP) renderers
+   */
+  clearDirectRendererCache: publicProcedure.mutation(async () => {
+    console.log('[clearDirectRendererCache] Clearing all cached direct renderers');
+    const result = clearDirectRendererCache();
+    console.log('[clearDirectRendererCache] Result:', result);
     return result;
   }),
 

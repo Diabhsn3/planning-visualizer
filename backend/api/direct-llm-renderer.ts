@@ -21,31 +21,31 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Resolve llm_renderers folder path
-function getLlmRenderersPath(): string {
+// Resolve llm_renderers_direct folder path (separate from MCP renderers)
+function getDirectRenderersPath(): string {
   if (__dirname.endsWith('/dist') || __dirname.endsWith('\\dist')) {
-    return path.join(__dirname, '../llm_renderers');
+    return path.join(__dirname, '../llm_renderers_direct');
   }
-  return path.join(__dirname, 'llm_renderers');
+  return path.join(__dirname, 'llm_renderers_direct');
 }
 
-const LLM_RENDERERS_DIR = getLlmRenderersPath();
+const DIRECT_RENDERERS_DIR = getDirectRenderersPath();
 
-// Ensure llm_renderers directory exists
-function ensureRenderersDir(): void {
-  if (!fs.existsSync(LLM_RENDERERS_DIR)) {
-    fs.mkdirSync(LLM_RENDERERS_DIR, { recursive: true });
+// Ensure llm_renderers_direct directory exists
+function ensureDirectRenderersDir(): void {
+  if (!fs.existsSync(DIRECT_RENDERERS_DIR)) {
+    fs.mkdirSync(DIRECT_RENDERERS_DIR, { recursive: true });
   }
 }
 
 // Generate unique filename for renderer
-function generateRendererFilename(domainName: string): string {
+function generateDirectRendererFilename(domainName: string): string {
   const timestamp = new Date().toISOString()
     .replace(/[:.]/g, '-')
     .replace('T', '_')
     .replace('Z', '');
   const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, '_');
-  return `${sanitizedDomain}_direct_${timestamp}.ts`;
+  return `${sanitizedDomain}_${timestamp}.ts`;
 }
 
 export interface DirectLLMRendererRequest {
@@ -64,12 +64,12 @@ export interface DirectLLMRendererResponse {
 /**
  * Save generated code to file
  */
-function saveRendererToFile(code: string, domainName: string): string | null {
+function saveDirectRendererToFile(code: string, domainName: string): string | null {
   try {
-    ensureRenderersDir();
+    ensureDirectRenderersDir();
     
-    const filename = generateRendererFilename(domainName);
-    const filepath = path.join(LLM_RENDERERS_DIR, filename);
+    const filename = generateDirectRendererFilename(domainName);
+    const filepath = path.join(DIRECT_RENDERERS_DIR, filename);
     
     const fileContent = `/**
  * Direct LLM-Generated Renderer for ${domainName}
@@ -190,7 +190,7 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
     }
 
     // Save to file
-    const savedFile = saveRendererToFile(code, request.domain_name);
+    const savedFile = saveDirectRendererToFile(code, request.domain_name);
 
     return {
       success: true,
@@ -211,6 +211,88 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
       success: false,
       typescript_code: "",
       error: errorMessage
+    };
+  }
+}
+
+/**
+ * Get cached direct renderer for a domain (most recent one)
+ * Returns null if no cached renderer exists
+ */
+export function getCachedDirectRenderer(domainName: string): { code: string; filename: string } | null {
+  try {
+    ensureDirectRenderersDir();
+    
+    // Sanitize domain name to match filename format
+    const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, '_');
+    
+    // List all files for this domain
+    const files = fs.readdirSync(DIRECT_RENDERERS_DIR)
+      .filter(f => f.endsWith('.ts') && f.startsWith(sanitizedDomain + '_'))
+      .sort()
+      .reverse(); // Most recent first
+    
+    if (files.length === 0) {
+      console.log('[Direct LLM Renderer Cache] No cached renderer for domain:', domainName);
+      return null;
+    }
+    
+    const latestFile = files[0];
+    const filepath = path.join(DIRECT_RENDERERS_DIR, latestFile);
+    const content = fs.readFileSync(filepath, 'utf-8');
+    
+    // Extract the actual code (skip the header comment)
+    const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
+    const code = codeMatch ? codeMatch[1].trim() : content;
+    
+    console.log('[Direct LLM Renderer Cache] Found cached renderer:', latestFile);
+    
+    return {
+      code,
+      filename: latestFile
+    };
+  } catch (error) {
+    console.error('[Direct LLM Renderer Cache] Error reading cache:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear all cached direct renderers for a domain (or all if no domain specified)
+ */
+export function clearDirectRendererCache(domainName?: string): { success: boolean; deletedCount: number; error: string | null } {
+  try {
+    ensureDirectRenderersDir();
+    
+    let files = fs.readdirSync(DIRECT_RENDERERS_DIR)
+      .filter(f => f.endsWith('.ts') && f !== '.gitkeep');
+    
+    // If domain specified, only delete files for that domain
+    if (domainName) {
+      const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, '_');
+      files = files.filter(f => f.startsWith(sanitizedDomain + '_'));
+    }
+    
+    let deletedCount = 0;
+    for (const file of files) {
+      const filepath = path.join(DIRECT_RENDERERS_DIR, file);
+      fs.unlinkSync(filepath);
+      deletedCount++;
+    }
+    
+    console.log('[Direct LLM Renderer Cache] Cleared', deletedCount, 'cached renderers');
+    
+    return {
+      success: true,
+      deletedCount,
+      error: null
+    };
+  } catch (error) {
+    console.error('[Direct LLM Renderer Cache] Error clearing cache:', error);
+    return {
+      success: false,
+      deletedCount: 0,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
