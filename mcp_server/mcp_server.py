@@ -538,5 +538,76 @@ def get_example_renderer() -> str:
     })
 
 
+@mcp.tool(
+    name="get_legend_guidelines",
+    description="""Get guidelines for creating a properly sized legend box.
+
+USE THIS TOOL WHEN: You are creating the renderDomainLegend function.
+The legend should have SMALL icons (15-20px), not full-sized objects.
+
+RETURNS: Code example and sizing rules for legend items.""",
+)
+def get_legend_guidelines() -> str:
+    """Get guidelines for creating a properly sized legend box."""
+    return json.dumps({
+        "description": "Guidelines for creating a properly sized legend",
+        "critical_rules": [
+            "Legend icons must be SMALL (15-20px), NOT full-sized objects",
+            "Legend box should be compact (120-160px wide, 80-150px tall)",
+            "Use simple shapes for icons, not detailed drawings",
+            "Each legend item: small icon (15x15) + text label",
+            "Spacing between items: 20-25px vertical"
+        ],
+        "example_code": '''function renderDomainLegend(ctx, x, y) {
+  const boxWidth = 140;
+  const boxHeight = 120;
+  const iconSize = 15;  // SMALL icons!
+  const padding = 10;
+  const itemSpacing = 22;
+  
+  // Background box
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillRect(x, y, boxWidth, boxHeight);
+  ctx.strokeStyle = '#ccc';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, boxWidth, boxHeight);
+  
+  // Title
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('Legend', x + padding, y + 16);
+  
+  let itemY = y + 32;
+  
+  // Item 1: Depot (small rectangle)
+  ctx.fillStyle = '#A9A9A9';
+  ctx.fillRect(x + padding, itemY, iconSize, iconSize);
+  ctx.fillStyle = '#333';
+  ctx.font = '10px Arial';
+  ctx.fillText('Depot', x + padding + iconSize + 8, itemY + 11);
+  itemY += itemSpacing;
+  
+  // Item 2: Truck (small rectangle)
+  ctx.fillStyle = '#00BFFF';
+  ctx.fillRect(x + padding, itemY, iconSize, iconSize);
+  ctx.fillStyle = '#333';
+  ctx.fillText('Truck', x + padding + iconSize + 8, itemY + 11);
+  itemY += itemSpacing;
+  
+  // Item 3: Package (small square)
+  ctx.fillStyle = '#FFD700';
+  ctx.fillRect(x + padding, itemY, iconSize, iconSize);
+  ctx.fillStyle = '#333';
+  ctx.fillText('Package', x + padding + iconSize + 8, itemY + 11);
+}''',
+        "common_mistakes": [
+            "Drawing full-sized objects in legend (e.g., 60x60 blocks)",
+            "Making legend box too large",
+            "Using complex drawings instead of simple colored squares"
+        ]
+    })
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
