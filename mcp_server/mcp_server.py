@@ -585,22 +585,22 @@ def get_legend_guidelines() -> str:
             "Use simplified versions of the actual object drawings, not different shapes",
             "Each legend item: small icon (15x15) + text label",
             "Spacing between items: 20-25px vertical",
-            "Include ALL object types that appear in the domain (depot, truck, crane, pile, package, etc.)"
+            "Include ALL object types that appear in the domain"
         ],
         "consistency_explanation": {
             "why": "The legend explains what each visual element means. It should NOT change between states.",
             "how": "The renderDomainLegend function takes NO state parameter - it draws the same legend every time.",
-            "what_to_include": "All object TYPES in the domain, not specific instances. E.g., 'Depot' not 'd1, d2'."
+            "what_to_include": "All object TYPES in the domain, not specific instances. E.g., 'Block' not 'blockA, blockB'."
         },
         "matching_visuals_explanation": {
             "why": "Users need to match legend icons to objects in the visualization.",
-            "how": "If you draw depots as gray rectangles in the main render, draw a small gray rectangle in the legend.",
-            "example": "If trucks are blue with wheels, the legend should show a small blue rectangle (simplified truck)."
+            "how": "If you draw blocks as colored rectangles in the main render, draw a small colored rectangle in the legend.",
+            "example": "If objects are red circles in main render, legend should show a small red circle."
         },
         "example_code": '''function renderDomainLegend(ctx, x, y) {
   // NOTE: No state parameter! Legend is CONSISTENT across all states.
   const boxWidth = 140;
-  const boxHeight = 140;  // Adjust based on number of object types
+  const boxHeight = 100;  // Adjust based on number of object types
   const iconSize = 15;  // SMALL icons!
   const padding = 10;
   const itemSpacing = 22;
@@ -621,41 +621,28 @@ def get_legend_guidelines() -> str:
   let itemY = y + 32;
   
   // IMPORTANT: Use the SAME colors as in the main render function!
+  // Adapt these items to match YOUR domain's object types and colors.
   
-  // Item 1: Depot (gray - matches main visualization)
-  ctx.fillStyle = '#A9A9A9';  // Same gray as depot in main render
+  // Example Item 1: Block (matches main visualization color)
+  ctx.fillStyle = '#4A90D9';  // Same color as blocks in main render
   ctx.fillRect(x + padding, itemY, iconSize, iconSize);
   ctx.fillStyle = '#333';
   ctx.font = '10px Arial';
-  ctx.fillText('Depot', x + padding + iconSize + 8, itemY + 11);
+  ctx.fillText('Block', x + padding + iconSize + 8, itemY + 11);
   itemY += itemSpacing;
   
-  // Item 2: Truck (blue - matches main visualization)
-  ctx.fillStyle = '#00BFFF';  // Same blue as truck in main render
+  // Example Item 2: Table/Surface
+  ctx.fillStyle = '#8B4513';  // Same color as table in main render
   ctx.fillRect(x + padding, itemY, iconSize, iconSize);
   ctx.fillStyle = '#333';
-  ctx.fillText('Truck', x + padding + iconSize + 8, itemY + 11);
+  ctx.fillText('Table', x + padding + iconSize + 8, itemY + 11);
   itemY += itemSpacing;
   
-  // Item 3: Crane/Hoist (pink - matches main visualization)
-  ctx.fillStyle = '#FF69B4';  // Same pink as crane in main render
+  // Example Item 3: Arm/Gripper
+  ctx.fillStyle = '#666666';  // Same color as arm in main render
   ctx.fillRect(x + padding, itemY, iconSize, iconSize);
   ctx.fillStyle = '#333';
-  ctx.fillText('Crane', x + padding + iconSize + 8, itemY + 11);
-  itemY += itemSpacing;
-  
-  // Item 4: Package/Crate (yellow - matches main visualization)
-  ctx.fillStyle = '#FFD700';  // Same yellow as package in main render
-  ctx.fillRect(x + padding, itemY, iconSize, iconSize);
-  ctx.fillStyle = '#333';
-  ctx.fillText('Package', x + padding + iconSize + 8, itemY + 11);
-  itemY += itemSpacing;
-  
-  // Item 5: Pile (brown - matches main visualization)
-  ctx.fillStyle = '#8B4513';  // Same brown as pile in main render
-  ctx.fillRect(x + padding, itemY, iconSize, iconSize);
-  ctx.fillStyle = '#333';
-  ctx.fillText('Pile', x + padding + iconSize + 8, itemY + 11);
+  ctx.fillText('Arm', x + padding + iconSize + 8, itemY + 11);
 }''',
         "common_mistakes": [
             "Reading state data in legend function - legend should be STATIC!",
@@ -683,7 +670,7 @@ def get_state_handling_guidelines() -> str:
         "critical_rules": [
             "NEVER hardcode object positions - always read from state.objects[].position",
             "ALWAYS iterate over state.objects to find what exists in current state",
-            "ALWAYS check state.relations to determine object relationships (e.g., 'in-truck', 'on-pile')",
+            "ALWAYS check state.relations to determine object relationships",
             "Objects may appear/disappear between states - only draw what's in current state",
             "Position objects based on their relations, not just their position property"
         ],
@@ -692,51 +679,44 @@ def get_state_handling_guidelines() -> str:
             "relations": "Array of {type, source, target} describing relationships"
         },
         "example_patterns": {
-            "find_objects_by_type": "const trucks = state.objects.filter(o => o.type === 'truck');",
+            "find_objects_by_type": "const blocks = state.objects.filter(o => o.type === 'block');",
             "get_position": "const [x, y] = obj.position || [0, 0];",
-            "find_relation": "const inTruck = state.relations.find(r => r.type === 'in-truck' && r.source === pkg.id);",
-            "position_by_relation": "if (inTruck) { drawAt(truckPosition); } else if (onPile) { drawAt(pilePosition); }"
+            "find_relation": "const onBlock = state.relations.find(r => r.type === 'on' && r.source === block.id);",
+            "position_by_relation": "if (onBlock) { drawAbove(targetBlock); } else { drawOnTable(block); }"
         },
         "example_code": '''// CORRECT: Dynamic positioning based on state
-function renderDepot(ctx, state) {
+function renderDomain(ctx, state) {
   // Get all objects from current state
-  const packages = state.objects.filter(o => o.type === 'package');
-  const trucks = state.objects.filter(o => o.type === 'truck');
+  const blocks = state.objects.filter(o => o.type === 'block');
   
   // Build relation maps from current state
-  const packageInTruck = new Map();
-  const packageOnPile = new Map();
+  const blockOn = new Map();  // blockId -> whatItIsOn
   
   for (const rel of state.relations) {
-    if (rel.type === 'in-truck') packageInTruck.set(rel.source, rel.target);
-    if (rel.type === 'on-pile') packageOnPile.set(rel.source, rel.target);
+    if (rel.type === 'on') blockOn.set(rel.source, rel.target);
   }
   
-  // Draw each package at its CURRENT location
-  for (const pkg of packages) {
-    const truckId = packageInTruck.get(pkg.id);
-    const pileId = packageOnPile.get(pkg.id);
+  // Draw each block at its CURRENT location
+  for (const block of blocks) {
+    const targetId = blockOn.get(block.id);
     
-    if (truckId) {
-      // Package is in a truck - find truck position and draw inside
-      const truck = trucks.find(t => t.id === truckId);
-      if (truck && truck.position) {
-        const [tx, ty] = truck.position;
-        drawPackage(ctx, tx + 10, ty + 10); // Inside truck
+    if (targetId) {
+      // Block is on another block - find target and draw above it
+      const target = blocks.find(b => b.id === targetId);
+      if (target && target.position) {
+        const [tx, ty] = target.position;
+        drawBlock(ctx, tx, ty - blockHeight); // Above target
       }
-    } else if (pileId) {
-      // Package is on a pile - use pile position
-      // ... similar logic
     } else {
-      // Package has its own position
-      const [x, y] = pkg.position || [0, 0];
-      drawPackage(ctx, x, y);
+      // Block is on table - use its own position
+      const [x, y] = block.position || [0, 0];
+      drawBlock(ctx, x, y);
     }
   }
 }''',
         "common_mistakes": [
-            "Hardcoding positions like 'drawTruck(100, 200)' instead of reading from state",
-            "Not checking relations - drawing package at its own position even when it's in a truck",
+            "Hardcoding positions like 'drawObject(100, 200)' instead of reading from state",
+            "Not checking relations - drawing object at its own position even when it should be relative to another",
             "Assuming objects always exist - not filtering by current state",
             "Drawing objects that don't exist in current state"
         ]
@@ -749,8 +729,8 @@ function renderDepot(ctx, state) {
 
 USE THIS TOOL FIRST before generating any code!
 This tool examines the state data and tells you:
-- What object types exist (e.g., truck, package, depot)
-- What relation types exist (e.g., in-truck, on-pile, at-depot)
+- What object types exist (e.g., block, table, arm)
+- What relation types exist (e.g., on, holding, clear)
 - How objects relate to each other
 - What properties objects have
 
@@ -848,23 +828,23 @@ def analyze_state_structure(state_json: str) -> str:
     holding_relations = [r for r in relation_types if "holding" in r.lower() or "held" in r.lower() or "carrying" in r.lower()]
     if holding_relations:
         insights.append(f"HOLDING DETECTED: Found holding relations: {holding_relations}")
-        insights.append("Held objects should be drawn near/attached to their holder (e.g., crane gripper).")
-        insights.append("IMPORTANT: When a crane is holding a package, draw the package VISIBLE near the crane!")
+        insights.append("Held objects should be drawn near/attached to their holder (e.g., arm, gripper).")
+        insights.append("IMPORTANT: When something is holding an object, draw the held object VISIBLE near the holder!")
         recommendations.append("MUST USE get_spatial_relationship_guidelines for held object positioning")
     
-    # Detect 'in-truck' relations (packages inside trucks)
-    in_truck_relations = [r for r in relation_types if "in-truck" in r.lower() or "in_truck" in r.lower()]
-    if in_truck_relations:
-        insights.append(f"IN-TRUCK DETECTED: Found in-truck relations: {in_truck_relations}")
-        insights.append("IMPORTANT: Packages in trucks should be drawn ON/INSIDE the truck, NOT invisible!")
-        insights.append("Draw the package on the truck bed so it's visible to the user.")
+    # Detect 'in' containment relations (objects inside containers)
+    in_container_relations = [r for r in relation_types if r.lower().startswith("in-") or r.lower().startswith("in_") or r.lower() == "in"]
+    if in_container_relations:
+        insights.append(f"CONTAINMENT DETECTED: Found 'in' relations: {in_container_relations}")
+        insights.append("IMPORTANT: Objects inside containers should be drawn INSIDE/ON the container, NOT invisible!")
+        insights.append("Draw contained objects visibly within or on their container.")
     
-    # Detect 'at' location relations (at-pile, at-crane, at-truck, at-depot, etc.)
+    # Detect 'at' location relations
     at_relations = [r for r in relation_types if r.lower().startswith("at") or r.lower().startswith("at-")]
     if at_relations:
         insights.append(f"LOCATION RELATIONS DETECTED: Found 'at' relations: {at_relations}")
         insights.append("CRITICAL: Objects with 'at-X' relations should be drawn AT the location of their target!")
-        insights.append("CRITICAL: Each pile/crane belongs to ONE specific depot - do NOT draw them at all depots!")
+        insights.append("CRITICAL: Each object belongs to ONE specific location - do NOT draw them at all locations!")
         
         # Build and show actual location mappings from the state
         location_map = {}
@@ -887,7 +867,7 @@ def analyze_state_structure(state_json: str) -> str:
             for loc, objs in by_location.items():
                 insights.append(f"  At {loc}: {objs}")
         
-        insights.append("WORKFLOW: 1) Build location map from at-X relations, 2) Draw each depot, 3) Draw objects ONLY at their assigned depot")
+        insights.append("WORKFLOW: 1) Build location map from at-X relations, 2) Draw each location, 3) Draw objects ONLY at their assigned location")
         recommendations.append("MUST USE get_spatial_relationship_guidelines for location-based positioning")
     
     # Check for position data
@@ -924,7 +904,7 @@ def analyze_state_structure(state_json: str) -> str:
     name="get_spatial_relationship_guidelines",
     description="""Get guidelines for handling spatial relationships: 'in' (containment), 'on' (stacking), and 'at' (location).
 
-USE THIS TOOL WHEN: You see relations like 'in', 'on', 'at-pile', 'at-crane', 'at-truck', 'holding', 'contains', or similar.
+USE THIS TOOL WHEN: You see relations like 'in', 'on', 'at-X', 'holding', 'contains', or similar.
 This tool teaches you how to:
 - Draw containers that RESIZE based on number of contents
 - Draw contained objects INSIDE their container
@@ -941,7 +921,7 @@ def get_spatial_relationship_guidelines() -> str:
         "overview": {
             "in_relations": "When A is 'in' B, A should be drawn INSIDE B. B is the container and should resize based on contents.",
             "on_relations": "When A is 'on' B, A should be drawn ABOVE B (vertically stacked). Build stacks from bottom to top.",
-            "at_relations": "When A 'at-X' B, A should be drawn AT B's location. Example: 'pile1 at-pile d1' means pile1 is at depot d1.",
+            "at_relations": "When A 'at-X' B, A should be drawn AT B's location. Example: 'blockA at room1' means blockA is in room1.",
             "key_insight": "Objects at the same logical position are NOT overlapping - they have spatial relationships that determine their visual arrangement!"
         },
         "critical_rules": [
@@ -1116,81 +1096,65 @@ function renderWithRelationships(ctx, state) {
         },
         "location_pattern": {
             "description": "For 'at-X' relations: position objects at their location's coordinates",
-            "code": '''// LOCATION: Objects 'at' a location (at-pile, at-crane, at-truck)
+            "code": '''// LOCATION: Objects 'at' a location
 function renderWithLocations(ctx, state) {
   // Step 1: Build location maps from 'at-X' relations
   const objectLocation = new Map(); // objectId -> locationId
-  const locationObjects = new Map(); // locationId -> {piles: [], cranes: [], trucks: [], packages: []}
+  const locationObjects = new Map(); // locationId -> [objects]
   
   for (const rel of state.relations) {
     const relType = rel.type.toLowerCase();
     
-    // Handle 'at-pile', 'at-crane', 'at-truck', 'at' relations
+    // Handle 'at-X' or 'at' relations
     if (relType.startsWith('at-') || relType === 'at') {
       const objectId = rel.source;  // The object that is AT somewhere
-      const locationId = rel.target; // The location (usually a depot)
+      const locationId = rel.target; // The location
       
       objectLocation.set(objectId, locationId);
       
       if (!locationObjects.has(locationId)) {
-        locationObjects.set(locationId, { piles: [], cranes: [], trucks: [], packages: [] });
+        locationObjects.set(locationId, []);
       }
       
-      // Categorize by relation type
       const obj = state.objects.find(o => o.id === objectId);
       if (obj) {
-        if (relType === 'at-pile') locationObjects.get(locationId).piles.push(obj);
-        else if (relType === 'at-crane') locationObjects.get(locationId).cranes.push(obj);
-        else if (relType === 'at-truck') locationObjects.get(locationId).trucks.push(obj);
-        else if (relType === 'at') locationObjects.get(locationId).packages.push(obj);
+        locationObjects.get(locationId).push(obj);
       }
     }
   }
   
-  // Step 2: Draw locations (depots) first, then objects AT each location
-  const locations = state.objects.filter(o => o.type === 'depot' || o.type === 'location');
+  // Step 2: Draw locations first, then objects AT each location
+  // Identify location objects (they have objects AT them)
+  const locationIds = new Set(locationObjects.keys());
+  const locations = state.objects.filter(o => locationIds.has(o.id));
   
   for (const location of locations) {
     const [x, y] = location.position || [0, 0];
     const pixelX = x * gridSize;
     const pixelY = y * gridSize;
     
-    // Draw the depot/location
-    drawDepot(ctx, location, pixelX, pixelY);
+    // Draw the location
+    drawLocation(ctx, location, pixelX, pixelY);
     
     // Get objects at this location
-    const atThisLocation = locationObjects.get(location.id) || { piles: [], cranes: [], trucks: [], packages: [] };
+    const objectsHere = locationObjects.get(location.id) || [];
     
-    // Draw cranes at this location (e.g., top of depot)
-    atThisLocation.cranes.forEach((crane, index) => {
-      const craneX = pixelX + 20 + index * 40;
-      const craneY = pixelY - 30; // Above depot
-      drawCrane(ctx, crane, craneX, craneY);
-    });
-    
-    // Draw piles at this location (e.g., inside depot)
-    atThisLocation.piles.forEach((pile, index) => {
-      const pileX = pixelX + 30 + index * 60;
-      const pileY = pixelY + 80; // Inside depot
-      drawPile(ctx, pile, pileX, pileY);
-    });
-    
-    // Draw trucks at this location (e.g., outside depot)
-    atThisLocation.trucks.forEach((truck, index) => {
-      const truckX = pixelX + 100 + index * 80;
-      const truckY = pixelY + 120; // Below depot
-      drawTruck(ctx, truck, truckX, truckY);
+    // Draw each object at this location with appropriate offset
+    objectsHere.forEach((obj, index) => {
+      const objX = pixelX + 20 + index * 40;
+      const objY = pixelY + 30;
+      drawObject(ctx, obj, objX, objY);
     });
   }
 }
 
 // IMPORTANT: Combine with 'on' relations for stacking!
-// Example: If 'p1 on p2' and 'p2 on-pile pile1' and 'pile1 at-pile d1'
-// Then: Draw d1 depot, draw pile1 at d1, draw p2 on pile1, draw p1 on p2
+// Example: If 'blockA on blockB' and 'blockB at room1'
+// Then: Draw room1, draw blockB at room1, draw blockA on blockB
 function getObjectDrawPosition(objId, state, objectLocation, drawnPositions) {
   // Check if object is ON something
   const onRel = state.relations.find(r => 
-    (r.type === 'on' || r.type === 'on-pile') && r.source === objId
+    r.type === 'on' && r.source === objId
   );
   
   if (onRel) {
