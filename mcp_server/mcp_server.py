@@ -234,10 +234,34 @@ def get_domain_hints(
             "legend": "Show satellite modes and target types",
         },
         "depot": {
-            "description": "Warehouse logistics with hoists and crates",
-            "layout": "depots with storage areas, trucks for transport",
-            "background": "Industrial warehouse floor",
-            "legend": "Show crate locations and hoist states",
+            "description": "Warehouse logistics with cranes, piles, trucks, and packages",
+            "layout": "Each depot is a large gray building. Cranes are above/on top of depots. Piles are inside depots. Trucks park outside depots.",
+            "background": "Industrial warehouse floor with grid pattern",
+            "legend": "Show depot, truck, crane, package, and pile with their colors",
+            "critical_relations": {
+                "at-pile": "pile1 at-pile d1 means pile1 belongs to depot d1 ONLY - do NOT draw pile1 at other depots!",
+                "at-crane": "c1 at-crane d1 means crane c1 belongs to depot d1 ONLY",
+                "at-truck": "t1 at-truck d1 means truck t1 is currently at depot d1",
+                "on": "p1 on p2 means package p1 is stacked ON TOP of package p2 (draw p1 above p2)",
+                "on-pile": "p1 on-pile pile1 means package p1 is on the pile (bottom of stack on that pile)",
+                "in-truck": "p1 in-truck t1 means package p1 is INSIDE the truck - draw it ON the truck bed!",
+                "holding": "c1 holding p1 means crane c1 is holding package p1 - draw p1 attached to crane gripper!"
+            },
+            "positioning_rules": [
+                "EACH pile belongs to ONE depot via at-pile - check the relation!",
+                "EACH crane belongs to ONE depot via at-crane - check the relation!",
+                "Packages can be: on a pile (on-pile), stacked on another package (on), in a truck (in-truck), or held by crane (holding)",
+                "When package is in-truck, draw it INSIDE/ON the truck, not invisible!",
+                "When crane is holding a package, draw the package near the crane gripper!",
+                "Build location maps FIRST: which piles/cranes are at which depot"
+            ],
+            "visual_style": {
+                "depot": "Large gray rectangle (building) with label inside",
+                "crane": "Pink/magenta colored, positioned above depot with a vertical arm/gripper",
+                "pile": "Brown rectangle at bottom of depot, packages stack on top",
+                "truck": "Blue rectangle with wheels, parked outside/below depot",
+                "package": "Yellow/gold small rectangle with label"
+            }
         },
         "rovers": {
             "description": "Mars rovers collecting samples and images",
@@ -789,18 +813,46 @@ def analyze_state_structure(state_json: str) -> str:
     holding_relations = [r for r in relation_types if "holding" in r.lower() or "held" in r.lower() or "carrying" in r.lower()]
     if holding_relations:
         insights.append(f"HOLDING DETECTED: Found holding relations: {holding_relations}")
-        insights.append("Held objects should be drawn near/attached to their holder.")
+        insights.append("Held objects should be drawn near/attached to their holder (e.g., crane gripper).")
+        insights.append("IMPORTANT: When a crane is holding a package, draw the package VISIBLE near the crane!")
         recommendations.append("MUST USE get_spatial_relationship_guidelines for held object positioning")
+    
+    # Detect 'in-truck' relations (packages inside trucks)
+    in_truck_relations = [r for r in relation_types if "in-truck" in r.lower() or "in_truck" in r.lower()]
+    if in_truck_relations:
+        insights.append(f"IN-TRUCK DETECTED: Found in-truck relations: {in_truck_relations}")
+        insights.append("IMPORTANT: Packages in trucks should be drawn ON/INSIDE the truck, NOT invisible!")
+        insights.append("Draw the package on the truck bed so it's visible to the user.")
     
     # Detect 'at' location relations (at-pile, at-crane, at-truck, at-depot, etc.)
     at_relations = [r for r in relation_types if r.lower().startswith("at") or r.lower().startswith("at-")]
     if at_relations:
         insights.append(f"LOCATION RELATIONS DETECTED: Found 'at' relations: {at_relations}")
         insights.append("CRITICAL: Objects with 'at-X' relations should be drawn AT the location of their target!")
-        insights.append("Example: 'pile1 at-pile d1' means pile1 should be drawn at depot d1's location.")
-        insights.append("Example: 'c1 at-crane d1' means crane c1 should be drawn at depot d1's location.")
-        insights.append("Example: 't1 at-truck d2' means truck t1 should be drawn at depot d2's location.")
-        insights.append("WORKFLOW: 1) Draw locations (depots) first, 2) Position other objects AT their location based on 'at-X' relations.")
+        insights.append("CRITICAL: Each pile/crane belongs to ONE specific depot - do NOT draw them at all depots!")
+        
+        # Build and show actual location mappings from the state
+        location_map = {}
+        for rel in relations:
+            rel_type = rel.get("type", "").lower()
+            if rel_type.startswith("at-") or rel_type == "at":
+                source = rel.get("source")
+                target = rel.get("target")
+                if source and target:
+                    location_map[source] = target
+        
+        if location_map:
+            insights.append(f"ACTUAL LOCATION MAPPINGS: {location_map}")
+            # Group by location
+            by_location = {}
+            for obj, loc in location_map.items():
+                if loc not in by_location:
+                    by_location[loc] = []
+                by_location[loc].append(obj)
+            for loc, objs in by_location.items():
+                insights.append(f"  At {loc}: {objs}")
+        
+        insights.append("WORKFLOW: 1) Build location map from at-X relations, 2) Draw each depot, 3) Draw objects ONLY at their assigned depot")
         recommendations.append("MUST USE get_spatial_relationship_guidelines for location-based positioning")
     
     # Check for position data
