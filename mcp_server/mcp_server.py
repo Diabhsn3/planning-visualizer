@@ -767,130 +767,262 @@ def analyze_state_structure(state_json: str) -> str:
     
     # Generate insights
     insights = []
+    recommendations = []
     
-    # Check for containment relations
-    containment_relations = [r for r in relation_types if "in" in r.lower() or "on" in r.lower() or "holding" in r.lower()]
-    if containment_relations:
-        insights.append(f"IMPORTANT: Found containment relations: {containment_relations}. Objects can move between containers!")
-        insights.append("You MUST check relations to determine where to draw each object.")
+    # Detect 'in' relations (containment)
+    in_relations = [r for r in relation_types if "in" in r.lower() or "inside" in r.lower() or "contains" in r.lower()]
+    if in_relations:
+        insights.append(f"CONTAINMENT DETECTED: Found 'in' relations: {in_relations}")
+        insights.append("Objects with 'in' relations should be drawn INSIDE their container.")
+        insights.append("Containers should RESIZE dynamically based on number of contents.")
+        recommendations.append("MUST USE get_spatial_relationship_guidelines for containment patterns")
+    
+    # Detect 'on' relations (stacking)
+    on_relations = [r for r in relation_types if "on" in r.lower() or "stacked" in r.lower() or "above" in r.lower()]
+    if on_relations:
+        insights.append(f"STACKING DETECTED: Found 'on' relations: {on_relations}")
+        insights.append("Objects with 'on' relations should be drawn ABOVE (vertically stacked on) their target.")
+        insights.append("Multiple objects at same position with 'on' relations form a VERTICAL STACK, not overlap!")
+        recommendations.append("MUST USE get_spatial_relationship_guidelines for stacking patterns")
+    
+    # Detect 'holding' relations
+    holding_relations = [r for r in relation_types if "holding" in r.lower() or "held" in r.lower() or "carrying" in r.lower()]
+    if holding_relations:
+        insights.append(f"HOLDING DETECTED: Found holding relations: {holding_relations}")
+        insights.append("Held objects should be drawn near/attached to their holder.")
+        recommendations.append("MUST USE get_spatial_relationship_guidelines for held object positioning")
     
     # Check for position data
     positioned_types = [t for t, info in object_types.items() if info["has_position"]]
     if positioned_types:
-        insights.append(f"Objects with positions: {positioned_types}. Use state.objects[].position for these.")
+        insights.append(f"Objects with positions: {positioned_types}. Use state.objects[].position for base locations.")
     
     non_positioned = [t for t, info in object_types.items() if not info["has_position"]]
     if non_positioned:
         insights.append(f"Objects WITHOUT positions: {non_positioned}. Position these based on their relations!")
+    
+    # Warn about same-position objects
+    if in_relations or on_relations:
+        insights.append("WARNING: Objects at the same logical position are NOT overlapping!")
+        insights.append("Use relations to determine spatial arrangement (inside, stacked above, etc.)")
+    
+    # Add standard recommendations
+    recommendations.extend([
+        "Use get_state_handling_guidelines for dynamic state handling",
+        "Use get_legend_guidelines when creating the legend function",
+        "Always iterate over state.objects - never hardcode positions"
+    ])
     
     return json.dumps({
         "analysis": "State structure analysis complete",
         "object_types": object_types,
         "relation_types": relation_types,
         "insights": insights,
-        "recommendations": [
-            "Use get_state_handling_guidelines if you have containment relations",
-            "Use get_legend_guidelines when creating the legend function",
-            "Always iterate over state.objects - never hardcode positions"
-        ]
+        "recommendations": recommendations
     }, indent=2)
 
 
 @mcp.tool(
-    name="get_collision_avoidance_guidelines",
-    description="""Get guidelines for arranging multiple objects at the same location.
+    name="get_spatial_relationship_guidelines",
+    description="""Get guidelines for handling spatial relationships: 'in' (containment) and 'on' (stacking).
 
-USE THIS TOOL WHEN: Multiple objects can be at the same position (e.g., packages on a pile, blocks on a table).
-This tool teaches you how to arrange objects SIDE BY SIDE instead of overlapping.
+USE THIS TOOL WHEN: You see relations like 'in', 'on', 'holding', 'contains', or similar.
+This tool teaches you how to:
+- Draw containers that RESIZE based on number of contents
+- Draw contained objects INSIDE their container
+- Stack objects VERTICALLY when one is 'on' another
+- Handle multiple objects at the same logical position
 
-RETURNS: Code patterns for detecting and handling object collisions.""",
+RETURNS: Code patterns for containment and stacking relationships.""",
 )
-def get_collision_avoidance_guidelines() -> str:
-    """Get guidelines for arranging multiple objects at the same location."""
+def get_spatial_relationship_guidelines() -> str:
+    """Get guidelines for handling spatial relationships."""
     return json.dumps({
-        "description": "Guidelines for arranging multiple objects without overlap",
+        "description": "Guidelines for handling 'in' (containment) and 'on' (stacking) relationships",
+        "overview": {
+            "in_relations": "When A is 'in' B, A should be drawn INSIDE B. B is the container and should resize based on contents.",
+            "on_relations": "When A is 'on' B, A should be drawn ABOVE B (vertically stacked). Build stacks from bottom to top.",
+            "key_insight": "Objects at the same logical position are NOT overlapping - they have spatial relationships that determine their visual arrangement!"
+        },
         "critical_rules": [
-            "NEVER draw objects on top of each other - they must ALL be visible",
-            "When multiple objects share a location, arrange them SIDE BY SIDE",
-            "Use index-based offsets: x + (index * objectWidth + spacing)",
-            "Group objects by their container/location first, then arrange within group",
-            "Containers should RESIZE based on number of contents"
+            "NEVER draw objects on top of each other - use relations to determine arrangement",
+            "'in' relation = draw INSIDE container, container RESIZES to fit contents",
+            "'on' relation = draw ABOVE the target, stack VERTICALLY with Y offset",
+            "Build containment/stacking maps FIRST, then draw in correct order",
+            "Draw containers/bases FIRST, then their contents/stacked objects"
         ],
-        "example_code": '''// CORRECT: Arrange objects at same location side by side
-function renderWithCollisionAvoidance(ctx, state) {
-  // Group objects by their container/location
-  const objectsByLocation = new Map();
+        "containment_pattern": {
+            "description": "For 'in' relations: container with dynamic sizing, contents drawn inside",
+            "code": '''// CONTAINMENT: Objects 'in' a container
+function renderContainment(ctx, state) {
+  // Step 1: Build containment map
+  const containedIn = new Map(); // objectId -> containerId
+  const containerContents = new Map(); // containerId -> [objectIds]
   
-  for (const obj of state.objects) {
-    // Find what container this object is in (from relations)
-    const containedIn = state.relations.find(r => 
-      (r.type.includes("in") || r.type.includes("on")) && r.source === obj.id
-    );
-    
-    const locationKey = containedIn ? containedIn.target : "free";
-    
-    if (!objectsByLocation.has(locationKey)) {
-      objectsByLocation.set(locationKey, []);
-    }
-    objectsByLocation.get(locationKey).push(obj);
-  }
-  
-  // Draw each group with proper spacing
-  for (const [locationId, objects] of objectsByLocation) {
-    if (locationId === "free") {
-      // Free objects - use their own positions
-      for (const obj of objects) {
-        const [x, y] = obj.position || [0, 0];
-        drawObject(ctx, obj, x, y);
+  for (const rel of state.relations) {
+    if (rel.type.includes('in') || rel.type === 'inside' || rel.type === 'contains') {
+      // rel.source is IN rel.target (or target CONTAINS source)
+      const containedId = rel.source;
+      const containerId = rel.target;
+      
+      containedIn.set(containedId, containerId);
+      if (!containerContents.has(containerId)) {
+        containerContents.set(containerId, []);
       }
-    } else {
-      // Objects in a container - arrange side by side
-      const container = state.objects.find(o => o.id === locationId);
-      if (!container) continue;
-      
-      const [baseX, baseY] = container.position || [0, 0];
-      const objectWidth = 30;
-      const spacing = 5;
-      
-      objects.forEach((obj, index) => {
-        const offsetX = index * (objectWidth + spacing);
-        drawObject(ctx, obj, baseX + 10 + offsetX, baseY + 10);
-      });
+      containerContents.get(containerId).push(containedId);
     }
   }
-}
-
-// CORRECT: Dynamic container sizing
-function drawContainerWithContents(ctx, container, contents) {
-  const baseWidth = 60;
-  const baseHeight = 40;
-  const itemWidth = 25;
-  const padding = 10;
   
-  // Calculate container size based on contents
-  const width = Math.max(baseWidth, contents.length * itemWidth + padding * 2);
-  const height = baseHeight;
+  // Step 2: Draw containers with dynamic sizing
+  const containers = state.objects.filter(o => containerContents.has(o.id));
   
-  const [x, y] = container.position || [0, 0];
+  for (const container of containers) {
+    const contents = containerContents.get(container.id) || [];
+    const contentObjects = contents.map(id => state.objects.find(o => o.id === id)).filter(Boolean);
+    
+    // Dynamic sizing based on contents
+    const baseWidth = 80;
+    const baseHeight = 60;
+    const itemWidth = 30;
+    const itemHeight = 25;
+    const padding = 10;
+    
+    const width = Math.max(baseWidth, contentObjects.length * (itemWidth + 5) + padding * 2);
+    const height = baseHeight;
+    
+    const [x, y] = container.position || [0, 0];
+    const pixelX = x * gridSize;
+    const pixelY = y * gridSize;
+    
+    // Draw container
+    ctx.fillStyle = '#666';
+    ctx.fillRect(pixelX, pixelY, width, height);
+    ctx.strokeStyle = '#333';
+    ctx.strokeRect(pixelX, pixelY, width, height);
+    
+    // Draw contents INSIDE container
+    contentObjects.forEach((item, index) => {
+      const itemX = pixelX + padding + index * (itemWidth + 5);
+      const itemY = pixelY + padding + (height - itemHeight - padding * 2) / 2;
+      drawSmallObject(ctx, item, itemX, itemY, itemWidth, itemHeight);
+    });
+  }
   
-  // Draw container
-  ctx.fillStyle = container.properties?.color || "#888";
-  ctx.fillRect(x, y, width, height);
+  // Step 3: Draw non-contained objects at their own positions
+  const freeObjects = state.objects.filter(o => !containedIn.has(o.id) && !containerContents.has(o.id));
+  for (const obj of freeObjects) {
+    const [x, y] = obj.position || [0, 0];
+    drawObject(ctx, obj, x * gridSize, y * gridSize);
+  }
+}'''
+        },
+        "stacking_pattern": {
+            "description": "For 'on' relations: vertical stacking with Y offset",
+            "code": '''// STACKING: Objects 'on' other objects (like blocks, packages on piles)
+function renderStacking(ctx, state) {
+  // Step 1: Build stacking relationships
+  const onTop = new Map(); // objectId -> whatItIsOn
+  const stackedOn = new Map(); // baseId -> [objectsOnTop]
   
-  // Draw contents inside, side by side
-  contents.forEach((item, index) => {
-    const itemX = x + padding + index * itemWidth;
-    const itemY = y + padding;
-    drawSmallItem(ctx, item, itemX, itemY);
+  for (const rel of state.relations) {
+    if (rel.type.includes('on') || rel.type === 'stacked' || rel.type === 'above') {
+      // rel.source is ON rel.target
+      const topId = rel.source;
+      const bottomId = rel.target;
+      
+      onTop.set(topId, bottomId);
+      if (!stackedOn.has(bottomId)) {
+        stackedOn.set(bottomId, []);
+      }
+      stackedOn.get(bottomId).push(topId);
+    }
+  }
+  
+  // Step 2: Find base objects (things that aren't on anything, or are on fixed surfaces)
+  const bases = state.objects.filter(o => !onTop.has(o.id));
+  
+  // Step 3: Build complete stacks from bottom to top
+  function getStackHeight(objId, visited = new Set()) {
+    if (visited.has(objId)) return 0; // Prevent cycles
+    visited.add(objId);
+    
+    const objectsOnThis = stackedOn.get(objId) || [];
+    if (objectsOnThis.length === 0) return 1;
+    
+    return 1 + Math.max(...objectsOnThis.map(id => getStackHeight(id, visited)));
+  }
+  
+  // Step 4: Draw stacks - bottom to top
+  const objectHeight = 30;
+  const objectWidth = 40;
+  const stackSpacing = 5;
+  
+  function drawStack(baseObj, baseX, baseY) {
+    // Draw the base object
+    drawObject(ctx, baseObj, baseX, baseY, objectWidth, objectHeight);
+    
+    // Draw objects stacked on this one
+    const objectsOnBase = stackedOn.get(baseObj.id) || [];
+    objectsOnBase.forEach((objId, index) => {
+      const obj = state.objects.find(o => o.id === objId);
+      if (obj) {
+        // Stack ABOVE (lower Y value since Y increases downward)
+        const stackY = baseY - (objectHeight + stackSpacing);
+        // If multiple objects on same base, offset horizontally
+        const offsetX = index * (objectWidth + 5);
+        drawStack(obj, baseX + offsetX, stackY);
+      }
+    });
+  }
+  
+  // Draw each base and its stack
+  bases.forEach((base, index) => {
+    const [x, y] = base.position || [index, 0];
+    const pixelX = x * gridSize;
+    const pixelY = y * gridSize;
+    drawStack(base, pixelX, pixelY);
   });
-}''',
+}'''
+        },
+        "combined_pattern": {
+            "description": "Handling both 'in' and 'on' relations together",
+            "code": '''// COMBINED: Handle both containment and stacking
+function renderWithRelationships(ctx, state) {
+  // Build relationship maps
+  const containedIn = new Map();
+  const onTopOf = new Map();
+  const heldBy = new Map();
+  
+  for (const rel of state.relations) {
+    const relType = rel.type.toLowerCase();
+    
+    if (relType.includes('in') || relType.includes('inside')) {
+      containedIn.set(rel.source, rel.target);
+    } else if (relType.includes('on') || relType.includes('stacked')) {
+      onTopOf.set(rel.source, rel.target);
+    } else if (relType.includes('holding') || relType.includes('held')) {
+      heldBy.set(rel.source, rel.target);
+    }
+  }
+  
+  // Determine draw order: containers first, then bases, then stacked/contained
+  const drawn = new Set();
+  
+  // Draw containers and their contents
+  // Draw bases and their stacks
+  // Draw held objects near their holders
+  // Draw free objects at their positions
+}'''
+        },
         "common_mistakes": [
-            "Drawing all objects at their raw positions without checking for overlap",
-            "Not grouping objects by container before drawing",
-            "Fixed container sizes that don't account for variable contents",
-            "Drawing contained objects outside their container"
+            "Drawing objects at their raw position without checking 'on'/'in' relations",
+            "Not building relationship maps before drawing",
+            "Fixed container sizes that don't adapt to contents",
+            "Drawing stacked objects at same Y position instead of offset",
+            "Drawing contained objects outside their container bounds",
+            "Not handling the draw order (base before stack, container before contents)"
         ],
-        "key_pattern": "Group by location → Calculate offsets → Draw with spacing"
+        "key_insight": "The position property gives the LOGICAL location. Relations tell you the SPATIAL arrangement at that location!"
     })
 
 
