@@ -10,6 +10,7 @@ class DepotRenderer(BaseStateRenderer):
     Domain predicates:
     - (at-truck ?t - truck ?d - depot)
     - (at-crane ?c - crane ?d - depot)
+    - (at-pile ?pl - pile ?d - depot)      -- pile at depot (CRITICAL for positioning!)
     - (on ?p - package ?q - package)       -- package stacked on package
     - (on-pile ?p - package ?pl - pile)    -- package on pile
     - (clear ?x)                           -- untyped clear predicate
@@ -110,6 +111,16 @@ class DepotRenderer(BaseStateRenderer):
                     source=crane,
                     target=depot,
                     properties={"description": f"{crane} at {depot}"}
+                ))
+
+            # --- Pile at depot ---
+            elif name == "at-pile":
+                pile, depot = params
+                visual_relations.append(VisualRelation(
+                    type="at-pile",
+                    source=pile,
+                    target=depot,
+                    properties={"description": f"{pile} at {depot}"}
                 ))
 
             # --- Package on pile ---
