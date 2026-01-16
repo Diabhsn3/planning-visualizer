@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from pydantic import Field
-from typing import Union, Optional
+from typing import Union, Optional, Any
 from mcp.server.fastmcp import FastMCP
 
 # Create the MCP server
@@ -253,16 +253,16 @@ RETURNS: Complete context including:
 After calling this tool, you have everything needed to generate the renderer.""",
 )
 def get_generation_context(
-    state_json: str = Field(description="JSON string of the example state data"),
+    state_json: Any = Field(description="The example state data (can be JSON string or object)"),
     domain_name: str = Field(description="Name of the planning domain (e.g., 'depot', 'blocks_world')"),
 ) -> str:
     """Get all context needed for renderer generation."""
     try:
-        # Validate required parameters
-        if not state_json or state_json == "":
+        # Validate required parameters - handle None, empty dict, empty string
+        if state_json is None or state_json == "" or state_json == {}:
             return json.dumps({
                 "success": False,
-                "error": "MISSING PARAMETER: state_json is required. Pass the example state data as a JSON string."
+                "error": "MISSING PARAMETER: state_json is required. Pass the example state data (as JSON object or string)."
             })
         if not domain_name or domain_name == "":
             return json.dumps({
@@ -270,11 +270,16 @@ def get_generation_context(
                 "error": "MISSING PARAMETER: domain_name is required. Pass the domain name (e.g., 'depot', 'rovers')."
             })
         
-        # Parse state
+        # Parse state - accept both dict and string
         if isinstance(state_json, dict):
             state = state_json
-        else:
+        elif isinstance(state_json, str):
             state = json.loads(state_json)
+        else:
+            return json.dumps({
+                "success": False,
+                "error": f"INVALID PARAMETER: state_json must be a JSON object or string, got {type(state_json).__name__}"
+            })
         
         # Analyze state structure
         state_analysis = _analyze_state(state)
