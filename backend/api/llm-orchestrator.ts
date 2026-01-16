@@ -273,7 +273,6 @@ export async function generateRendererWithLLM(
 
   // Helper for logging with timestamps
   const startTime = Date.now();
-  let currentStep = 0;
   const TOTAL_STEPS = 6; // Setup, Tools, Prompt, Iterations (1-3), Validation, Complete
   
   const log = (source: string, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info') => {
@@ -287,7 +286,6 @@ export async function generateRendererWithLLM(
 
   // Helper to report progress with step number
   const reportProgress = (step: number, message: string) => {
-    currentStep = step;
     const percent = Math.round((step / TOTAL_STEPS) * 100);
     log('LLMOrchestrator', `Step ${step}/${TOTAL_STEPS} (${percent}%): ${message}`);
     if (onProgress) {
