@@ -216,7 +216,37 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
         console.log('[StateCanvas] Extracted functions - Main:', llmFnName, 'Background:', bgFnName, 'Legend:', legendFnName);
         
         // Create wrapper that defines all functions and returns them
+        // Include common helper functions that LLM-generated code might use
         const wrappedCode = `
+          // Helper function to lighten a color
+          function lightenColor(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = Math.min(255, (num >> 16) + amt);
+            const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+            const B = Math.min(255, (num & 0x0000FF) + amt);
+            return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+          }
+          
+          // Helper function to darken a color
+          function darkenColor(color, percent) {
+            const num = parseInt(color.replace('#', ''), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = Math.max(0, (num >> 16) - amt);
+            const G = Math.max(0, ((num >> 8) & 0x00FF) - amt);
+            const B = Math.max(0, (num & 0x0000FF) - amt);
+            return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+          }
+          
+          // Helper function to convert hex to rgba
+          function hexToRgba(hex, alpha) {
+            const num = parseInt(hex.replace('#', ''), 16);
+            const R = (num >> 16) & 255;
+            const G = (num >> 8) & 255;
+            const B = num & 255;
+            return 'rgba(' + R + ',' + G + ',' + B + ',' + alpha + ')';
+          }
+          
           ${jsCode}
           return {
             main: typeof ${llmFnName} === 'function' ? ${llmFnName} : null,
