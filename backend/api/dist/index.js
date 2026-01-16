@@ -505,12 +505,20 @@ ${JSON.stringify(exampleState, null, 2)}
 ${styleHints ? `STYLE HINTS: ${styleHints}
 ` : ""}
 
-IMPORTANT WORKFLOW:
-1. FIRST, call analyze_state_structure with the state data to understand the objects and relations
-2. Based on the analysis, call any helpful tools (get_state_handling_guidelines, get_legend_guidelines, etc.)
-3. THEN generate the complete JavaScript renderer code
+IMPORTANT: You have access to multiple MCP tools. EXPLORE AND USE ALL OF THEM before generating code!
 
-Start by analyzing the state structure to understand what you need to render.`;
+WORKFLOW:
+1. DISCOVER: Look at all available tools - there are tools for analysis, hints, guidelines, examples, and validation
+2. INVESTIGATE: Use tools to understand the state structure, object types, relations, and domain-specific styling
+3. GATHER HINTS: Use tools to get domain-specific visualization hints and recommendations
+4. LEARN PATTERNS: Use tools to understand how to handle spatial relationships (in, on, at, holding)
+5. GET EXAMPLES: Use tools to see working code examples
+6. GENERATE: Only after thorough investigation, generate the complete JavaScript renderer code
+7. VALIDATE: Use tools to validate your generated code
+
+When a tool recommends calling another tool, FOLLOW THAT RECOMMENDATION!
+
+Start by exploring the available tools and gathering all the information you need.`;
     reportProgress("Starting investigation phase...");
     const messages = [
       { role: "user", content: userPrompt }
