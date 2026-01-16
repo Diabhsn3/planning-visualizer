@@ -1172,7 +1172,8 @@ export default function Visualizer() {
                   <div className="relative">
                     {/* LLM Generation Progress - Overlays only the canvas */}
                     {/* Show during generation AND after completion until user clicks Show Result */}
-                    {visualizationMode === "llm" && (isLlmGenerating || llmCode) && (
+                    {/* Only show progress UI when using MCP mode (direct mode has no progress tracking) */}
+                    {visualizationMode === "llm" && useMcp && (isLlmGenerating || llmCode) && (
                       <GenerationProgress 
                         isGenerating={isLlmGenerating}
                         onComplete={() => {
