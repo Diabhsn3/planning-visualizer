@@ -609,5 +609,80 @@ def get_legend_guidelines() -> str:
     })
 
 
+@mcp.tool(
+    name="get_state_handling_guidelines",
+    description="""Get guidelines for handling state transitions properly.
+
+USE THIS TOOL WHEN: Objects are not moving correctly between states, disappearing unexpectedly, or appearing in wrong positions.
+
+RETURNS: Critical rules for reading state data and positioning objects dynamically.""",
+)
+def get_state_handling_guidelines() -> str:
+    """Get guidelines for handling state transitions properly."""
+    return json.dumps({
+        "description": "Guidelines for handling state transitions in renderers",
+        "critical_rules": [
+            "NEVER hardcode object positions - always read from state.objects[].position",
+            "ALWAYS iterate over state.objects to find what exists in current state",
+            "ALWAYS check state.relations to determine object relationships (e.g., 'in-truck', 'on-pile')",
+            "Objects may appear/disappear between states - only draw what's in current state",
+            "Position objects based on their relations, not just their position property"
+        ],
+        "state_structure": {
+            "objects": "Array of {id, type, label, position: [x,y], properties: {}}",
+            "relations": "Array of {type, source, target} describing relationships"
+        },
+        "example_patterns": {
+            "find_objects_by_type": "const trucks = state.objects.filter(o => o.type === 'truck');",
+            "get_position": "const [x, y] = obj.position || [0, 0];",
+            "find_relation": "const inTruck = state.relations.find(r => r.type === 'in-truck' && r.source === pkg.id);",
+            "position_by_relation": "if (inTruck) { drawAt(truckPosition); } else if (onPile) { drawAt(pilePosition); }"
+        },
+        "example_code": '''// CORRECT: Dynamic positioning based on state
+function renderDepot(ctx, state) {
+  // Get all objects from current state
+  const packages = state.objects.filter(o => o.type === 'package');
+  const trucks = state.objects.filter(o => o.type === 'truck');
+  
+  // Build relation maps from current state
+  const packageInTruck = new Map();
+  const packageOnPile = new Map();
+  
+  for (const rel of state.relations) {
+    if (rel.type === 'in-truck') packageInTruck.set(rel.source, rel.target);
+    if (rel.type === 'on-pile') packageOnPile.set(rel.source, rel.target);
+  }
+  
+  // Draw each package at its CURRENT location
+  for (const pkg of packages) {
+    const truckId = packageInTruck.get(pkg.id);
+    const pileId = packageOnPile.get(pkg.id);
+    
+    if (truckId) {
+      // Package is in a truck - find truck position and draw inside
+      const truck = trucks.find(t => t.id === truckId);
+      if (truck && truck.position) {
+        const [tx, ty] = truck.position;
+        drawPackage(ctx, tx + 10, ty + 10); // Inside truck
+      }
+    } else if (pileId) {
+      // Package is on a pile - use pile position
+      // ... similar logic
+    } else {
+      // Package has its own position
+      const [x, y] = pkg.position || [0, 0];
+      drawPackage(ctx, x, y);
+    }
+  }
+}''',
+        "common_mistakes": [
+            "Hardcoding positions like 'drawTruck(100, 200)' instead of reading from state",
+            "Not checking relations - drawing package at its own position even when it's in a truck",
+            "Assuming objects always exist - not filtering by current state",
+            "Drawing objects that don't exist in current state"
+        ]
+    })
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
