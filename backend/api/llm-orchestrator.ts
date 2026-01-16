@@ -282,11 +282,16 @@ export async function generateRendererWithLLM(
     }
   };
 
-  // Helper to report progress (no step counter - just messages)
-  const reportProgress = (message: string) => {
-    log('LLMOrchestrator', message);
+  // Track current step for progress reporting
+  let currentStep = 0;
+  const TOTAL_STEPS = 6;
+  
+  const reportProgress = (step: number, message: string) => {
+    currentStep = step;
+    const percent = Math.round((step / TOTAL_STEPS) * 100);
+    log('LLMOrchestrator', `Step ${step}/${TOTAL_STEPS} (${percent}%): ${message}`);
     if (onProgress) {
-      onProgress(0, message);
+      onProgress(step, message);
     }
   };
 
@@ -299,7 +304,7 @@ export async function generateRendererWithLLM(
     // STEP 1: Fetch system prompt from MCP Resource
     // =========================================================================
     
-    reportProgress("Fetching system prompt...");
+    reportProgress(1, "Fetching system prompt...");
     
     const promptResourceUri = `prompt://renderer/system/${DEFAULT_PROMPT_VERSION}`;
     log('MCPClient', `Reading resource: ${promptResourceUri}`);
@@ -326,7 +331,7 @@ export async function generateRendererWithLLM(
     // STEP 2: Get available MCP tools
     // =========================================================================
     
-    reportProgress("Discovering available tools...");
+    reportProgress(2, "Discovering available tools...");
     
     const mcpTools = mcpClient.getToolsForLLM();
     const anthropicTools = mcpToolsToAnthropicFormat(mcpTools);
@@ -337,7 +342,7 @@ export async function generateRendererWithLLM(
     // STEP 3: Build initial user prompt (encourages investigation)
     // =========================================================================
     
-    reportProgress("Preparing investigation request...");
+    reportProgress(2, "Preparing investigation request...");
     
     const userPrompt = `Generate a JavaScript renderer for the "${domainName}" domain.
 
@@ -365,7 +370,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     // STEP 4: Agentic Loop - Let LLM investigate and generate
     // =========================================================================
     
-    reportProgress("Starting investigation phase...");
+    reportProgress(3, "Starting LLM generation...");
     
     const messages: Message[] = [
       { role: "user", content: userPrompt }
@@ -388,7 +393,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
         // LLM is investigating - execute tool calls
         const toolNames = toolCalls.map(t => t.name).join(', ');
         log('LLMOrchestrator', `LLM calling: ${toolNames}`);
-        reportProgress(`Tool: ${toolCalls[0].name}`);
+        reportProgress(3, `Tool: ${toolCalls[0].name}`);
         
         // Add assistant message with tool calls
         messages.push({
@@ -437,15 +442,26 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
         const textOutput = orchestrator.extractText(llmResponse);
         const stopReason = llmResponse.stop_reason;
         
+        // Check if this looks like code (contains function render)
+        const looksLikeCode = textOutput.includes('function render');
+        
         if (stopReason === 'max_tokens') {
           log('LLMOrchestrator', `⚠️ Output truncated (max_tokens) - ${textOutput.length} chars`, 'warning');
+        } else if (looksLikeCode) {
+          // Log code response concisely
+          log('LLMOrchestrator', `LLM generated code: ${textOutput.length} chars`);
+          const preview = textOutput.substring(0, 100).replace(/\n/g, ' ');
+          log('LLMOrchestrator', `Code preview: ${preview}...`);
         } else {
-          log('LLMOrchestrator', `LLM generated ${textOutput.length} chars`);
+          // Log text response (summary/analysis from LLM)
+          // Show a brief summary instead of full text
+          const firstLine = textOutput.split('\n')[0].substring(0, 100);
+          log('LLMOrchestrator', `LLM response: ${firstLine}${textOutput.length > 100 ? '...' : ''}`);
         }
         
-        if (textOutput.includes('function render')) {
+        if (looksLikeCode) {
           // This looks like code - clean and validate it
-          reportProgress("Validating code...");
+          reportProgress(4, "Validating generated code...");
           
           const cleanedCode = cleanCodeLocally(textOutput);
           const validation = validateCodeLocally(cleanedCode, domainPascal);
@@ -457,7 +473,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
           } else {
             // Ask LLM to fix the issues
             log('LLMOrchestrator', `❌ Validation failed: ${validation.errors.join('; ')}`, 'warning');
-            reportProgress("Fixing code...");
+            reportProgress(4, "Fixing validation errors...");
             
             messages.push({
               role: "assistant",
@@ -469,17 +485,33 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
             });
           }
         } else {
-          // LLM returned something else - prompt it to generate code
-          log('LLMOrchestrator', 'LLM did not return code, prompting for generation...', 'warning');
-          
-          messages.push({
-            role: "assistant",
-            content: textOutput
-          });
-          messages.push({
-            role: "user",
-            content: "Now that you've analyzed the state structure, please generate the complete JavaScript renderer code. Start with 'function render" + domainPascal + "(ctx, state) {'"
-          });
+          // LLM returned analysis/summary - this is expected after tool calls
+          // Check if we already got context from tools (iteration > 1 means we've done tool calls)
+          if (iteration > 2) {
+            // We've already done investigation, now prompt for code generation
+            log('LLMOrchestrator', 'Analysis complete, requesting code generation...');
+            
+            messages.push({
+              role: "assistant",
+              content: textOutput
+            });
+            messages.push({
+              role: "user",
+              content: "Now generate the complete JavaScript renderer code. Start with 'function render" + domainPascal + "(ctx, state) {' and include all three functions."
+            });
+          } else {
+            // Still in early iterations, let LLM continue investigating
+            log('LLMOrchestrator', 'LLM analyzing, continuing investigation...');
+            
+            messages.push({
+              role: "assistant",
+              content: textOutput
+            });
+            messages.push({
+              role: "user",
+              content: "Please continue with your analysis and then generate the renderer code."
+            });
+          }
         }
       }
     }
@@ -489,7 +521,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     // =========================================================================
     
     if (finalCode) {
-      reportProgress("Final syntax validation...");
+      reportProgress(5, "Final syntax validation...");
       log('MCPClient', 'Running MCP validate_renderer for syntax check');
       
       try {
@@ -518,12 +550,12 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
     
     if (!finalCode || !finalCode.includes('function render')) {
-      reportProgress("Generation failed");
+      reportProgress(6, "Generation failed");
       log('LLMOrchestrator', `❌ Failed after ${iteration} iterations (${totalTime}s)`, 'error');
       return { success: false, code: "", error: `Failed to generate valid renderer after ${iteration} iterations` };
     }
     
-    reportProgress("Generation complete!");
+    reportProgress(6, "Generation complete!");
     log('LLMOrchestrator', `✅ Complete! ${finalCode.length} chars in ${iteration} iterations (${totalTime}s)`, 'success');
     
     return { success: true, code: finalCode };
