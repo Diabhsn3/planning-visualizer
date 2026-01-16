@@ -55,19 +55,11 @@ CRITICAL CODE RULES:
           x = 5;
    RIGHT: let x = 5;
 
-3. NO IMAGES - DRAW EVERYTHING WITH CANVAS SHAPES!
-   FORBIDDEN: new Image(), .src =, drawImage(), img.onload
-   REQUIRED: Use ONLY Canvas drawing methods:
-   - ctx.fillRect(), ctx.strokeRect() for rectangles
-   - ctx.arc(), ctx.beginPath(), ctx.fill() for circles
-   - ctx.moveTo(), ctx.lineTo() for lines and polygons
-   - ctx.fillText() for labels
-
-4. ALWAYS check for null/undefined:
+3. ALWAYS check for null/undefined:
    if (!state || !state.objects) return;
    const color = obj.properties?.color || '#888';
 
-5. USE RELATIONS to determine object positions:
+4. USE RELATIONS to determine object positions:
    - 'in' relations: Draw object INSIDE its container
    - 'on' relations: Draw object ABOVE (stacked on) its target
    - 'at-X' relations: Draw object AT the location of its target
@@ -80,63 +72,9 @@ CRITICAL: VISUAL FEEDBACK FOR EVERY ACTION
 EVERY action in the plan MUST produce a VISIBLE CHANGE in the visualization!
 Users need to see that something happened for EVERY step, not just movement actions.
 
-FOR NON-MOVEMENT ACTIONS (calibrate, take-image, communicate, sample, etc.):
-Use these visual feedback techniques:
-
-1. STATUS INDICATORS: Add colored dots/icons near objects showing their state
-   - Green checkmark: action completed successfully
-   - Yellow dot: action in progress
-   - Blue glow: object is active/selected
-
-2. VISUAL EFFECTS: Show action effects with visual cues
-   - Camera flash effect for take-image (brief white overlay or flash icon)
-   - Antenna waves for communicate (curved lines emanating)
-   - Crosshair/target for calibrate (alignment marks)
-   - Sparkle/glow for sample collection
-
-3. STATE BADGES: Small badges on objects showing accumulated states
-   - "IMG" badge when image was taken
-   - "CAL" badge when calibrated
-   - "TX" badge when data transmitted
-   - Counter badges showing number of samples
-
-4. COLOR CHANGES: Objects change color based on state
-   - Instruments glow when powered on
-   - Targets change color when photographed
-   - Waypoints marked when visited
-
-5. PROGRESS INDICATORS: Show what has been accomplished
-   - Checkmarks on completed objectives
-   - Fill bars for multi-step processes
-   - Connecting lines for communicated data paths
-
-IMPLEMENTATION PATTERN:
-```javascript
-// Check for state-based properties in objects
-const hasImage = obj.properties?.has_image || false;
-const isCalibrated = obj.properties?.calibrated || false;
-const dataSent = obj.properties?.communicated || false;
-
-// Draw status indicators
-if (hasImage) {
-  // Draw camera icon or "IMG" badge
-  ctx.fillStyle = '#4CAF50';
-  ctx.fillText('📷', x + width - 15, y + 15);
-}
-
-if (isCalibrated) {
-  // Draw calibration indicator
-  ctx.strokeStyle = '#2196F3';
-  drawCrosshair(ctx, x + width/2, y + height/2, 10);
-}
-
-// Check relations for state changes
-const communicatedData = relations.filter(r => r.type.includes('communicated'));
-for (const comm of communicatedData) {
-  // Draw transmission line or indicator
-  drawTransmissionEffect(ctx, sourcePos, targetPos);
-}
-```
+For non-movement actions (like calibrate, take-image, communicate, sample, etc.),
+use your creativity to show visual feedback - status indicators, color changes,
+badges, icons, effects, or any visual cue that makes it clear the action occurred.
 
 REMEMBER: The user is watching a plan execute step-by-step. If an action happens
 but nothing visually changes, they will think the visualization is broken!
