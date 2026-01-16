@@ -353,17 +353,11 @@ ${JSON.stringify(exampleState, null, 2)}
 
 ${styleHints ? `STYLE HINTS: ${styleHints}\n` : ''}
 
-You have access to MCP tools. Use them EFFICIENTLY - call multiple related tools if needed, but don't call unnecessary ones.
+STEP 1: Call get_generation_context with:
+- state_json: the example state data above (as JSON string)
+- domain_name: "${domainName}"
 
-RECOMMENDED TOOLS (call these in order):
-1. analyze_state_structure - Pass the example state to understand objects and relations
-2. get_domain_hints - Get domain-specific styling hints for "${domainName}"
-3. get_spatial_relationship_guidelines - ONLY if you see 'in', 'on', 'at-*', or 'holding' relations
-4. get_example_renderer - See a working code example
-5. After generating code, use validate_renderer to check it
-
-DO NOT call list_available_domains - you already know the domain is "${domainName}".
-DO NOT call get_domain_rendered_data - the state data is already provided above.
+STEP 2: Generate complete JavaScript code using the returned context.
 
 Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
 
