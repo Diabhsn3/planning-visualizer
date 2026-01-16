@@ -351,9 +351,11 @@ ${JSON.stringify(exampleState, null, 2)}
 
 ${styleHints ? `STYLE HINTS: ${styleHints}\n` : ''}
 
-STEP 1: Call get_generation_context with:
-- state_json: the example state data above (as JSON string)
+STEP 1: Call get_generation_context IMMEDIATELY with these EXACT parameters:
+- state_json: Pass the EXAMPLE STATE DATA shown above (the JSON object)
 - domain_name: "${domainName}"
+
+DO NOT call the tool without parameters. Pass both parameters on your FIRST call.
 
 STEP 2: Generate complete JavaScript code using the returned context.
 
@@ -406,11 +408,8 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
           try {
             const result = await mcpClient.callTool(toolCall.name, toolCall.input as Record<string, unknown>);
             
-            // Log actual tool output (truncated for readability)
-            const truncatedOutput = result.content.length > 500 
-              ? result.content.substring(0, 500) + '... [truncated]'
-              : result.content;
-            log('MCPClient', `✓ ${toolCall.name} output:\n${truncatedOutput}`);
+            // Log full tool output
+            log('MCPClient', `✓ ${toolCall.name} output:\n${result.content}`);
             
             toolResults.push({
               type: "tool_result",
