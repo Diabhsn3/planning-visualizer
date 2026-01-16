@@ -39,9 +39,9 @@ export interface GenerationProgress {
 // In a production app, you might use Redis or similar
 const progressStore = new Map<string, GenerationProgress>();
 
-// Initial estimate for total steps - will be updated dynamically
-// The autonomous agentic loop can have variable iterations
-const INITIAL_STEPS_ESTIMATE = 10;
+// Initial estimate for total steps - matches the 6 steps in llm-orchestrator
+// Steps: 1=Setup, 2=Tools, 3=Generation, 4=Validation, 5=Syntax, 6=Complete
+const INITIAL_STEPS_ESTIMATE = 6;
 
 /**
  * Create a new progress tracker for a generation session

@@ -1,0 +1,53 @@
+{
+  "domain": "satellite",
+  "aliases": ["satellite", "satellites"],
+  "description": "Satellites taking images of targets",
+  "layout": "Satellites in orbit, targets on ground",
+  "background": "Space/Earth view",
+  "legend": "Show satellite modes and target types",
+  "critical_relations": {
+    "pointing": "satellite pointing direction means satellite is aimed at direction",
+    "have_image": "satellite have_image direction mode means image was taken",
+    "power_on": "instrument power_on means instrument is active",
+    "calibrated": "instrument calibrated direction means instrument is calibrated for that direction"
+  },
+  "positioning_rules": [
+    "Satellites should be shown in upper portion (orbit)",
+    "Targets/directions should be shown in lower portion (ground)",
+    "Show pointing direction with lines or arrows",
+    "Indicate active instruments visually"
+  ],
+  "visual_feedback": {
+    "turn_to": {
+      "description": "When satellite turns to point at a direction",
+      "visual": "Draw arrow/line from satellite to target direction, highlight satellite",
+      "code_hint": "ctx.setLineDash([5,5]); drawArrow(ctx, satX, satY, dirX, dirY);"
+    },
+    "switch_on": {
+      "description": "When instrument is powered on",
+      "visual": "Instrument glows green, add power indicator LED",
+      "code_hint": "ctx.fillStyle = '#4CAF50'; ctx.beginPath(); ctx.arc(instX+5, instY-5, 3, 0, Math.PI*2); ctx.fill();"
+    },
+    "switch_off": {
+      "description": "When instrument is powered off",
+      "visual": "Instrument returns to gray, power LED turns off",
+      "code_hint": "ctx.fillStyle = '#888'; // Gray for powered off"
+    },
+    "calibrate": {
+      "description": "When instrument is calibrated for a direction",
+      "visual": "Draw crosshair on instrument, add 'CAL' badge",
+      "code_hint": "ctx.strokeStyle = '#2196F3'; drawCrosshair(ctx, instX, instY, 8); ctx.fillText('CAL', instX+10, instY);"
+    },
+    "take_image": {
+      "description": "When satellite takes image of target",
+      "visual": "Flash effect, camera icon, mark target as captured",
+      "code_hint": "ctx.fillStyle = '#FFD700'; ctx.fillText('📷', targetX, targetY-10); // Camera icon on target"
+    }
+  },
+  "state_indicators": {
+    "powered_on": "Green LED dot on instrument",
+    "calibrated": "Crosshair marks and 'CAL' badge",
+    "pointing_at": "Dashed line from satellite to direction",
+    "image_taken": "Camera icon (📷) on captured target"
+  }
+}

@@ -332,18 +332,33 @@ export default function Visualizer() {
     return "";
   };
 
-  // LLM cache query
+  // LLM cache query (MCP-based)
   const checkCachedRendererQuery = trpc.visualizer.getCachedRenderer.useQuery(
     { domainName: selectedDomain },
     { enabled: false } // Manual refetch only
   );
 
-  // Clear cache mutation
+  // Direct LLM cache query (non-MCP)
+  const checkCachedDirectRendererQuery = trpc.visualizer.getCachedDirectRenderer.useQuery(
+    { domainName: selectedDomain },
+    { enabled: false } // Manual refetch only
+  );
+
+  // Clear MCP cache mutation
   const clearCacheMutation = trpc.visualizer.clearRendererCache.useMutation({
     onSuccess: () => {
       setLlmCode(null);
       setLlmError(null);
-      console.log('[Visualizer] Cache cleared');
+      console.log('[Visualizer] MCP cache cleared');
+    },
+  });
+
+  // Clear direct cache mutation
+  const clearDirectCacheMutation = trpc.visualizer.clearDirectRendererCache.useMutation({
+    onSuccess: () => {
+      setLlmCode(null);
+      setLlmError(null);
+      console.log('[Visualizer] Direct cache cleared');
     },
   });
 
@@ -382,16 +397,19 @@ export default function Visualizer() {
       if (visualizationMode === "llm" && data.states.length > 0) {
         const domainForLlm = data.domain || selectedDomain;
         
-        // Check cache first
-        checkCachedRendererQuery.refetch().then((result: { data?: { found: boolean; code: string | null } }) => {
+        // Check appropriate cache based on useMcp setting
+        const cacheQuery = useMcp ? checkCachedRendererQuery : checkCachedDirectRendererQuery;
+        const cacheType = useMcp ? 'MCP' : 'Direct';
+        
+        cacheQuery.refetch().then((result: { data?: { found: boolean; code: string | null } }) => {
           if (result.data?.found && result.data.code) {
             // Use cached renderer
-            console.log('[Visualizer] Using cached LLM renderer');
+            console.log(`[Visualizer] Using cached ${cacheType} renderer`);
             setLlmCode(result.data.code);
             setLlmError(null);
           } else {
             // No cache, generate new
-            console.log('[Visualizer] No cached renderer, generating new');
+            console.log(`[Visualizer] No cached ${cacheType} renderer, generating new`);
             setIsLlmGenerating(true);
             setLlmCode(null);
             setLlmError(null);
@@ -984,7 +1002,29 @@ export default function Visualizer() {
                       <input
                         type="checkbox"
                         checked={useMcp}
-                        onChange={(e) => setUseMcp(e.target.checked)}
+                        onChange={(e) => {
+                          const newUseMcp = e.target.checked;
+                          setUseMcp(newUseMcp);
+                          
+                          // When toggling, try to load cached renderer from the appropriate cache
+                          if (renderedStates.length > 0) {
+                            const cacheQuery = newUseMcp ? checkCachedRendererQuery : checkCachedDirectRendererQuery;
+                            const cacheType = newUseMcp ? 'MCP' : 'Direct';
+                            
+                            cacheQuery.refetch().then((result: { data?: { found: boolean; code: string | null } }) => {
+                              if (result.data?.found && result.data.code) {
+                                console.log(`[Visualizer] Switched to cached ${cacheType} renderer`);
+                                setLlmCode(result.data.code);
+                                setLlmError(null);
+                              } else {
+                                // No cached renderer for this mode - clear current code
+                                console.log(`[Visualizer] No cached ${cacheType} renderer available`);
+                                setLlmCode(null);
+                                setLlmError(null);
+                              }
+                            });
+                          }
+                        }}
                         className="w-4 h-4 text-purple-600 border-slate-300 rounded focus:ring-purple-500"
                       />
                       <div className="flex-1">
@@ -1101,13 +1141,22 @@ export default function Visualizer() {
                       {/* Clear Cache Button (LLM mode only) */}
                       {visualizationMode === "llm" && (
                         <button
-                          onClick={() => clearCacheMutation.mutate()}
-                          disabled={clearCacheMutation.isPending}
+                          onClick={() => {
+                            // Clear the appropriate cache based on useMcp setting
+                            if (useMcp) {
+                              clearCacheMutation.mutate();
+                            } else {
+                              clearDirectCacheMutation.mutate();
+                            }
+                          }}
+                          disabled={clearCacheMutation.isPending || clearDirectCacheMutation.isPending}
                           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
-                          title="Clear all cached LLM renderers"
+                          title={useMcp ? "Clear MCP cached renderers" : "Clear Direct cached renderers"}
                         >
                           <Trash2 className="w-4 h-4" />
-                          {clearCacheMutation.isPending ? "Clearing..." : "Clear Cache"}
+                          {(clearCacheMutation.isPending || clearDirectCacheMutation.isPending) 
+                            ? "Clearing..." 
+                            : `Clear ${useMcp ? 'MCP' : 'Direct'} Cache`}
                         </button>
                       )}
                       {plannerInfo && (

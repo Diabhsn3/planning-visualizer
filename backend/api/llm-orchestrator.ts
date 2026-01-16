@@ -273,12 +273,15 @@ export async function generateRendererWithLLM(
 
   // Helper for logging with timestamps
   const startTime = Date.now();
+  let currentStep = 0;
+  const TOTAL_STEPS = 6; // Setup, Tools, Prompt, Iterations (1-3), Validation, Complete
+  
   const log = (source: string, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    const formattedMessage = `[${elapsed}s] [${source}] ${message}`;
-    console.log(formattedMessage);
+    const formattedMessage = `[${elapsed}s] ${message}`;
+    console.log(`[${source}] ${formattedMessage}`);
     if (onDetailedLog) {
-      onDetailedLog(source, `[${elapsed}s] ${message}`, level);
+      onDetailedLog(source, formattedMessage, level);
     }
   };
 
@@ -363,6 +366,7 @@ STEP 1: Call get_generation_context IMMEDIATELY with these EXACT parameters:
 DO NOT call the tool without parameters. Pass both parameters on your FIRST call.
 
 STEP 2: Generate complete JavaScript code using the returned context.
+
 
 Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
 

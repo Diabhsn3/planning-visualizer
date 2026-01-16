@@ -1,0 +1,18 @@
+{
+  "domain": "hanoi",
+  "aliases": ["hanoi", "tower-of-hanoi", "towers-of-hanoi"],
+  "description": "Tower of Hanoi puzzle with disks on pegs",
+  "layout": "3 pegs arranged horizontally, disks stacked vertically",
+  "background": "Wooden texture or gradient",
+  "legend": "Show disk sizes and colors",
+  "critical_relations": {
+    "on": "disk1 on disk2 means disk1 is on top of disk2 - draw vertically stacked",
+    "on-peg": "disk1 on-peg peg1 means disk1 is at the bottom of peg1"
+  },
+  "positioning_rules": [
+    "Pegs should be evenly spaced horizontally",
+    "Disks should be stacked vertically on pegs",
+    "Larger disks should be at the bottom",
+    "Use different colors or sizes to distinguish disks"
+  ]
+}
