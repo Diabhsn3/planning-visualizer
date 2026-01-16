@@ -569,23 +569,38 @@ def get_example_renderer() -> str:
 
 USE THIS TOOL WHEN: You are creating the renderDomainLegend function.
 The legend should have SMALL icons (15-20px), not full-sized objects.
+The legend MUST be CONSISTENT across all states - it does NOT depend on state data.
 
 RETURNS: Code example and sizing rules for legend items.""",
 )
 def get_legend_guidelines() -> str:
     """Get guidelines for creating a properly sized legend box."""
     return json.dumps({
-        "description": "Guidelines for creating a properly sized legend",
+        "description": "Guidelines for creating a properly sized, CONSISTENT legend",
         "critical_rules": [
+            "CONSISTENCY: Legend must be IDENTICAL for ALL states in the domain - do NOT read state data!",
+            "MATCHING VISUALS: Legend icons must use the SAME colors and shapes as the main visualization",
             "Legend icons must be SMALL (15-20px), NOT full-sized objects",
             "Legend box should be compact (120-160px wide, 80-150px tall)",
-            "Use simple shapes for icons, not detailed drawings",
+            "Use simplified versions of the actual object drawings, not different shapes",
             "Each legend item: small icon (15x15) + text label",
-            "Spacing between items: 20-25px vertical"
+            "Spacing between items: 20-25px vertical",
+            "Include ALL object types that appear in the domain (depot, truck, crane, pile, package, etc.)"
         ],
+        "consistency_explanation": {
+            "why": "The legend explains what each visual element means. It should NOT change between states.",
+            "how": "The renderDomainLegend function takes NO state parameter - it draws the same legend every time.",
+            "what_to_include": "All object TYPES in the domain, not specific instances. E.g., 'Depot' not 'd1, d2'."
+        },
+        "matching_visuals_explanation": {
+            "why": "Users need to match legend icons to objects in the visualization.",
+            "how": "If you draw depots as gray rectangles in the main render, draw a small gray rectangle in the legend.",
+            "example": "If trucks are blue with wheels, the legend should show a small blue rectangle (simplified truck)."
+        },
         "example_code": '''function renderDomainLegend(ctx, x, y) {
+  // NOTE: No state parameter! Legend is CONSISTENT across all states.
   const boxWidth = 140;
-  const boxHeight = 120;
+  const boxHeight = 140;  // Adjust based on number of object types
   const iconSize = 15;  // SMALL icons!
   const padding = 10;
   const itemSpacing = 22;
@@ -605,31 +620,50 @@ def get_legend_guidelines() -> str:
   
   let itemY = y + 32;
   
-  // Item 1: Depot (small rectangle)
-  ctx.fillStyle = '#A9A9A9';
+  // IMPORTANT: Use the SAME colors as in the main render function!
+  
+  // Item 1: Depot (gray - matches main visualization)
+  ctx.fillStyle = '#A9A9A9';  // Same gray as depot in main render
   ctx.fillRect(x + padding, itemY, iconSize, iconSize);
   ctx.fillStyle = '#333';
   ctx.font = '10px Arial';
   ctx.fillText('Depot', x + padding + iconSize + 8, itemY + 11);
   itemY += itemSpacing;
   
-  // Item 2: Truck (small rectangle)
-  ctx.fillStyle = '#00BFFF';
+  // Item 2: Truck (blue - matches main visualization)
+  ctx.fillStyle = '#00BFFF';  // Same blue as truck in main render
   ctx.fillRect(x + padding, itemY, iconSize, iconSize);
   ctx.fillStyle = '#333';
   ctx.fillText('Truck', x + padding + iconSize + 8, itemY + 11);
   itemY += itemSpacing;
   
-  // Item 3: Package (small square)
-  ctx.fillStyle = '#FFD700';
+  // Item 3: Crane/Hoist (pink - matches main visualization)
+  ctx.fillStyle = '#FF69B4';  // Same pink as crane in main render
+  ctx.fillRect(x + padding, itemY, iconSize, iconSize);
+  ctx.fillStyle = '#333';
+  ctx.fillText('Crane', x + padding + iconSize + 8, itemY + 11);
+  itemY += itemSpacing;
+  
+  // Item 4: Package/Crate (yellow - matches main visualization)
+  ctx.fillStyle = '#FFD700';  // Same yellow as package in main render
   ctx.fillRect(x + padding, itemY, iconSize, iconSize);
   ctx.fillStyle = '#333';
   ctx.fillText('Package', x + padding + iconSize + 8, itemY + 11);
+  itemY += itemSpacing;
+  
+  // Item 5: Pile (brown - matches main visualization)
+  ctx.fillStyle = '#8B4513';  // Same brown as pile in main render
+  ctx.fillRect(x + padding, itemY, iconSize, iconSize);
+  ctx.fillStyle = '#333';
+  ctx.fillText('Pile', x + padding + iconSize + 8, itemY + 11);
 }''',
         "common_mistakes": [
+            "Reading state data in legend function - legend should be STATIC!",
+            "Using different colors in legend than in main visualization",
             "Drawing full-sized objects in legend (e.g., 60x60 blocks)",
             "Making legend box too large",
-            "Using complex drawings instead of simple colored squares"
+            "Only showing some object types, not all",
+            "Changing legend between states"
         ]
     })
 
