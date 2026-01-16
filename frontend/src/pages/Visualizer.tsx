@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
+import { GenerationProgress } from "@/components/GenerationProgress";
 import { 
   Play, Pause, SkipForward, SkipBack, Upload, FileText, 
   AlertTriangle, Clock, Zap, Settings, 
-  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown
+  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown, Trash2
 } from "lucide-react";
 
 // Search strategy type
@@ -40,6 +41,10 @@ export default function Visualizer() {
   const [showExampleProblem, setShowExampleProblem] = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [visualizationMode, setVisualizationMode] = useState<"basic" | "llm">("basic");
+  const [llmCode, setLlmCode] = useState<string | null>(null);
+  const [llmError, setLlmError] = useState<string | null>(null);
+  const [isLlmGenerating, setIsLlmGenerating] = useState(false);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef = useRef<HTMLDivElement>(null);
   
@@ -326,8 +331,42 @@ export default function Visualizer() {
     return "";
   };
 
+  // LLM cache query
+  const checkCachedRendererQuery = trpc.visualizer.getCachedRenderer.useQuery(
+    { domainName: selectedDomain },
+    { enabled: false } // Manual refetch only
+  );
+
+  // Clear cache mutation
+  const clearCacheMutation = trpc.visualizer.clearRendererCache.useMutation({
+    onSuccess: () => {
+      setLlmCode(null);
+      setLlmError(null);
+      console.log('[Visualizer] Cache cleared');
+    },
+  });
+
+  // LLM renderer mutation
+  const llmRendererMutation = trpc.visualizer.generateLLMRenderer.useMutation({
+    onSuccess: (data: { success: boolean; typescript_code: string; error: string | null; saved_file: string | null; progress_id: string | null }) => {
+      setIsLlmGenerating(false);
+      if (data.success && data.typescript_code) {
+        setLlmCode(data.typescript_code);
+        setLlmError(null);
+      } else {
+        setLlmCode(null);
+        setLlmError(data.error || "Failed to generate LLM renderer");
+      }
+    },
+    onError: (error: any) => {
+      setIsLlmGenerating(false);
+      setLlmCode(null);
+      setLlmError(error.message || "Failed to generate LLM renderer");
+    },
+  });
+
   const uploadMutation = trpc.visualizer.uploadAndGenerate.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: { states: any[]; plan: string[]; domain?: string; used_planner?: boolean; planner_info?: string; search_strategy?: any }) => {
       setIsProcessing(false);
       setRenderedStates(data.states);
       setPlan(data.plan);
@@ -337,6 +376,31 @@ export default function Visualizer() {
         info: data.planner_info || "Unknown",
         strategy: data.search_strategy
       });
+      
+      // If LLM mode, check cache first then generate if needed
+      if (visualizationMode === "llm" && data.states.length > 0) {
+        const domainForLlm = data.domain || selectedDomain;
+        
+        // Check cache first
+        checkCachedRendererQuery.refetch().then((result: { data?: { found: boolean; code: string | null } }) => {
+          if (result.data?.found && result.data.code) {
+            // Use cached renderer
+            console.log('[Visualizer] Using cached LLM renderer');
+            setLlmCode(result.data.code);
+            setLlmError(null);
+          } else {
+            // No cache, generate new
+            console.log('[Visualizer] No cached renderer, generating new');
+            setIsLlmGenerating(true);
+            setLlmCode(null);
+            setLlmError(null);
+            llmRendererMutation.mutate({
+              domainName: domainForLlm,
+              states: data.states,
+            });
+          }
+        });
+      }
     },
     onError: (error: any) => {
       setIsProcessing(false);
@@ -849,6 +913,72 @@ export default function Visualizer() {
               )}
             </div>
 
+            {/* Visualization Mode Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100">
+                <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-500" />
+                  Visualization Mode
+                </h2>
+              </div>
+              <div className="p-4 space-y-3">
+                {/* Basic Visualizer */}
+                <button
+                  onClick={() => setVisualizationMode("basic")}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-200 ${
+                    visualizationMode === "basic"
+                      ? "bg-indigo-50 border-2 border-indigo-500 shadow-sm"
+                      : "bg-slate-50 border-2 border-transparent hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center">
+                    <Cpu className="w-4 h-4 text-slate-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className={`font-medium ${visualizationMode === "basic" ? "text-indigo-900" : "text-slate-900"}`}>
+                      Basic Visualizer
+                    </div>
+                    <div className="text-xs text-slate-500">Hand-crafted domain-specific renderers</div>
+                  </div>
+                  {visualizationMode === "basic" && (
+                    <CheckCircle2 className="w-5 h-5 text-indigo-500" />
+                  )}
+                </button>
+
+                {/* LLM-Based Visualizer */}
+                <button
+                  onClick={() => setVisualizationMode("llm")}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all duration-200 ${
+                    visualizationMode === "llm"
+                      ? "bg-purple-50 border-2 border-purple-500 shadow-sm"
+                      : "bg-slate-50 border-2 border-transparent hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className={`font-medium ${visualizationMode === "llm" ? "text-purple-900" : "text-slate-900"}`}>
+                      LLM-Based Visualizer
+                    </div>
+                    <div className="text-xs text-slate-500">Naive LLM approach (basic prompts)</div>
+                  </div>
+                  {visualizationMode === "llm" && (
+                    <CheckCircle2 className="w-5 h-5 text-purple-500" />
+                  )}
+                </button>
+
+                {visualizationMode === "llm" && (
+                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                    <p className="text-xs text-purple-800">
+                      <strong>Naive LLM Mode:</strong> Uses simple prompts without MCP tools.
+                      Results may vary - this simulates an early/first attempt at LLM integration.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Generate Button */}
             <button
               onClick={handleGenerate}
@@ -895,25 +1025,83 @@ export default function Visualizer() {
                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h2 className="text-lg font-semibold text-slate-900">Visualization</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-semibold text-slate-900">
+                          {currentDomain?.icon} {currentDomain?.name} Visualization
+                        </h2>
+                        {visualizationMode === "llm" && (
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            LLM Mode
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-slate-500 mt-0.5">
-                        {currentDomain?.icon} {currentDomain?.name} • {plan.length} actions
+                        {plan.length} actions
+                        {isLlmGenerating && " • Generating LLM renderer..."}
                       </p>
                     </div>
-                    {plannerInfo && (
-                      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
-                        plannerInfo.used_planner 
-                          ? "bg-emerald-100 text-emerald-700" 
-                          : "bg-amber-100 text-amber-700"
-                      }`}>
-                        {plannerInfo.used_planner ? (
-                          <CheckCircle2 className="w-4 h-4" />
-                        ) : (
-                          <AlertTriangle className="w-4 h-4" />
-                        )}
-                        {plannerInfo.info}
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {/* Regenerate Button (LLM mode only) */}
+                      {visualizationMode === "llm" && renderedStates.length > 0 && (
+                        <button
+                          onClick={() => {
+                            // Force regenerate - bypass cache
+                            setIsLlmGenerating(true);
+                            setLlmCode(null);
+                            setLlmError(null);
+                            llmRendererMutation.mutate({
+                              domainName: selectedDomain,
+                              states: renderedStates,
+                            });
+                          }}
+                          disabled={isLlmGenerating}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                            isLlmGenerating
+                              ? "bg-purple-100 text-purple-400 cursor-wait"
+                              : "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                          }`}
+                        >
+                          {isLlmGenerating ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-4 h-4" />
+                              Regenerate
+                            </>
+                          )}
+                        </button>
+                      )}
+                      {/* Clear Cache Button (LLM mode only) */}
+                      {visualizationMode === "llm" && (
+                        <button
+                          onClick={() => clearCacheMutation.mutate()}
+                          disabled={clearCacheMutation.isPending}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                          title="Clear all cached LLM renderers"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {clearCacheMutation.isPending ? "Clearing..." : "Clear Cache"}
+                        </button>
+                      )}
+                      {plannerInfo && (
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+                          plannerInfo.used_planner 
+                            ? "bg-emerald-100 text-emerald-700" 
+                            : "bg-amber-100 text-amber-700"
+                        }`}>
+                          {plannerInfo.used_planner ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4" />
+                          )}
+                          {plannerInfo.info}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   
                   {plannerInfo?.strategy && (
@@ -933,11 +1121,55 @@ export default function Visualizer() {
 
                 {/* Canvas */}
                 <div className="p-6">
-                  <StateCanvas 
-                    state={renderedStates[currentStateIndex]} 
-                    isFirst={currentStateIndex === 0} 
-                    isLast={currentStateIndex === renderedStates.length - 1}
-                  />
+                  {/* LLM Error Display */}
+                  {visualizationMode === "llm" && llmError && (
+                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+                      <div className="flex items-start gap-2">
+                        <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-red-800">LLM Generation Failed</p>
+                          <p className="text-xs text-red-600 mt-1">{llmError}</p>
+                          <p className="text-xs text-slate-500 mt-2">Falling back to basic renderer.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* LLM Success Indicator */}
+                  {visualizationMode === "llm" && llmCode && !isLlmGenerating && (
+                    <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        <p className="text-xs text-emerald-700">LLM-generated renderer active</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Canvas with Progress Overlay */}
+                  <div className="relative">
+                    {/* LLM Generation Progress - Overlays only the canvas */}
+                    {/* Show during generation AND after completion until user clicks Show Result */}
+                    {visualizationMode === "llm" && (isLlmGenerating || llmCode) && (
+                      <GenerationProgress 
+                        isGenerating={isLlmGenerating}
+                        onComplete={() => {
+                          // Progress component will show completion state
+                          // The actual llmCode update happens via the mutation
+                        }}
+                        onShowResult={() => {
+                          // User clicked Show Result - component will dismiss itself
+                          // The llmCode is already set, so visualization will show
+                        }}
+                      />
+                    )}
+                    
+                    <StateCanvas 
+                      state={renderedStates[currentStateIndex]} 
+                      isFirst={currentStateIndex === 0} 
+                      isLast={currentStateIndex === renderedStates.length - 1}
+                      llmCode={visualizationMode === "llm" ? llmCode : null}
+                    />
+                  </div>
                 </div>
 
                 {/* Controls */}

@@ -95,10 +95,11 @@ interface StateCanvasProps {
   height?: number;
   isFirst?: boolean;
   isLast?: boolean;
+  llmCode?: string | null;
 }
 
 
-export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false }: StateCanvasProps) {
+export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmCode = null }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -177,79 +178,183 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Get domain-specific renderer configuration
-    const domainConfig = domainRenderers[state.domain];
-
     // ============================================
-    // 1. DRAW BACKGROUND (BEFORE zoom/pan transform)
+    // PARSE LLM CODE FOR BACKGROUND/LEGEND FUNCTIONS
     // ============================================
-    if (domainConfig?.background) {
-      // Use domain-specific background
-      domainConfig.background(ctx, width, height);
-    } else {
-      // Default background with grid
-      drawDefaultBackground(ctx, width, height);
+    let llmBackgroundFn: ((ctx: CanvasRenderingContext2D, w: number, h: number) => void) | null = null;
+    let llmLegendFn: ((ctx: CanvasRenderingContext2D, x: number, y: number) => void) | null = null;
+    let llmMainFn: ((ctx: CanvasRenderingContext2D, state: RenderedState) => void) | null = null;
+    let llmFnName = 'render';
+    
+    if (llmCode) {
+      try {
+        // First, strip any markdown code blocks that Claude might have added
+        let jsCode = llmCode
+          .replace(/^```(?:javascript|typescript|js)?\s*\n?/gm, '')
+          .replace(/\n?```$/gm, '')
+          .trim();
+        
+        // Strip TypeScript type annotations
+        jsCode = jsCode
+          .replace(/:\s*(?:string|number|boolean|any|void|never|unknown|null|undefined|[A-Z][A-Za-z0-9_<>\[\]|&\s,]*)(?=[,)])/g, '')
+          .replace(/\)\s*:\s*(?:string|number|boolean|any|void|never|unknown|null|undefined|[A-Z][A-Za-z0-9_<>\[\]|&\s]*)\s*\{/g, ') {')
+          .replace(/(const|let|var)\s+(\w+)\s*:\s*(?:string|number|boolean|any|void|never|unknown|null|undefined|[A-Z][A-Za-z0-9_<>\[\]|&\s]*)\s*=/g, '$1 $2 =')
+          .replace(/\s+as\s+(?:string|number|boolean|any|[A-Z][A-Za-z0-9_<>\[\]|&\s]*)/g, '')
+          .replace(/^\s*(interface|type)\s+\w+.*$/gm, '')
+          .replace(/  +/g, ' ');
+        
+        // Extract function names
+        const mainFnMatch = jsCode.match(/function\s+(render[A-Za-z]+)\s*\(\s*ctx\s*,\s*state\s*\)/);
+        const bgFnMatch = jsCode.match(/function\s+(render[A-Za-z]+Background)\s*\(/);
+        const legendFnMatch = jsCode.match(/function\s+(render[A-Za-z]+Legend)\s*\(/);
+        
+        llmFnName = mainFnMatch ? mainFnMatch[1] : 'render';
+        const bgFnName = bgFnMatch ? bgFnMatch[1] : null;
+        const legendFnName = legendFnMatch ? legendFnMatch[1] : null;
+        
+        console.log('[StateCanvas] Extracted functions - Main:', llmFnName, 'Background:', bgFnName, 'Legend:', legendFnName);
+        
+        // Create wrapper that defines all functions and returns them
+        const wrappedCode = `
+          ${jsCode}
+          return {
+            main: typeof ${llmFnName} === 'function' ? ${llmFnName} : null,
+            background: ${bgFnName ? `typeof ${bgFnName} === 'function' ? ${bgFnName} : null` : 'null'},
+            legend: ${legendFnName ? `typeof ${legendFnName} === 'function' ? ${legendFnName} : null` : 'null'}
+          };
+        `;
+        
+        // Execute and get functions
+        const getFns = new Function(wrappedCode);
+        const fns = getFns();
+        
+        llmMainFn = fns.main;
+        llmBackgroundFn = fns.background;
+        llmLegendFn = fns.legend;
+        
+        console.log('[StateCanvas] LLM functions parsed - Main:', !!llmMainFn, 'Background:', !!llmBackgroundFn, 'Legend:', !!llmLegendFn);
+      } catch (error) {
+        console.error('[StateCanvas] Failed to parse LLM functions:', error);
+      }
     }
 
     // ============================================
-    // 2. APPLY ZOOM/PAN TRANSFORM
+    // DRAW BACKGROUND (before zoom/pan transform)
     // ============================================
+    let hasCustomBackground = false;
+    
+    // Try LLM background first
+    if (llmBackgroundFn) {
+      try {
+        llmBackgroundFn(ctx, width, height);
+        hasCustomBackground = true;
+        console.log('[StateCanvas] LLM background rendered');
+      } catch (error) {
+        console.error('[StateCanvas] LLM background failed:', error);
+      }
+    }
+    
+    // Fall back to built-in domain backgrounds
+    if (!hasCustomBackground && state.domain === 'satellite' && renderSatelliteBackground) {
+      renderSatelliteBackground(ctx, width, height);
+      hasCustomBackground = true;
+    }
+    // Add more domain backgrounds here as needed
+    
+    // Default grid background
+    if (!hasCustomBackground) {
+      ctx.fillStyle = "#f0f4f8";
+      ctx.fillRect(0, 0, width, height);
+
+      const GRID_SIZE = 40;
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.08)";
+      ctx.lineWidth = 1;
+      
+      for (let x = 0; x <= width; x += GRID_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      
+      for (let y = 0; y <= height; y += GRID_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+    }
+
+    // Save context state
     ctx.save();
+
+    // Apply transformations for zoom and pan
     ctx.translate(offset.x, offset.y);
     ctx.scale(scale, scale);
 
     // ============================================
-    // 3. DRAW MAIN VISUALIZATION
+    // RENDER MAIN VISUALIZATION
     // ============================================
-    if (domainConfig) {
-      domainConfig.render(ctx, state);
-    } else if (state.domain === "blocks-world") {
-      renderBlocksWorld(ctx, state);
-    } else if (state.domain === "gripper") {
-      renderGripper(ctx, state);
-    } else {
-      renderDefault(ctx, state);
+    let usedLlm = false;
+    
+    console.log('[StateCanvas] Rendering, llmCode present:', !!llmCode, 'llmCode length:', llmCode?.length || 0);
+    
+    if (llmMainFn) {
+      try {
+        llmMainFn(ctx, state);
+        usedLlm = true;
+        console.log('[StateCanvas] LLM main render executed successfully');
+      } catch (error) {
+        console.error('[StateCanvas] LLM code execution failed:', error);
+        console.error('[StateCanvas] LLM code was:', llmCode?.substring(0, 500) + '...');
+        // Fall through to basic renderer
+      }
+    }
+    
+    if (!usedLlm) {
+      // Use basic domain-specific renderers
+      if (state.domain === "blocks-world") {
+        renderBlocksWorld(ctx, state);
+      } else if (state.domain === "gripper") {
+        renderGripper(ctx, state);
+      } else if(state.domain === "depot"){
+        renderDepot(ctx, state);
+      } else if(state.domain === "hanoi"){
+        renderHanoi(ctx, state);
+      } else if(state.domain === "rovers"){
+        renderRovers(ctx, state);
+      } else if(state.domain === "satellite"){
+        renderSatellite(ctx, state);
+      } else {
+        renderDefault(ctx, state);
+      }
     }
 
-    // Restore context state (removes zoom/pan transform)
+    // Restore context state
     ctx.restore();
-
-    // ============================================
-    // 4. DRAW LEGEND (AFTER restoring transform - fixed position)
-    // ============================================
-    if (domainConfig?.legend) {
-      // Draw legend at fixed position (top-left, below zoom controls)
-      domainConfig.legend(ctx, 20, 70);
-    }
-  }, [state, width, height, scale, offset, isFirst, isLast]);
-
-  // Default background with grid pattern
-  function drawDefaultBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
-    // Set background color
-    ctx.fillStyle = "#f0f4f8";
-    ctx.fillRect(0, 0, w, h);
-
-    // Draw grid
-    const GRID_SIZE = 40;
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.08)";
-    ctx.lineWidth = 1;
     
-    // Draw vertical lines
-    for (let x = 0; x <= w; x += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
+    // ============================================
+    // DRAW LEGEND (after restore - fixed position)
+    // ============================================
+    const legendX = width - 165;  // 150px legend + 15px margin
+    const legendY = 15;
     
-    // Draw horizontal lines
-    for (let y = 0; y <= h; y += GRID_SIZE) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
+    // Try LLM legend first
+    if (llmLegendFn) {
+      try {
+        llmLegendFn(ctx, legendX, legendY);
+        console.log('[StateCanvas] LLM legend rendered');
+      } catch (error) {
+        console.error('[StateCanvas] LLM legend failed:', error);
+      }
     }
-  }
+    // Fall back to built-in domain legends (only if no LLM legend)
+    else if (state.domain === 'satellite' && renderSatelliteLegend) {
+      renderSatelliteLegend(ctx, legendX, legendY);
+    }
+    // Add more domain legends here as needed
+    
+    }, [state, width, height, scale, offset, isFirst, isLast, llmCode]);
 
   // Handle mouse down for panning
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {

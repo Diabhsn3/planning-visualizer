@@ -5,6 +5,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
+import {
+  generateNaiveLLMRenderer,
+  checkNaiveLLMRendererStatus,
+  getCachedRenderer,
+  cacheRenderer,
+  clearRendererCache,
+} from "./naive-llm-renderer.js";
+import { getProgress, getLatestProgress } from "./generation-progress.js";
 
 const execAsync = promisify(exec);
 
@@ -295,7 +303,7 @@ export const visualizerRouter = router({
           search_strategy: data.search_strategy,
         };
       } catch (error) {
-        // Clean up files even on error
+        // Clean up files on error
         try {
           if (problemPath) {
             await unlink(problemPath).catch(() => {});
@@ -451,5 +459,111 @@ export const visualizerRouter = router({
         console.error(`[getDomainDefinition] Error reading domain file:`, error);
         throw new Error(`Failed to read domain file for ${input.domainName}`);
       }
+    }),
+
+  // ============================================================================
+  // NAIVE LLM RENDERER ENDPOINTS
+  // ============================================================================
+
+  /**
+   * Generate LLM renderer using NAIVE approach
+   * 
+   * This is a simple, direct LLM call without MCP tools or sophisticated prompts.
+   * Demonstrates the "first attempt" at LLM-based rendering.
+   */
+  generateLLMRenderer: publicProcedure
+    .input(z.object({
+      domainName: z.string(),
+      states: z.array(z.unknown()),
+      styleHints: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      console.log('[generateLLMRenderer] Starting naive LLM generation for:', input.domainName);
+      
+      const result = await generateNaiveLLMRenderer({
+        domain_name: input.domainName,
+        states: input.states,
+        style_hints: input.styleHints,
+      });
+
+      // Cache successful results
+      if (result.success && result.typescript_code) {
+        cacheRenderer(input.domainName, result.typescript_code);
+      }
+
+      return {
+        success: result.success,
+        typescript_code: result.typescript_code,
+        error: result.error,
+        saved_file: result.saved_file || null,
+        progress_id: null, // Naive approach doesn't use progress tracking
+      };
+    }),
+
+  /**
+   * Check LLM renderer status
+   */
+  checkLLMRendererStatus: publicProcedure.query(async () => {
+    return checkNaiveLLMRendererStatus();
+  }),
+
+  /**
+   * Get cached renderer for a domain
+   */
+  getCachedRenderer: publicProcedure
+    .input(z.object({
+      domainName: z.string(),
+    }))
+    .query(({ input }) => {
+      return getCachedRenderer(input.domainName);
+    }),
+
+  /**
+   * Clear renderer cache
+   */
+  clearRendererCache: publicProcedure.mutation(() => {
+    clearRendererCache();
+    return { success: true };
+  }),
+
+  /**
+   * Get generation progress
+   */
+  getGenerationProgress: publicProcedure
+    .input(z.object({
+      progressId: z.string().optional(),
+    }))
+    .query(({ input }) => {
+      const progress = input.progressId 
+        ? getProgress(input.progressId) 
+        : getLatestProgress();
+      
+      if (!progress) {
+        return { found: false, progress: null };
+      }
+      
+      // Convert to format expected by frontend
+      return {
+        found: true,
+        progress: {
+          id: progress.id,
+          domainName: progress.domain,
+          status: progress.status,
+          currentStep: progress.currentStep,
+          totalSteps: 10, // Naive approach doesn't track total steps
+          percentage: progress.status === 'completed' ? 100 : 50,
+          currentMessage: progress.currentMessage,
+          logs: [],
+          detailedLogs: progress.detailedLogs.map(log => ({
+            timestamp: new Date(log.timestamp).getTime(),
+            source: log.source,
+            message: log.message,
+            level: log.level,
+          })),
+          startTime: new Date(progress.startTime).getTime(),
+          endTime: progress.endTime ? new Date(progress.endTime).getTime() : undefined,
+          error: progress.error,
+        }
+      };
     }),
 });
