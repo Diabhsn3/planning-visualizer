@@ -258,6 +258,18 @@ def get_generation_context(
 ) -> str:
     """Get all context needed for renderer generation."""
     try:
+        # Validate required parameters
+        if not state_json or state_json == "":
+            return json.dumps({
+                "success": False,
+                "error": "MISSING PARAMETER: state_json is required. Pass the example state data as a JSON string."
+            })
+        if not domain_name or domain_name == "":
+            return json.dumps({
+                "success": False,
+                "error": "MISSING PARAMETER: domain_name is required. Pass the domain name (e.g., 'depot', 'rovers')."
+            })
+        
         # Parse state
         if isinstance(state_json, dict):
             state = state_json
@@ -312,6 +324,20 @@ def validate_renderer(
     domain_name: str = Field(description="Expected domain name (for function name checking)"),
 ) -> str:
     """Validate renderer code for syntax errors and required functions."""
+    # Validate required parameters
+    if not code or code == "":
+        return json.dumps({
+            "valid": False,
+            "errors": ["MISSING PARAMETER: code is required. Pass the JavaScript code to validate."],
+            "warnings": []
+        })
+    if not domain_name or domain_name == "":
+        return json.dumps({
+            "valid": False,
+            "errors": ["MISSING PARAMETER: domain_name is required. Pass the domain name (e.g., 'depot', 'rovers')."],
+            "warnings": []
+        })
+    
     errors = []
     warnings = []
     

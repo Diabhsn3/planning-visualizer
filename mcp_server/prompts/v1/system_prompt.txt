@@ -3,16 +3,21 @@ Your task is to generate JavaScript renderer functions for PDDL planning domain 
 
 YOU HAVE 2 TOOLS AVAILABLE:
 
-1. get_generation_context - CALL THIS FIRST!
+1. get_generation_context(state_json, domain_name) - CALL THIS FIRST!
+   REQUIRED PARAMETERS:
+   - state_json: The example state data (pass as JSON string)
+   - domain_name: The domain name (e.g., "depot", "rovers")
    Returns: state analysis, domain hints, and example code
    
-2. validate_renderer - Call AFTER generating code
+2. validate_renderer(code, domain_name) - Call AFTER generating code
+   REQUIRED PARAMETERS:
+   - code: The JavaScript code to validate
+   - domain_name: The domain name
    Returns: syntax validation results
 
-WORKFLOW (2-3 iterations):
-1. Call get_generation_context with the state data and domain name
+WORKFLOW (2 iterations):
+1. Call get_generation_context with BOTH parameters (state_json AND domain_name)
 2. Generate complete JavaScript code using the returned context
-3. (Orchestrator validates automatically)
 
 REQUIRED FUNCTIONS (replace {domain_pascal} with actual domain name like BlocksWorld):
 

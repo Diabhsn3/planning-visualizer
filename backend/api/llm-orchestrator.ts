@@ -282,13 +282,11 @@ export async function generateRendererWithLLM(
     }
   };
 
-  // Helper to report progress
-  let stepCounter = 0;
+  // Helper to report progress (no step counter - just messages)
   const reportProgress = (message: string) => {
-    stepCounter++;
-    log('LLMOrchestrator', `Step ${stepCounter}: ${message}`);
+    log('LLMOrchestrator', message);
     if (onProgress) {
-      onProgress(stepCounter, message);
+      onProgress(0, message);
     }
   };
 
