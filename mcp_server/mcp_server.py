@@ -796,5 +796,103 @@ def analyze_state_structure(state_json: str) -> str:
     }, indent=2)
 
 
+@mcp.tool(
+    name="get_collision_avoidance_guidelines",
+    description="""Get guidelines for arranging multiple objects at the same location.
+
+USE THIS TOOL WHEN: Multiple objects can be at the same position (e.g., packages on a pile, blocks on a table).
+This tool teaches you how to arrange objects SIDE BY SIDE instead of overlapping.
+
+RETURNS: Code patterns for detecting and handling object collisions.""",
+)
+def get_collision_avoidance_guidelines() -> str:
+    """Get guidelines for arranging multiple objects at the same location."""
+    return json.dumps({
+        "description": "Guidelines for arranging multiple objects without overlap",
+        "critical_rules": [
+            "NEVER draw objects on top of each other - they must ALL be visible",
+            "When multiple objects share a location, arrange them SIDE BY SIDE",
+            "Use index-based offsets: x + (index * objectWidth + spacing)",
+            "Group objects by their container/location first, then arrange within group",
+            "Containers should RESIZE based on number of contents"
+        ],
+        "example_code": '''// CORRECT: Arrange objects at same location side by side
+function renderWithCollisionAvoidance(ctx, state) {
+  // Group objects by their container/location
+  const objectsByLocation = new Map();
+  
+  for (const obj of state.objects) {
+    // Find what container this object is in (from relations)
+    const containedIn = state.relations.find(r => 
+      (r.type.includes("in") || r.type.includes("on")) && r.source === obj.id
+    );
+    
+    const locationKey = containedIn ? containedIn.target : "free";
+    
+    if (!objectsByLocation.has(locationKey)) {
+      objectsByLocation.set(locationKey, []);
+    }
+    objectsByLocation.get(locationKey).push(obj);
+  }
+  
+  // Draw each group with proper spacing
+  for (const [locationId, objects] of objectsByLocation) {
+    if (locationId === "free") {
+      // Free objects - use their own positions
+      for (const obj of objects) {
+        const [x, y] = obj.position || [0, 0];
+        drawObject(ctx, obj, x, y);
+      }
+    } else {
+      // Objects in a container - arrange side by side
+      const container = state.objects.find(o => o.id === locationId);
+      if (!container) continue;
+      
+      const [baseX, baseY] = container.position || [0, 0];
+      const objectWidth = 30;
+      const spacing = 5;
+      
+      objects.forEach((obj, index) => {
+        const offsetX = index * (objectWidth + spacing);
+        drawObject(ctx, obj, baseX + 10 + offsetX, baseY + 10);
+      });
+    }
+  }
+}
+
+// CORRECT: Dynamic container sizing
+function drawContainerWithContents(ctx, container, contents) {
+  const baseWidth = 60;
+  const baseHeight = 40;
+  const itemWidth = 25;
+  const padding = 10;
+  
+  // Calculate container size based on contents
+  const width = Math.max(baseWidth, contents.length * itemWidth + padding * 2);
+  const height = baseHeight;
+  
+  const [x, y] = container.position || [0, 0];
+  
+  // Draw container
+  ctx.fillStyle = container.properties?.color || "#888";
+  ctx.fillRect(x, y, width, height);
+  
+  // Draw contents inside, side by side
+  contents.forEach((item, index) => {
+    const itemX = x + padding + index * itemWidth;
+    const itemY = y + padding;
+    drawSmallItem(ctx, item, itemX, itemY);
+  });
+}''',
+        "common_mistakes": [
+            "Drawing all objects at their raw positions without checking for overlap",
+            "Not grouping objects by container before drawing",
+            "Fixed container sizes that don't account for variable contents",
+            "Drawing contained objects outside their container"
+        ],
+        "key_pattern": "Group by location → Calculate offsets → Draw with spacing"
+    })
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
