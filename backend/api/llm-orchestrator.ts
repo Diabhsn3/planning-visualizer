@@ -285,10 +285,7 @@ export async function generateRendererWithLLM(
     }
   };
 
-  // Track current step for progress reporting
-  let currentStep = 0;
-  const TOTAL_STEPS = 6;
-  
+  // Helper to report progress with step number
   const reportProgress = (step: number, message: string) => {
     currentStep = step;
     const percent = Math.round((step / TOTAL_STEPS) * 100);
