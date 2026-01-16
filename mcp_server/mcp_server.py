@@ -287,20 +287,12 @@ def get_generation_context(
         # Get domain hints
         domain_hints = _get_domain_hints(domain_name)
         
-        # Get example code snippet
-        example_path = EXAMPLES_DIR / "example_renderer.js"
-        example_snippet = ""
-        if example_path.exists():
-            with open(example_path, "r") as f:
-                # Just get the first 50 lines as a snippet
-                lines = f.readlines()[:50]
-                example_snippet = "".join(lines)
+       
         
         return json.dumps({
             "success": True,
             "state_analysis": state_analysis,
             "domain_hints": domain_hints,
-            "example_snippet": example_snippet,
             "next_step": "Now generate the complete JavaScript renderer code using this context."
         }, indent=2)
         
