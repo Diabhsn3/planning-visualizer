@@ -1,0 +1,41 @@
+{
+  "description": "Index of available domain hints for PDDL planning visualization",
+  "domains": [
+    {
+      "name": "depot",
+      "file": "depot.json",
+      "aliases": ["depot", "depots", "warehouse", "logistics-depot"]
+    },
+    {
+      "name": "blocks-world",
+      "file": "blocks-world.json",
+      "aliases": ["blocks-world", "blocks_world", "blocksworld", "blocks"]
+    },
+    {
+      "name": "hanoi",
+      "file": "hanoi.json",
+      "aliases": ["hanoi", "tower-of-hanoi", "towers-of-hanoi"]
+    },
+    {
+      "name": "gripper",
+      "file": "gripper.json",
+      "aliases": ["gripper", "robot-gripper"]
+    },
+    {
+      "name": "logistics",
+      "file": "logistics.json",
+      "aliases": ["logistics", "package-delivery"]
+    },
+    {
+      "name": "satellite",
+      "file": "satellite.json",
+      "aliases": ["satellite", "satellites"]
+    },
+    {
+      "name": "rovers",
+      "file": "rovers.json",
+      "aliases": ["rovers", "rover", "mars-rovers"]
+    }
+  ],
+  "usage": "To get hints for a domain, read the corresponding JSON file. If domain not found, the LLM should generate visualization based on state analysis alone."
+}

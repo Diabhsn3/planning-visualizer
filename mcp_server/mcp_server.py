@@ -48,8 +48,72 @@ def get_system_prompt_resource(version: str) -> str:
         return f.read()
 
 
+# Directory containing domain hints
+DOMAIN_HINTS_DIR = Path(__file__).parent / "domain_hints"
+
+
+@mcp.resource("domain://hints/index")
+def get_domain_hints_index() -> str:
+    """
+    Get the index of all available domain hints.
+    
+    URI: domain://hints/index
+    
+    Returns a list of available domains with their aliases.
+    Use this to find if hints exist for a specific domain.
+    """
+    index_path = DOMAIN_HINTS_DIR / "index.json"
+    if not index_path.exists():
+        return json.dumps({"error": "Domain hints index not found", "domains": []})
+    with open(index_path, "r") as f:
+        return f.read()
+
+
+@mcp.resource("domain://hints/{domain_name}")
+def get_domain_hints_resource(domain_name: str) -> str:
+    """
+    Get visualization hints for a specific planning domain.
+    
+    URI: domain://hints/depot, domain://hints/blocks-world, etc.
+    
+    Returns domain-specific hints including:
+    - description: What the domain is about
+    - layout: How to arrange visual elements
+    - background: Suggested background style
+    - legend: What to show in the legend
+    - critical_relations: How to interpret key relations
+    - positioning_rules: Rules for placing objects
+    - code_pattern: Example code patterns (if available)
+    """
+    # Normalize domain name
+    domain_name = domain_name.strip().lower().replace("_", "-")
+    
+    # Try direct match first
+    hints_path = DOMAIN_HINTS_DIR / f"{domain_name}.json"
+    if hints_path.exists():
+        with open(hints_path, "r") as f:
+            return f.read()
+    
+    # Try to find by alias
+    index_path = DOMAIN_HINTS_DIR / "index.json"
+    if index_path.exists():
+        with open(index_path, "r") as f:
+            index = json.load(f)
+            for domain in index.get("domains", []):
+                if domain_name in domain.get("aliases", []):
+                    alias_path = DOMAIN_HINTS_DIR / domain["file"]
+                    if alias_path.exists():
+                        with open(alias_path, "r") as hf:
+                            return hf.read()
+    
+    return json.dumps({
+        "error": f"No hints found for domain '{domain_name}'",
+        "suggestion": "Generate visualization based on state analysis alone"
+    })
+
+
 # =============================================================================
-# DOMAIN HINTS DATABASE
+# DOMAIN HINTS DATABASE (kept for backward compatibility)
 # =============================================================================
 
 DOMAIN_HINTS = {
@@ -174,33 +238,44 @@ def _analyze_state(state: dict) -> dict:
     # Generate insights based on detected relations
     insights = []
     
-    # Detect containment ('in' relations)
-    in_relations = [r for r in relation_types if "in" in r.lower()]
-    if in_relations:
-        insights.append(f"CONTAINMENT: Found 'in' relations {in_relations}. Draw contained objects INSIDE their container.")
+    # Detect containment ('in' or 'at' relations - both indicate object belongs to/is inside another)
+    # Exclude 'holding' from 'in' detection as it's handled separately
+    in_relations = [r for r in relation_types if "in" in r.lower() and "holding" not in r.lower()]
+    at_relations = [r for r in relation_types if (r.lower().startswith("at") or "-at" in r.lower()) and "holding" not in r.lower()]
+    containment_relations = list(set(in_relations + at_relations))
+    
+    if containment_relations:
+        # Build containment/location map
+        location_map = {}
+        for rel in relations:
+            rel_type = rel.get("type", "").lower()
+            # Exclude holding relations from location map
+            if "holding" in rel_type:
+                continue
+            if "in" in rel_type or rel_type.startswith("at") or "-at" in rel_type:
+                location_map[rel.get("source")] = rel.get("target")
+        
+        insights.append(f"CONTAINMENT/LOCATION: Found relations {containment_relations} that indicate object placement.")
+        insights.append(f"LOCATION MAP: {location_map}")
+        insights.append("CRITICAL: Draw each object ONLY at its assigned location/container!")
+        insights.append("TIP: Both 'at-X' and 'in-X' relations mean the source object belongs to/is at the target.")
     
     # Detect stacking ('on' relations)
-    on_relations = [r for r in relation_types if "on" in r.lower()]
+    on_relations = [r for r in relation_types if "on" in r.lower() and "in" not in r.lower()]
     if on_relations:
         insights.append(f"STACKING: Found 'on' relations {on_relations}. Draw objects ABOVE (vertically stacked on) their target.")
     
-    # Detect location ('at' relations)
-    at_relations = [r for r in relation_types if r.lower().startswith("at")]
-    if at_relations:
-        # Build location map
-        location_map = {}
-        for rel in relations:
-            if rel.get("type", "").lower().startswith("at"):
-                location_map[rel.get("source")] = rel.get("target")
-        
-        insights.append(f"LOCATIONS: Found 'at' relations {at_relations}.")
-        insights.append(f"LOCATION MAP: {location_map}")
-        insights.append("CRITICAL: Draw each object ONLY at its assigned location!")
-    
-    # Detect holding
+    # Detect holding (explicit 'holding' relation)
     holding_relations = [r for r in relation_types if "holding" in r.lower()]
     if holding_relations:
-        insights.append(f"HOLDING: Found holding relations {holding_relations}. Draw held objects near the holder!")
+        # Build holding map
+        holding_map = {}
+        for rel in relations:
+            if "holding" in rel.get("type", "").lower():
+                holding_map[rel.get("source")] = rel.get("target")
+        insights.append(f"HOLDING: Found holding relations {holding_relations}.")
+        insights.append(f"HOLDING MAP: {holding_map}")
+        insights.append("CRITICAL: Draw held objects ATTACHED to the holder (e.g., near gripper/crane arm)!")
     
     return {
         "object_types": object_types,
@@ -210,24 +285,53 @@ def _analyze_state(state: dict) -> dict:
 
 
 def _get_domain_hints(domain_name: str) -> dict:
-    """Get domain-specific hints."""
+    """Get domain-specific hints from dictionary or resource files."""
+    # Normalize domain name
+    domain_name = domain_name.strip() if domain_name else ""
     domain_key = domain_name.lower().replace(" ", "-").replace("_", "-")
     domain_key_underscore = domain_name.lower().replace(" ", "_").replace("-", "_")
     
+    # Try dictionary first (backward compatibility)
     if domain_key in DOMAIN_HINTS:
-        return {"found": True, "hints": DOMAIN_HINTS[domain_key]}
+        return {"found": True, "source": "dictionary", "hints": DOMAIN_HINTS[domain_key]}
     elif domain_key_underscore in DOMAIN_HINTS:
-        return {"found": True, "hints": DOMAIN_HINTS[domain_key_underscore]}
-    else:
-        return {
-            "found": False,
-            "hints": {
-                "description": "Unknown domain - analyze the state structure to determine visualization",
-                "layout": "Arrange objects based on their relations and positions",
-                "background": "Use a subtle gradient or pattern appropriate to the domain theme",
-                "legend": "Show all object types with their colors and any important states"
-            }
+        return {"found": True, "source": "dictionary", "hints": DOMAIN_HINTS[domain_key_underscore]}
+    
+    # Try resource files
+    hints_path = DOMAIN_HINTS_DIR / f"{domain_key}.json"
+    if hints_path.exists():
+        try:
+            with open(hints_path, "r") as f:
+                hints = json.load(f)
+                return {"found": True, "source": "resource_file", "hints": hints}
+        except Exception as e:
+            pass
+    
+    # Try aliases in index
+    index_path = DOMAIN_HINTS_DIR / "index.json"
+    if index_path.exists():
+        try:
+            with open(index_path, "r") as f:
+                index = json.load(f)
+                for domain in index.get("domains", []):
+                    if domain_key in domain.get("aliases", []) or domain_key_underscore in domain.get("aliases", []):
+                        alias_path = DOMAIN_HINTS_DIR / domain["file"]
+                        if alias_path.exists():
+                            with open(alias_path, "r") as hf:
+                                hints = json.load(hf)
+                                return {"found": True, "source": "resource_file", "hints": hints}
+        except Exception as e:
+            pass
+    
+    return {
+        "found": False,
+        "hints": {
+            "description": "Unknown domain - analyze the state structure to determine visualization",
+            "layout": "Arrange objects based on their relations and positions",
+            "background": "Use a subtle gradient or pattern appropriate to the domain theme",
+            "legend": "Show all object types with their colors and any important states"
         }
+    }
 
 
 # =============================================================================
@@ -243,18 +347,21 @@ CALL THIS TOOL FIRST before generating any code!
 This tool combines:
 1. State structure analysis (object types, relation types, insights)
 2. Domain-specific hints (styling, layout, critical relations)
+3. Action context analysis (detects implicit states like 'holding' from action names)
 
 RETURNS: Complete context including:
 - object_types: What objects exist and their properties
 - relation_types: What relations exist (in, on, at-*, holding, etc.)
 - insights: How to handle the detected relations
 - domain_hints: Styling and layout suggestions for this domain
+- action_insights: Implicit states detected from action context
 
 After calling this tool, you have everything needed to generate the renderer.""",
 )
 def get_generation_context(
     state_json: Any = Field(description="The example state data (can be JSON string or object)"),
     domain_name: str = Field(description="Name of the planning domain (e.g., 'depot', 'blocks_world')"),
+    action_context: Optional[str] = Field(default=None, description="Optional: Current action being visualized (e.g., 'lift hoist1 crate1 surface1 depot1'). Helps detect implicit states like 'holding'."),
 ) -> str:
     """Get all context needed for renderer generation."""
     try:
@@ -287,12 +394,29 @@ def get_generation_context(
         # Get domain hints
         domain_hints = _get_domain_hints(domain_name)
         
-       
+        # Analyze action context for implicit states
+        action_insights = []
+        if action_context:
+            action_lower = action_context.lower()
+            # Detect lift/unstack actions that imply holding
+            if any(word in action_lower for word in ["lift", "unstack", "pick-up", "pickup", "grab"]):
+                action_insights.append("IMPLICIT HOLDING: This action implies an object is being held/lifted.")
+                action_insights.append("TIP: After lift/unstack, the object should be shown attached to the hoist/gripper, not on any surface.")
+            # Detect drop/stack actions that imply releasing
+            if any(word in action_lower for word in ["drop", "stack", "put-down", "putdown", "release"]):
+                action_insights.append("IMPLICIT RELEASE: This action implies an object is being placed down.")
+            # Detect load/unload for trucks
+            if "load" in action_lower:
+                action_insights.append("LOADING: Object is being moved into a vehicle/container.")
+                action_insights.append("TIP: Show the object INSIDE the truck/container after loading.")
+            if "unload" in action_lower:
+                action_insights.append("UNLOADING: Object is being moved out of a vehicle/container.")
         
         return json.dumps({
             "success": True,
             "state_analysis": state_analysis,
             "domain_hints": domain_hints,
+            "action_insights": action_insights,
             "next_step": "Now generate the complete JavaScript renderer code using this context."
         }, indent=2)
         

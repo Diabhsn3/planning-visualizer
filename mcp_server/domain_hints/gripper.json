@@ -1,0 +1,20 @@
+{
+  "domain": "gripper",
+  "aliases": ["gripper", "robot-gripper"],
+  "description": "Robot gripper moving balls between rooms",
+  "layout": "Rooms side by side, robot moves between them",
+  "background": "Room floor pattern",
+  "legend": "Show ball colors and gripper states",
+  "critical_relations": {
+    "at-robby": "robot at-robby room1 means robot is in room1",
+    "at": "ball1 at room1 means ball1 is in room1",
+    "carry": "gripper carry ball1 means gripper is holding ball1 - draw near gripper",
+    "free": "gripper free means gripper is not holding anything"
+  },
+  "positioning_rules": [
+    "Rooms should be drawn side by side",
+    "Robot should be shown in its current room",
+    "Balls should be drawn inside their room",
+    "Carried balls should be shown near the gripper"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "domain": "blocks-world",
+  "aliases": ["blocks-world", "blocks_world", "blocksworld", "blocks"],
+  "description": "Blocks stacking puzzle where blocks are moved between table and stacks",
+  "layout": "Blocks on table or stacked vertically",
+  "background": "Table surface with wood grain",
+  "legend": "Show block colors and arm state",
+  "critical_relations": {
+    "on": "block1 on block2 means block1 is stacked on top of block2 - draw vertically",
+    "on-table": "block1 on-table means block1 is on the table surface",
+    "holding": "arm holding block1 means the robot arm is holding block1 - draw near gripper",
+    "clear": "block1 clear means nothing is on top of block1"
+  },
+  "positioning_rules": [
+    "Blocks on table should be arranged horizontally",
+    "Stacked blocks should be drawn vertically with 'on' block above target",
+    "Held blocks should be shown near the robot arm/gripper",
+    "Use consistent block sizes for visual clarity"
+  ]
+}

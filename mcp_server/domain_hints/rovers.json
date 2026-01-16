@@ -1,0 +1,28 @@
+{
+  "domain": "rovers",
+  "aliases": ["rovers", "rover", "mars-rovers"],
+  "description": "Mars rovers exploring terrain, taking samples and images",
+  "layout": "Grid-like terrain with waypoints, rovers navigate between them",
+  "background": "Mars-like reddish terrain with rocks",
+  "legend": "Show rover states, sample locations, and communication status",
+  "critical_relations": {
+    "at": "rover at waypoint means rover is at that waypoint location",
+    "at_soil_sample": "waypoint at_soil_sample means soil sample available at waypoint",
+    "at_rock_sample": "waypoint at_rock_sample means rock sample available at waypoint",
+    "have_soil_analysis": "rover have_soil_analysis waypoint means rover analyzed soil from waypoint",
+    "have_rock_analysis": "rover have_rock_analysis waypoint means rover analyzed rock from waypoint",
+    "have_image": "rover have_image objective mode means rover captured image",
+    "communicated_soil_data": "waypoint communicated_soil_data means soil data was transmitted",
+    "communicated_rock_data": "waypoint communicated_rock_data means rock data was transmitted",
+    "communicated_image_data": "objective communicated_image_data means image data was transmitted",
+    "can_traverse": "rover can_traverse wp1 wp2 means rover can move between waypoints",
+    "visible": "objective visible waypoint means objective is visible from waypoint"
+  },
+  "positioning_rules": [
+    "Waypoints should be arranged in a grid or network layout",
+    "Rovers should be drawn at their current waypoint",
+    "Show sample locations with distinct markers",
+    "Indicate communicated data with visual feedback (checkmarks, colors)",
+    "Draw traversable paths between waypoints"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "domain": "logistics",
+  "aliases": ["logistics", "package-delivery"],
+  "description": "Package delivery with trucks and planes",
+  "layout": "Cities with locations, vehicles move between them",
+  "background": "Map-like terrain",
+  "legend": "Show vehicle types and package states",
+  "critical_relations": {
+    "in-city": "location in-city city1 means location belongs to city1",
+    "at": "truck at location1 means truck is at location1",
+    "in": "package in truck means package is inside the truck - draw on truck bed"
+  },
+  "positioning_rules": [
+    "Group locations by city",
+    "Show vehicles at their current location",
+    "Packages inside vehicles should be visible on/in the vehicle",
+    "Use different icons for trucks vs planes"
+  ]
+}

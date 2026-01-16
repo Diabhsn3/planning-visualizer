@@ -1,0 +1,19 @@
+{
+  "domain": "satellite",
+  "aliases": ["satellite", "satellites"],
+  "description": "Satellites taking images of targets",
+  "layout": "Satellites in orbit, targets on ground",
+  "background": "Space/Earth view",
+  "legend": "Show satellite modes and target types",
+  "critical_relations": {
+    "pointing": "satellite pointing direction means satellite is aimed at direction",
+    "have_image": "satellite have_image direction mode means image was taken",
+    "power_on": "instrument power_on means instrument is active"
+  },
+  "positioning_rules": [
+    "Satellites should be shown in upper portion (orbit)",
+    "Targets/directions should be shown in lower portion (ground)",
+    "Show pointing direction with lines or arrows",
+    "Indicate active instruments visually"
+  ]
+}
