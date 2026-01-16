@@ -7,7 +7,7 @@
  * Architecture:
  * - LLMOrchestrator: Handles LLM API calls (Anthropic, OpenAI, etc.)
  * - MCPClient: Provides tools and resources from Python MCP server
- * - Single-shot generation: One LLM call with optional retry on validation failure
+ * - Investigate-First Approach: LLM analyzes state, uses tools, then generates
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -106,60 +106,21 @@ export class LLMOrchestrator {
     return this.provider;
   }
 
-  async chat(
-    messages: Message[],
-    systemPrompt: string,
-    tools?: any[]
-  ): Promise<any> {
-    return await this.provider.chat(messages, systemPrompt, tools);
+  async chat(messages: Message[], systemPrompt: string, tools?: any[]): Promise<any> {
+    return this.provider.chat(messages, systemPrompt, tools);
   }
 
-  hasToolUse(response: any): boolean {
-    if (response.content && Array.isArray(response.content)) {
-      return response.content.some((block: any) => block.type === "tool_use");
-    }
-    return false;
+  extractText(response: Anthropic.Message): string {
+    const textBlocks = response.content.filter(
+      (block): block is Anthropic.TextBlock => block.type === "text"
+    );
+    return textBlocks.map((b) => b.text).join("\n");
   }
 
-  getToolUseBlocks(response: any): any[] {
-    if (response.content && Array.isArray(response.content)) {
-      return response.content.filter((block: any) => block.type === "tool_use");
-    }
-    return [];
-  }
-
-  extractText(response: any): string {
-    if (response.content && Array.isArray(response.content)) {
-      const textBlocks = response.content.filter(
-        (block: any) => block.type === "text"
-      );
-      return textBlocks.map((block: any) => block.text).join("\n");
-    }
-    return "";
-  }
-
-  async executeToolRequests(
-    mcpClient: MCPClient,
-    response: any
-  ): Promise<any[]> {
-    const toolBlocks = this.getToolUseBlocks(response);
-    const results: any[] = [];
-
-    for (const block of toolBlocks) {
-      const toolName = block.name;
-      const toolInput = block.input;
-
-      const result = await mcpClient.callTool(toolName, toolInput);
-
-      results.push({
-        type: "tool_result",
-        tool_use_id: block.id,
-        content: result.content,
-        is_error: result.isError,
-      });
-    }
-
-    return results;
+  extractToolCalls(response: Anthropic.Message): Anthropic.ToolUseBlock[] {
+    return response.content.filter(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+    );
   }
 }
 
@@ -168,35 +129,25 @@ export class LLMOrchestrator {
 // ============================================================================
 
 const DEFAULT_PROMPT_VERSION = "v1";
-const MAX_RETRY_ATTEMPTS = 2; // Maximum retries on validation failure
+const MAX_ITERATIONS = 10;  // Max agentic loop iterations
 
 // ============================================================================
-// Local Validation (fast, no LLM call needed)
+// Helper Functions
 // ============================================================================
 
 function validateCodeLocally(code: string, domainPascal: string): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
   
-  // Check for empty code
-  if (!code || code.trim().length === 0) {
-    errors.push("Code is empty");
-    return { valid: false, errors };
+  // Check for required main function
+  const mainFnPattern = new RegExp(`function\\s+render${domainPascal}\\s*\\(`);
+  if (!mainFnPattern.test(code)) {
+    errors.push(`Missing required function: render${domainPascal}(ctx, state)`);
   }
   
-  // Check for required functions
-  const mainFunc = `function render${domainPascal}`;
-  const legendFunc = `function render${domainPascal}Legend`;
-  
-  if (!code.includes(mainFunc)) {
-    errors.push(`Missing main render function: ${mainFunc}`);
-  }
-  
-  if (!code.includes(legendFunc)) {
-    errors.push(`Missing legend function: ${legendFunc}`);
-  }
-  
-  if (!code.includes("ctx")) {
-    errors.push("Missing 'ctx' parameter - renderer needs canvas context");
+  // Check for legend function
+  const legendFnPattern = new RegExp(`function\\s+render${domainPascal}Legend\\s*\\(`);
+  if (!legendFnPattern.test(code)) {
+    errors.push(`Missing required function: render${domainPascal}Legend(ctx, x, y)`);
   }
   
   // Check for common syntax issues
@@ -227,8 +178,17 @@ function cleanCodeLocally(code: string): string {
   return cleaned.trim();
 }
 
+// Convert MCP tools to Anthropic tool format
+function mcpToolsToAnthropicFormat(mcpTools: any[]): any[] {
+  return mcpTools.map(tool => ({
+    name: tool.name,
+    description: tool.description || "",
+    input_schema: tool.inputSchema || { type: "object", properties: {} }
+  }));
+}
+
 // ============================================================================
-// Main Generation Function - Single-Shot with Retry
+// Main Generation Function - Investigate-First Agentic Approach
 // ============================================================================
 
 export async function generateRendererWithLLM(
@@ -250,14 +210,16 @@ export async function generateRendererWithLLM(
   };
 
   // Helper to report progress
-  const reportProgress = (step: number, message: string) => {
-    log('LLMOrchestrator', `Step ${step}: ${message}`);
+  let stepCounter = 0;
+  const reportProgress = (message: string) => {
+    stepCounter++;
+    log('LLMOrchestrator', `Step ${stepCounter}: ${message}`);
     if (onProgress) {
-      onProgress(step, message);
+      onProgress(stepCounter, message);
     }
   };
 
-  log('LLMOrchestrator', `Starting SINGLE-SHOT renderer generation for domain: ${domainName}`);
+  log('LLMOrchestrator', `Starting INVESTIGATE-FIRST renderer generation for domain: ${domainName}`);
   log('LLMOrchestrator', `Using provider: ${orchestrator.getProvider().getProviderName()}`);
   log('LLMOrchestrator', `Using model: ${orchestrator.getProvider().getModelName()}`);
 
@@ -266,7 +228,7 @@ export async function generateRendererWithLLM(
     // STEP 1: Fetch system prompt from MCP Resource
     // =========================================================================
     
-    reportProgress(1, "Fetching system prompt...");
+    reportProgress("Fetching system prompt...");
     
     const promptResourceUri = `prompt://renderer/system/${DEFAULT_PROMPT_VERSION}`;
     log('MCPClient', `Reading resource: ${promptResourceUri}`);
@@ -290,101 +252,162 @@ export async function generateRendererWithLLM(
     log('LLMOrchestrator', `Domain PascalCase: ${domainPascal}`);
     
     // =========================================================================
-    // STEP 2: Build user prompt with all context
+    // STEP 2: Get available MCP tools
     // =========================================================================
     
-    reportProgress(2, "Preparing generation request...");
+    reportProgress("Discovering available tools...");
     
-    // Build comprehensive user prompt - give LLM everything it needs in one shot
-    let userPrompt = `Generate JavaScript renderer functions for the "${domainName}" domain.
+    const mcpTools = await mcpClient.listTools();
+    const anthropicTools = mcpToolsToAnthropicFormat(mcpTools);
+    
+    log('LLMOrchestrator', `Available tools: ${mcpTools.map((t: any) => t.name).join(', ')}`);
+    
+    // =========================================================================
+    // STEP 3: Build initial user prompt (encourages investigation)
+    // =========================================================================
+    
+    reportProgress("Preparing investigation request...");
+    
+    const userPrompt = `Generate a JavaScript renderer for the "${domainName}" domain.
 
-REQUIRED FUNCTION NAMES (use exactly):
+REQUIRED FUNCTIONS:
 - render${domainPascal}(ctx, state) - Main render function
-- render${domainPascal}Legend(ctx, x, y) - Legend box function
+- render${domainPascal}Legend(ctx, x, y) - Legend box function  
 - render${domainPascal}Background(ctx, width, height) - Background function [optional]
 
-STATE DATA STRUCTURE (your renderer will receive this format):
+EXAMPLE STATE DATA:
 ${JSON.stringify(exampleState, null, 2)}
 
-`;
+${styleHints ? `STYLE HINTS: ${styleHints}\n` : ''}
 
-    if (styleHints) {
-      userPrompt += `STYLE HINTS: ${styleHints}\n\n`;
-    }
+IMPORTANT WORKFLOW:
+1. FIRST, call analyze_state_structure with the state data to understand the objects and relations
+2. Based on the analysis, call any helpful tools (get_state_handling_guidelines, get_legend_guidelines, etc.)
+3. THEN generate the complete JavaScript renderer code
 
-    userPrompt += `IMPORTANT:
-- Output ONLY the JavaScript code, no explanations
-- Start directly with 'function render${domainPascal}...'
-- Use pure JavaScript, NO TypeScript
-- Follow the system prompt rules exactly
-
-Generate the complete renderer code now:`;
+Start by analyzing the state structure to understand what you need to render.`;
 
     // =========================================================================
-    // STEP 3: Single LLM call (with retry on failure)
+    // STEP 4: Agentic Loop - Let LLM investigate and generate
     // =========================================================================
     
-    reportProgress(3, "Generating renderer code...");
-    log('LLMOrchestrator', 'Making single-shot LLM call...');
+    reportProgress("Starting investigation phase...");
+    
+    const messages: Message[] = [
+      { role: "user", content: userPrompt }
+    ];
     
     let finalCode = "";
-    let lastError = "";
+    let iteration = 0;
     
-    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-      log('LLMOrchestrator', `Generation attempt ${attempt}/${MAX_RETRY_ATTEMPTS}`);
+    while (iteration < MAX_ITERATIONS) {
+      iteration++;
+      log('LLMOrchestrator', `--- Iteration ${iteration} ---`);
       
-      const messages: Message[] = [
-        { role: "user", content: userPrompt }
-      ];
+      // Make LLM call with tools available
+      const llmResponse = await orchestrator.chat(messages, systemPrompt, anthropicTools);
       
-      // Add error context if this is a retry
-      if (attempt > 1 && lastError) {
-        messages[0].content += `\n\nPREVIOUS ATTEMPT FAILED WITH ERRORS:\n${lastError}\n\nPlease fix these issues and generate valid code.`;
-      }
+      log('LLMOrchestrator', `LLM stop reason: ${llmResponse.stop_reason}`);
       
-      // Make LLM call WITHOUT tools for faster response
-      // Tools are still available via MCP but we don't force the LLM to use them
-      const llmResponse = await orchestrator.chat(messages, systemPrompt, []);
+      // Check if LLM wants to use tools
+      const toolCalls = orchestrator.extractToolCalls(llmResponse);
       
-      // Extract text response
-      let rawOutput = orchestrator.extractText(llmResponse);
-      log('LLMOrchestrator', `LLM returned ${rawOutput.length} chars`);
-      
-      if (!rawOutput || rawOutput.length === 0) {
-        lastError = "LLM returned empty response";
-        log('LLMOrchestrator', lastError, 'warning');
-        continue;
-      }
-      
-      // Clean the code locally (fast)
-      reportProgress(4, "Cleaning generated code...");
-      const cleanedCode = cleanCodeLocally(rawOutput);
-      log('LLMOrchestrator', `Cleaned code: ${cleanedCode.length} chars`);
-      
-      // Validate locally (fast)
-      reportProgress(5, "Validating code...");
-      const validation = validateCodeLocally(cleanedCode, domainPascal);
-      
-      if (validation.valid) {
-        finalCode = cleanedCode;
-        log('LLMOrchestrator', 'Code validation passed!', 'success');
-        break;
-      } else {
-        lastError = validation.errors.join("; ");
-        log('LLMOrchestrator', `Validation failed: ${lastError}`, 'warning');
+      if (toolCalls.length > 0) {
+        // LLM is investigating - execute tool calls
+        log('LLMOrchestrator', `LLM called ${toolCalls.length} tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
+        reportProgress(`Executing tool: ${toolCalls[0].name}...`);
         
-        if (attempt < MAX_RETRY_ATTEMPTS) {
-          reportProgress(3, `Retrying generation (attempt ${attempt + 1})...`);
+        // Add assistant message with tool calls
+        messages.push({
+          role: "assistant",
+          content: llmResponse.content
+        });
+        
+        // Execute each tool and collect results
+        const toolResults: any[] = [];
+        for (const toolCall of toolCalls) {
+          log('MCPClient', `Calling tool: ${toolCall.name}`);
+          
+          try {
+            const result = await mcpClient.callTool(toolCall.name, toolCall.input as Record<string, unknown>);
+            const truncatedResult = result.content.length > 200 
+              ? result.content.substring(0, 200) + "..." 
+              : result.content;
+            log('MCPClient', `Tool result: ${truncatedResult}`);
+            
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolCall.id,
+              content: result.content
+            });
+          } catch (e) {
+            log('MCPClient', `Tool error: ${e}`, 'error');
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: toolCall.id,
+              content: `Error: ${e}`
+            });
+          }
+        }
+        
+        // Add tool results to messages
+        messages.push({
+          role: "user",
+          content: toolResults
+        });
+        
+      } else {
+        // LLM returned text - check if it's the final code
+        const textOutput = orchestrator.extractText(llmResponse);
+        log('LLMOrchestrator', `LLM returned text (${textOutput.length} chars)`);
+        
+        if (textOutput.includes('function render')) {
+          // This looks like code - clean and validate it
+          reportProgress("Processing generated code...");
+          
+          const cleanedCode = cleanCodeLocally(textOutput);
+          const validation = validateCodeLocally(cleanedCode, domainPascal);
+          
+          if (validation.valid) {
+            finalCode = cleanedCode;
+            log('LLMOrchestrator', 'Code validation passed!', 'success');
+            break;
+          } else {
+            // Ask LLM to fix the issues
+            log('LLMOrchestrator', `Validation failed: ${validation.errors.join('; ')}`, 'warning');
+            reportProgress("Requesting code fixes...");
+            
+            messages.push({
+              role: "assistant",
+              content: textOutput
+            });
+            messages.push({
+              role: "user",
+              content: `Your code has validation errors:\n${validation.errors.join('\n')}\n\nPlease fix these issues and provide the corrected code.`
+            });
+          }
+        } else {
+          // LLM returned something else - prompt it to generate code
+          log('LLMOrchestrator', 'LLM did not return code, prompting for generation...', 'warning');
+          
+          messages.push({
+            role: "assistant",
+            content: textOutput
+          });
+          messages.push({
+            role: "user",
+            content: "Now that you've analyzed the state structure, please generate the complete JavaScript renderer code. Start with 'function render" + domainPascal + "(ctx, state) {'"
+          });
         }
       }
     }
     
     // =========================================================================
-    // STEP 4: Final MCP validation (optional, for syntax check with Node.js)
+    // STEP 5: Final MCP validation (syntax check)
     // =========================================================================
     
     if (finalCode) {
-      reportProgress(6, "Final syntax validation...");
+      reportProgress("Final syntax validation...");
       log('MCPClient', 'Running MCP validate_renderer for syntax check');
       
       try {
@@ -396,8 +419,7 @@ Generate the complete renderer code now:`;
         const validation = JSON.parse(validateResult.content) as { valid: boolean; errors?: string[]; warnings?: string[] };
         
         if (!validation.valid) {
-          log('LLMOrchestrator', `Syntax errors: ${validation.errors?.join(', ') || 'none'}`, 'warning');
-          // Don't fail - local validation passed, syntax check is extra
+          log('LLMOrchestrator', `Syntax warnings: ${validation.errors?.join(', ') || 'none'}`, 'warning');
         }
         if (validation.warnings && validation.warnings.length > 0) {
           log('LLMOrchestrator', `Warnings: ${validation.warnings.join(', ')}`, 'info');
@@ -412,13 +434,14 @@ Generate the complete renderer code now:`;
     // =========================================================================
     
     if (!finalCode || !finalCode.includes('function render')) {
-      reportProgress(7, "Generation failed");
-      log('LLMOrchestrator', `Failed after ${MAX_RETRY_ATTEMPTS} attempts: ${lastError}`, 'error');
-      return { success: false, code: "", error: `Failed to generate valid renderer: ${lastError}` };
+      reportProgress("Generation failed");
+      log('LLMOrchestrator', `Failed after ${iteration} iterations`, 'error');
+      return { success: false, code: "", error: `Failed to generate valid renderer after ${iteration} iterations` };
     }
     
-    reportProgress(7, "Generation complete!");
+    reportProgress("Generation complete!");
     log('LLMOrchestrator', `Generation complete, code length: ${finalCode.length}`, 'success');
+    log('LLMOrchestrator', `Total iterations: ${iteration}`);
     
     return { success: true, code: finalCode };
 

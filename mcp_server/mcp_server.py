@@ -684,5 +684,117 @@ function renderDepot(ctx, state) {
     })
 
 
+@mcp.tool(
+    name="analyze_state_structure",
+    description="""Analyze the state data structure to understand what objects and relations exist.
+
+USE THIS TOOL FIRST before generating any code!
+This tool examines the state data and tells you:
+- What object types exist (e.g., truck, package, depot)
+- What relation types exist (e.g., in-truck, on-pile, at-depot)
+- How objects relate to each other
+- What properties objects have
+
+RETURNS: Detailed analysis of the state structure to guide your renderer design.""",
+)
+def analyze_state_structure(state_json: str) -> str:
+    """Analyze the state data structure.
+    
+    Args:
+        state_json: JSON string of the state data to analyze
+    """
+    try:
+        state = json.loads(state_json)
+    except json.JSONDecodeError:
+        return json.dumps({"error": "Invalid JSON provided"})
+    
+    objects = state.get("objects", [])
+    relations = state.get("relations", [])
+    
+    # Analyze object types
+    object_types = {}
+    for obj in objects:
+        obj_type = obj.get("type", "unknown")
+        if obj_type not in object_types:
+            object_types[obj_type] = {
+                "count": 0,
+                "has_position": False,
+                "properties": set(),
+                "example_ids": []
+            }
+        object_types[obj_type]["count"] += 1
+        if obj.get("position"):
+            object_types[obj_type]["has_position"] = True
+        if obj.get("properties"):
+            object_types[obj_type]["properties"].update(obj["properties"].keys())
+        if len(object_types[obj_type]["example_ids"]) < 3:
+            object_types[obj_type]["example_ids"].append(obj.get("id", "?"))
+    
+    # Convert sets to lists for JSON
+    for obj_type in object_types:
+        object_types[obj_type]["properties"] = list(object_types[obj_type]["properties"])
+    
+    # Analyze relation types
+    relation_types = {}
+    for rel in relations:
+        rel_type = rel.get("type", "unknown")
+        if rel_type not in relation_types:
+            relation_types[rel_type] = {
+                "count": 0,
+                "has_target": False,
+                "source_types": set(),
+                "target_types": set(),
+                "examples": []
+            }
+        relation_types[rel_type]["count"] += 1
+        if rel.get("target"):
+            relation_types[rel_type]["has_target"] = True
+        # Try to find source/target object types
+        source_id = rel.get("source")
+        target_id = rel.get("target")
+        for obj in objects:
+            if obj.get("id") == source_id:
+                relation_types[rel_type]["source_types"].add(obj.get("type", "unknown"))
+            if obj.get("id") == target_id:
+                relation_types[rel_type]["target_types"].add(obj.get("type", "unknown"))
+        if len(relation_types[rel_type]["examples"]) < 2:
+            relation_types[rel_type]["examples"].append(f"{source_id} -> {target_id}")
+    
+    # Convert sets to lists for JSON
+    for rel_type in relation_types:
+        relation_types[rel_type]["source_types"] = list(relation_types[rel_type]["source_types"])
+        relation_types[rel_type]["target_types"] = list(relation_types[rel_type]["target_types"])
+    
+    # Generate insights
+    insights = []
+    
+    # Check for containment relations
+    containment_relations = [r for r in relation_types if "in" in r.lower() or "on" in r.lower() or "holding" in r.lower()]
+    if containment_relations:
+        insights.append(f"IMPORTANT: Found containment relations: {containment_relations}. Objects can move between containers!")
+        insights.append("You MUST check relations to determine where to draw each object.")
+    
+    # Check for position data
+    positioned_types = [t for t, info in object_types.items() if info["has_position"]]
+    if positioned_types:
+        insights.append(f"Objects with positions: {positioned_types}. Use state.objects[].position for these.")
+    
+    non_positioned = [t for t, info in object_types.items() if not info["has_position"]]
+    if non_positioned:
+        insights.append(f"Objects WITHOUT positions: {non_positioned}. Position these based on their relations!")
+    
+    return json.dumps({
+        "analysis": "State structure analysis complete",
+        "object_types": object_types,
+        "relation_types": relation_types,
+        "insights": insights,
+        "recommendations": [
+            "Use get_state_handling_guidelines if you have containment relations",
+            "Use get_legend_guidelines when creating the legend function",
+            "Always iterate over state.objects - never hardcode positions"
+        ]
+    }, indent=2)
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
