@@ -90,7 +90,7 @@ class AnthropicProvider implements LLMProvider {
 
     const params: Anthropic.MessageCreateParams = {
       model: this.model,
-      max_tokens: 8096,
+      max_tokens: 16000,
       system: systemPrompt,
       messages: anthropicMessages,
     };
@@ -240,11 +240,14 @@ export async function generateRendererWithLLM(
 ): Promise<GenerationResult> {
   const orchestrator = new LLMOrchestrator();
 
-  // Helper for logging
+  // Helper for logging with timestamps
+  const startTime = Date.now();
   const log = (source: string, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info') => {
-    console.log(`[${source}] ${message}`);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const formattedMessage = `[${elapsed}s] [${source}] ${message}`;
+    console.log(formattedMessage);
     if (onDetailedLog) {
-      onDetailedLog(source, message, level);
+      onDetailedLog(source, `[${elapsed}s] ${message}`, level);
     }
   };
 
@@ -319,20 +322,19 @@ ${JSON.stringify(exampleState, null, 2)}
 
 ${styleHints ? `STYLE HINTS: ${styleHints}\n` : ''}
 
-IMPORTANT: You have access to multiple MCP tools. EXPLORE AND USE ALL OF THEM before generating code!
+You have access to MCP tools. Use them EFFICIENTLY - call multiple related tools if needed, but don't call unnecessary ones.
 
-WORKFLOW:
-1. DISCOVER: Look at all available tools - there are tools for analysis, hints, guidelines, examples, and validation
-2. INVESTIGATE: Use tools to understand the state structure, object types, relations, and domain-specific styling
-3. GATHER HINTS: Use tools to get domain-specific visualization hints and recommendations
-4. LEARN PATTERNS: Use tools to understand how to handle spatial relationships (in, on, at, holding)
-5. GET EXAMPLES: Use tools to see working code examples
-6. GENERATE: Only after thorough investigation, generate the complete JavaScript renderer code
-7. VALIDATE: Use tools to validate your generated code
+RECOMMENDED TOOLS (call these in order):
+1. analyze_state_structure - Pass the example state to understand objects and relations
+2. get_domain_hints - Get domain-specific styling hints for "${domainName}"
+3. get_spatial_relationship_guidelines - ONLY if you see 'in', 'on', 'at-*', or 'holding' relations
+4. get_example_renderer - See a working code example
+5. After generating code, use validate_renderer to check it
 
-When a tool recommends calling another tool, FOLLOW THAT RECOMMENDATION!
+DO NOT call list_available_domains - you already know the domain is "${domainName}".
+DO NOT call get_domain_rendered_data - the state data is already provided above.
 
-Start by exploring the available tools and gathering all the information you need.`;
+Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
 
     // =========================================================================
     // STEP 4: Agentic Loop - Let LLM investigate and generate
@@ -349,20 +351,19 @@ Start by exploring the available tools and gathering all the information you nee
     
     while (iteration < MAX_ITERATIONS) {
       iteration++;
-      log('LLMOrchestrator', `--- Iteration ${iteration} ---`);
+      log('LLMOrchestrator', `━━━ Iteration ${iteration}/${MAX_ITERATIONS} ━━━`);
       
       // Make LLM call with tools available
       const llmResponse = await orchestrator.chat(messages, systemPrompt, anthropicTools);
-      
-      log('LLMOrchestrator', `LLM stop reason: ${llmResponse.stop_reason}`);
       
       // Check if LLM wants to use tools
       const toolCalls = orchestrator.extractToolCalls(llmResponse);
       
       if (toolCalls.length > 0) {
         // LLM is investigating - execute tool calls
-        log('LLMOrchestrator', `LLM called ${toolCalls.length} tool(s): ${toolCalls.map(t => t.name).join(', ')}`);
-        reportProgress(`Executing tool: ${toolCalls[0].name}...`);
+        const toolNames = toolCalls.map(t => t.name).join(', ');
+        log('LLMOrchestrator', `LLM calling: ${toolNames}`);
+        reportProgress(`Tool: ${toolCalls[0].name}`);
         
         // Add assistant message with tool calls
         messages.push({
@@ -373,14 +374,15 @@ Start by exploring the available tools and gathering all the information you nee
         // Execute each tool and collect results
         const toolResults: any[] = [];
         for (const toolCall of toolCalls) {
-          log('MCPClient', `Calling tool: ${toolCall.name}`);
+          const inputSummary = Object.keys(toolCall.input || {}).length > 0 
+            ? ` with ${Object.keys(toolCall.input).join(', ')}` 
+            : '';
+          log('MCPClient', `→ ${toolCall.name}${inputSummary}`);
           
           try {
             const result = await mcpClient.callTool(toolCall.name, toolCall.input as Record<string, unknown>);
-            const truncatedResult = result.content.length > 200 
-              ? result.content.substring(0, 200) + "..." 
-              : result.content;
-            log('MCPClient', `Tool result: ${truncatedResult}`);
+            const resultLen = result.content.length;
+            log('MCPClient', `✓ ${toolCall.name} returned ${resultLen} chars`);
             
             toolResults.push({
               type: "tool_result",
@@ -406,23 +408,29 @@ Start by exploring the available tools and gathering all the information you nee
       } else {
         // LLM returned text - check if it's the final code
         const textOutput = orchestrator.extractText(llmResponse);
-        log('LLMOrchestrator', `LLM returned text (${textOutput.length} chars)`);
+        const stopReason = llmResponse.stop_reason;
+        
+        if (stopReason === 'max_tokens') {
+          log('LLMOrchestrator', `⚠️ Output truncated (max_tokens) - ${textOutput.length} chars`, 'warning');
+        } else {
+          log('LLMOrchestrator', `LLM generated ${textOutput.length} chars`);
+        }
         
         if (textOutput.includes('function render')) {
           // This looks like code - clean and validate it
-          reportProgress("Processing generated code...");
+          reportProgress("Validating code...");
           
           const cleanedCode = cleanCodeLocally(textOutput);
           const validation = validateCodeLocally(cleanedCode, domainPascal);
           
           if (validation.valid) {
             finalCode = cleanedCode;
-            log('LLMOrchestrator', 'Code validation passed!', 'success');
+            log('LLMOrchestrator', '✅ Code validation passed!', 'success');
             break;
           } else {
             // Ask LLM to fix the issues
-            log('LLMOrchestrator', `Validation failed: ${validation.errors.join('; ')}`, 'warning');
-            reportProgress("Requesting code fixes...");
+            log('LLMOrchestrator', `❌ Validation failed: ${validation.errors.join('; ')}`, 'warning');
+            reportProgress("Fixing code...");
             
             messages.push({
               role: "assistant",
@@ -480,15 +488,16 @@ Start by exploring the available tools and gathering all the information you nee
     // RESULT
     // =========================================================================
     
+    const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+    
     if (!finalCode || !finalCode.includes('function render')) {
       reportProgress("Generation failed");
-      log('LLMOrchestrator', `Failed after ${iteration} iterations`, 'error');
+      log('LLMOrchestrator', `❌ Failed after ${iteration} iterations (${totalTime}s)`, 'error');
       return { success: false, code: "", error: `Failed to generate valid renderer after ${iteration} iterations` };
     }
     
     reportProgress("Generation complete!");
-    log('LLMOrchestrator', `Generation complete, code length: ${finalCode.length}`, 'success');
-    log('LLMOrchestrator', `Total iterations: ${iteration}`);
+    log('LLMOrchestrator', `✅ Complete! ${finalCode.length} chars in ${iteration} iterations (${totalTime}s)`, 'success');
     
     return { success: true, code: finalCode };
 
