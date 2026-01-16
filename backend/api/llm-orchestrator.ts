@@ -168,7 +168,7 @@ export class LLMOrchestrator {
 // ============================================================================
 
 const DEFAULT_PROMPT_VERSION = "v1";
-const MAX_ITERATIONS = 10;  // Max agentic loop iterations
+const MAX_ITERATIONS = 20;  // Max agentic loop iterations
 
 // ============================================================================
 // Helper Functions

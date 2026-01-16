@@ -420,7 +420,7 @@ var LLMOrchestrator = class {
   }
 };
 var DEFAULT_PROMPT_VERSION = "v1";
-var MAX_ITERATIONS = 10;
+var MAX_ITERATIONS = 20;
 function validateCodeLocally(code, domainPascal) {
   const errors = [];
   const mainFnPattern = new RegExp(`function\\s+render${domainPascal}\\s*\\(`);
