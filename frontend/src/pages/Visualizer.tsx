@@ -42,6 +42,7 @@ export default function Visualizer() {
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [visualizationMode, setVisualizationMode] = useState<"basic" | "llm">("basic");
+  const [useMcp, setUseMcp] = useState(true); // Toggle between MCP-based and direct LLM generation
   const [llmCode, setLlmCode] = useState<string | null>(null);
   const [llmError, setLlmError] = useState<string | null>(null);
   const [isLlmGenerating, setIsLlmGenerating] = useState(false);
@@ -397,6 +398,7 @@ export default function Visualizer() {
             llmRendererMutation.mutate({
               domainName: domainForLlm,
               states: data.states,
+              useMcp: useMcp,
             });
           }
         });
@@ -969,11 +971,31 @@ export default function Visualizer() {
                 </button>
 
                 {visualizationMode === "llm" && (
-                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
-                    <p className="text-xs text-purple-800">
-                      <strong>Note:</strong> LLM mode generates fresh TypeScript code using AI.
-                      This may take 30-60 seconds.
-                    </p>
+                  <div className="space-y-3">
+                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
+                      <p className="text-xs text-purple-800">
+                        <strong>Note:</strong> LLM mode generates fresh TypeScript code using AI.
+                        This may take 30-60 seconds.
+                      </p>
+                    </div>
+                    
+                    {/* MCP Toggle */}
+                    <label className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={useMcp}
+                        onChange={(e) => setUseMcp(e.target.checked)}
+                        className="w-4 h-4 text-purple-600 border-slate-300 rounded focus:ring-purple-500"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-slate-900">With MCP</div>
+                        <div className="text-xs text-slate-500">
+                          {useMcp 
+                            ? "Uses MCP tools for enhanced generation with validation" 
+                            : "Direct LLM generation with simple prompts"}
+                        </div>
+                      </div>
+                    </label>
                   </div>
                 )}
               </div>
@@ -1053,6 +1075,7 @@ export default function Visualizer() {
                             llmRendererMutation.mutate({
                               domainName: selectedDomain,
                               states: renderedStates,
+                              useMcp: useMcp,
                             });
                           }}
                           disabled={isLlmGenerating}

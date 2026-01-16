@@ -20,6 +20,18 @@ import { MCPClient } from "./mcp-client.js";
 export type ProgressCallback = (step: number, message: string) => void;
 export type DetailedLogCallback = (source: string, message: string, level?: 'info' | 'success' | 'warning' | 'error') => void;
 
+// Sampling types for MCP server-initiated LLM requests
+export interface SamplingRequest {
+  messages: Array<{ role: string; content: string }>;
+  systemPrompt?: string;
+  maxTokens?: number;
+}
+
+export interface SamplingResponse {
+  content: string;
+  stopReason?: string;
+}
+
 interface GenerationResult {
   success: boolean;
   code: string;
@@ -108,6 +120,33 @@ export class LLMOrchestrator {
 
   async chat(messages: Message[], systemPrompt: string, tools?: any[]): Promise<any> {
     return this.provider.chat(messages, systemPrompt, tools);
+  }
+
+  /**
+   * Handle a sampling request from the MCP server
+   * This is called when the server requests LLM generation
+   */
+  async handleSamplingRequest(request: SamplingRequest): Promise<SamplingResponse> {
+    console.log('[LLMOrchestrator] Handling sampling request');
+    
+    const messages: Message[] = request.messages.map(m => ({
+      role: m.role as "user" | "assistant",
+      content: m.content
+    }));
+    
+    const response = await this.provider.chat(
+      messages,
+      request.systemPrompt || "",
+      undefined
+    );
+    
+    // Extract text from Anthropic response
+    const textContent = this.extractText(response);
+    
+    return {
+      content: textContent,
+      stopReason: response.stop_reason || "end_turn"
+    };
   }
 
   extractText(response: Anthropic.Message): string {

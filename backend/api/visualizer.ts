@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { generateLLMRenderer, checkLLMRendererStatus, getCachedRenderer, clearRendererCache, getGenerationProgress } from "./llm-renderer.js";
+import { generateDirectLLMRenderer } from "./direct-llm-renderer.js";
 
 const execAsync = promisify(exec);
 
@@ -457,6 +458,9 @@ export const visualizerRouter = router({
   /**
    * Generate TypeScript renderer using LLM
    * NO CACHING - always generates fresh code
+   * 
+   * @param useMcp - If true, uses MCP-based generation with tools and validation.
+   *                 If false, uses direct LLM generation with simple prompts.
    */
   generateLLMRenderer: publicProcedure
     .input(
@@ -464,33 +468,61 @@ export const visualizerRouter = router({
         domainName: z.string(),
         states: z.array(z.any()),
         styleHints: z.string().optional(),
+        useMcp: z.boolean().optional().default(true),
       })
     )
     .mutation(async ({ input }) => {
       console.log('[generateLLMRenderer] Starting for domain:', input.domainName);
       console.log('[generateLLMRenderer] Number of states:', input.states.length);
+      console.log('[generateLLMRenderer] Using MCP:', input.useMcp);
       
-      const result = await generateLLMRenderer({
-        domain_name: input.domainName,
-        states: input.states,
-        style_hints: input.styleHints,
-      });
-      
-      console.log('[generateLLMRenderer] Result success:', result.success);
-      if (!result.success) {
-        console.error('[generateLLMRenderer] Error:', result.error);
+      if (input.useMcp) {
+        // Use MCP-based generation with tools and validation
+        const result = await generateLLMRenderer({
+          domain_name: input.domainName,
+          states: input.states,
+          style_hints: input.styleHints,
+        });
+        
+        console.log('[generateLLMRenderer] MCP Result success:', result.success);
+        if (!result.success) {
+          console.error('[generateLLMRenderer] Error:', result.error);
+        }
+        if (result.saved_file) {
+          console.log('[generateLLMRenderer] Saved to:', result.saved_file);
+        }
+        
+        return {
+          success: result.success,
+          typescript_code: result.typescript_code,
+          error: result.error,
+          saved_file: result.saved_file || null,
+          progress_id: result.progress_id || null,
+        };
+      } else {
+        // Use direct LLM generation without MCP
+        const result = await generateDirectLLMRenderer({
+          domain_name: input.domainName,
+          states: input.states,
+          style_hints: input.styleHints,
+        });
+        
+        console.log('[generateLLMRenderer] Direct Result success:', result.success);
+        if (!result.success) {
+          console.error('[generateLLMRenderer] Error:', result.error);
+        }
+        if (result.saved_file) {
+          console.log('[generateLLMRenderer] Saved to:', result.saved_file);
+        }
+        
+        return {
+          success: result.success,
+          typescript_code: result.typescript_code,
+          error: result.error,
+          saved_file: result.saved_file || null,
+          progress_id: null, // Direct approach doesn't use progress tracking
+        };
       }
-      if (result.saved_file) {
-        console.log('[generateLLMRenderer] Saved to:', result.saved_file);
-      }
-      
-      return {
-        success: result.success,
-        typescript_code: result.typescript_code,
-        error: result.error,
-        saved_file: result.saved_file || null,
-        progress_id: result.progress_id || null,
-      };
     }),
 
   /**
