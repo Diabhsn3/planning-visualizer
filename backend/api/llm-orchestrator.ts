@@ -273,20 +273,25 @@ export async function generateRendererWithLLM(
 
   // Helper for logging with timestamps
   const startTime = Date.now();
+  let currentStep = 0;
+  const TOTAL_STEPS = 6; // Setup, Tools, Prompt, Iterations (1-3), Validation, Complete
+  
   const log = (source: string, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    const formattedMessage = `[${elapsed}s] [${source}] ${message}`;
-    console.log(formattedMessage);
+    const formattedMessage = `[${elapsed}s] ${message}`;
+    console.log(`[${source}] ${formattedMessage}`);
     if (onDetailedLog) {
-      onDetailedLog(source, `[${elapsed}s] ${message}`, level);
+      onDetailedLog(source, formattedMessage, level);
     }
   };
 
-  // Helper to report progress (no step counter - just messages)
-  const reportProgress = (message: string) => {
-    log('LLMOrchestrator', message);
+  // Helper to report progress with step number for progress bar
+  const reportProgress = (step: number, message: string) => {
+    currentStep = step;
+    const percent = Math.round((step / TOTAL_STEPS) * 100);
+    log('LLMOrchestrator', `Step ${step}/${TOTAL_STEPS} (${percent}%): ${message}`);
     if (onProgress) {
-      onProgress(0, message);
+      onProgress(step, message);
     }
   };
 
@@ -299,7 +304,7 @@ export async function generateRendererWithLLM(
     // STEP 1: Fetch system prompt from MCP Resource
     // =========================================================================
     
-    reportProgress("Fetching system prompt...");
+    reportProgress(1, "Fetching system prompt...");
     
     const promptResourceUri = `prompt://renderer/system/${DEFAULT_PROMPT_VERSION}`;
     log('MCPClient', `Reading resource: ${promptResourceUri}`);
@@ -326,7 +331,7 @@ export async function generateRendererWithLLM(
     // STEP 2: Get available MCP tools
     // =========================================================================
     
-    reportProgress("Discovering available tools...");
+    reportProgress(2, "Discovering available tools...");
     
     const mcpTools = mcpClient.getToolsForLLM();
     const anthropicTools = mcpToolsToAnthropicFormat(mcpTools);
@@ -337,7 +342,7 @@ export async function generateRendererWithLLM(
     // STEP 3: Build initial user prompt (encourages investigation)
     // =========================================================================
     
-    reportProgress("Preparing investigation request...");
+    reportProgress(2, "Preparing investigation request...");
     
     const userPrompt = `Generate a JavaScript renderer for the "${domainName}" domain.
 
@@ -366,7 +371,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     // STEP 4: Agentic Loop - Let LLM investigate and generate
     // =========================================================================
     
-    reportProgress("Starting investigation phase...");
+    reportProgress(3, "Starting LLM generation...");
     
     const messages: Message[] = [
       { role: "user", content: userPrompt }
@@ -389,7 +394,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
         // LLM is investigating - execute tool calls
         const toolNames = toolCalls.map(t => t.name).join(', ');
         log('LLMOrchestrator', `LLM calling: ${toolNames}`);
-        reportProgress(`Tool: ${toolCalls[0].name}`);
+        reportProgress(3, `Tool: ${toolCalls[0].name}`);
         
         // Add assistant message with tool calls
         messages.push({
@@ -441,13 +446,21 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
         
         if (stopReason === 'max_tokens') {
           log('LLMOrchestrator', `⚠️ Output truncated (max_tokens) - ${textOutput.length} chars`, 'warning');
+        }
+        
+        // Log LLM output - summarize if it's code, show full if it's text
+        if (textOutput.includes('function render')) {
+          // It's code - just show summary
+          log('LLMOrchestrator', `LLM generated code: ${textOutput.length} chars`);
+          log('LLMOrchestrator', `Code preview: ${textOutput.substring(0, 100).replace(/\n/g, ' ')}...`);
         } else {
-          log('LLMOrchestrator', `LLM generated ${textOutput.length} chars`);
+          // It's text response - show full content (useful for debugging)
+          log('LLMOrchestrator', `LLM response:\n${textOutput}`);
         }
         
         if (textOutput.includes('function render')) {
           // This looks like code - clean and validate it
-          reportProgress("Validating code...");
+          reportProgress(4, "Validating generated code...");
           
           const cleanedCode = cleanCodeLocally(textOutput);
           const validation = validateCodeLocally(cleanedCode, domainPascal);
@@ -459,7 +472,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
           } else {
             // Ask LLM to fix the issues
             log('LLMOrchestrator', `❌ Validation failed: ${validation.errors.join('; ')}`, 'warning');
-            reportProgress("Fixing code...");
+            reportProgress(4, "Fixing validation errors...");
             
             messages.push({
               role: "assistant",
@@ -491,7 +504,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     // =========================================================================
     
     if (finalCode) {
-      reportProgress("Final syntax validation...");
+      reportProgress(5, "Final syntax validation...");
       log('MCPClient', 'Running MCP validate_renderer for syntax check');
       
       try {
@@ -520,12 +533,12 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
     
     if (!finalCode || !finalCode.includes('function render')) {
-      reportProgress("Generation failed");
+      reportProgress(6, "Generation failed");
       log('LLMOrchestrator', `❌ Failed after ${iteration} iterations (${totalTime}s)`, 'error');
       return { success: false, code: "", error: `Failed to generate valid renderer after ${iteration} iterations` };
     }
     
-    reportProgress("Generation complete!");
+    reportProgress(6, "Generation complete!");
     log('LLMOrchestrator', `✅ Complete! ${finalCode.length} chars in ${iteration} iterations (${totalTime}s)`, 'success');
     
     return { success: true, code: finalCode };
