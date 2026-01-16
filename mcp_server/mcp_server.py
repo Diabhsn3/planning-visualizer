@@ -234,33 +234,34 @@ def get_domain_hints(
             "legend": "Show satellite modes and target types",
         },
         "depot": {
-            "description": "Warehouse logistics with cranes, piles, trucks, and packages",
-            "layout": "Each depot is a large gray building. Cranes are above/on top of depots. Piles are inside depots. Trucks park outside depots.",
-            "background": "Industrial warehouse floor with grid pattern",
-            "legend": "Show depot, truck, crane, package, and pile with their colors",
+            "description": "A dual-warehouse logistics scenario where labeled crates are moved via an overhead hoist onto a single transport truck, shuttled between depots, and deposited on designated piles. The hoists can pick up crates from piles or trucks, stack them, and release them at the target depot.",
+            "layout": "Two depots (D1 and D2) sit side-by-side on an industrial grid. Each depot has a pile (pile1, pile2) and a gantry-style hoist. A small truck parks beside the active depot; crates (p1, p2, etc.) are hoisted from piles onto the truck bed, transported to the other depot, and hoisted down. Piles are labelled, hoists are centred in each depot, and the truck travels along the space between depots.",
+            "background": "A light grey, tiled warehouse floor provides a neutral, industrial backdrop and helps to separate the depots spatially. The grid subtly conveys movement and positions without distracting from the assets.",
+            "legend": "Use distinct colors (e.g., yellow and orange boxes) and labels (p1, p2) to denote each crate, icons to represent the hoists, and a small vehicle icon for the truck. Show the piles as brown platforms with labels (pile1, pile2). Hoist states (idle vs. holding a crate) can be indicated by highlighting the hoist arm; truck states (loaded vs. empty) can be reflected by the presence of crates on its bed.",
             "critical_relations": {
                 "at-pile": "pile1 at-pile d1 means pile1 belongs to depot d1 ONLY - do NOT draw pile1 at other depots!",
-                "at-crane": "c1 at-crane d1 means crane c1 belongs to depot d1 ONLY",
-                "at-truck": "t1 at-truck d1 means truck t1 is currently at depot d1",
-                "on": "p1 on p2 means package p1 is stacked ON TOP of package p2 (draw p1 above p2)",
-                "on-pile": "p1 on-pile pile1 means package p1 is on the pile (bottom of stack on that pile)",
-                "in-truck": "p1 in-truck t1 means package p1 is INSIDE the truck - draw it ON the truck bed!",
-                "holding": "c1 holding p1 means crane c1 is holding package p1 - draw p1 attached to crane gripper!"
+                "at-crane": "c1 at-crane d1 means hoist/crane c1 belongs to depot d1 ONLY - centred in that depot",
+                "at-truck": "t1 at-truck d1 means truck t1 is currently parked at depot d1",
+                "on": "p1 on p2 means crate p1 is stacked ON TOP of crate p2 (draw p1 above p2)",
+                "on-pile": "p1 on-pile pile1 means crate p1 is on the pile (bottom of stack on that pile)",
+                "in-truck": "p1 in-truck t1 means crate p1 is ON the truck bed - draw it visible on the truck!",
+                "holding": "c1 holding p1 means hoist c1 is holding crate p1 - draw p1 attached to hoist gripper!"
             },
             "positioning_rules": [
                 "EACH pile belongs to ONE depot via at-pile - check the relation!",
-                "EACH crane belongs to ONE depot via at-crane - check the relation!",
-                "Packages can be: on a pile (on-pile), stacked on another package (on), in a truck (in-truck), or held by crane (holding)",
-                "When package is in-truck, draw it INSIDE/ON the truck, not invisible!",
-                "When crane is holding a package, draw the package near the crane gripper!",
-                "Build location maps FIRST: which piles/cranes are at which depot"
+                "EACH hoist/crane belongs to ONE depot via at-crane - centred in that depot!",
+                "Crates can be: on a pile (on-pile), stacked on another crate (on), on truck bed (in-truck), or held by hoist (holding)",
+                "When crate is in-truck, draw it ON the truck bed, visible to user!",
+                "When hoist is holding a crate, draw the crate near the hoist gripper/arm!",
+                "Build location maps FIRST: which piles/hoists are at which depot",
+                "Truck travels between depots - check at-truck to see current location"
             ],
             "visual_style": {
-                "depot": "Large gray rectangle (building) with label inside",
-                "crane": "Pink/magenta colored, positioned above depot with a vertical arm/gripper",
-                "pile": "Brown rectangle at bottom of depot, packages stack on top",
-                "truck": "Blue rectangle with wheels, parked outside/below depot",
-                "package": "Yellow/gold small rectangle with label"
+                "depot": "Large gray rectangle (warehouse building) with label inside, side-by-side layout",
+                "hoist": "Gantry-style crane with vertical arm, centred in depot, pink/magenta color",
+                "pile": "Brown platform at bottom of depot with label, crates stack on top",
+                "truck": "Small blue vehicle with wheels, parks beside active depot",
+                "crate": "Yellow/orange small rectangle with label (p1, p2, etc.)"
             }
         },
         "rovers": {
