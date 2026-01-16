@@ -262,7 +262,35 @@ def get_domain_hints(
                 "pile": "Brown platform at bottom of depot with label, crates stack on top",
                 "truck": "Small blue vehicle with wheels, parks beside active depot",
                 "crate": "Yellow/orange small rectangle with label (p1, p2, etc.)"
-            }
+            },
+            "code_pattern": """// CRITICAL: Build location maps from at-pile, at-crane, at-truck relations
+const pileAtDepot = new Map();  // pileId -> depotId
+const craneAtDepot = new Map(); // craneId -> depotId
+const truckAtDepot = new Map(); // truckId -> depotId
+
+for (const rel of state.relations) {
+  if (rel.type === 'at-pile') pileAtDepot.set(rel.source, rel.target);
+  if (rel.type === 'at-crane') craneAtDepot.set(rel.source, rel.target);
+  if (rel.type === 'at-truck') truckAtDepot.set(rel.source, rel.target);
+}
+
+// Draw each depot, then draw objects AT that depot
+for (const depot of depots) {
+  const [x, y] = depot.position;
+  drawDepot(ctx, depot, x, y);
+  
+  // Find piles at THIS depot
+  const pilesHere = piles.filter(p => pileAtDepot.get(p.id) === depot.id);
+  pilesHere.forEach((pile, i) => drawPile(ctx, pile, x + 20 + i*50, y + 80));
+  
+  // Find crane at THIS depot
+  const cranesHere = cranes.filter(c => craneAtDepot.get(c.id) === depot.id);
+  cranesHere.forEach((crane, i) => drawCrane(ctx, crane, x + 60, y - 20));
+  
+  // Find truck at THIS depot (if any)
+  const trucksHere = trucks.filter(t => truckAtDepot.get(t.id) === depot.id);
+  trucksHere.forEach((truck, i) => drawTruck(ctx, truck, x + 130, y + 90));
+}"""
         },
         "rovers": {
             "description": "Mars rovers collecting samples and images",
@@ -381,6 +409,16 @@ def validate_renderer(
     
     if "ctx" not in code:
         errors.append("Missing 'ctx' parameter - renderer needs canvas context")
+    
+    # Check for trailing non-code text (common LLM issue)
+    # Look for text after the last closing brace that looks like explanation
+    last_brace = code.rfind('}')
+    if last_brace != -1 and last_brace < len(code) - 10:
+        trailing = code[last_brace + 1:].strip()
+        if trailing and not trailing.startswith('//') and not trailing.startswith('/*'):
+            # Check if it looks like prose (contains multiple words without code syntax)
+            if len(trailing) > 20 and not any(c in trailing[:50] for c in ['{', '}', '(', ')', ';', '=']):
+                errors.append(f"Trailing non-code text detected after last function. Remove explanatory text.")
     
     # Check JavaScript syntax
     try:

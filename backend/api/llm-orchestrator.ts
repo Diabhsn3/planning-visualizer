@@ -214,6 +214,37 @@ function cleanCodeLocally(code: string): string {
   cleaned = cleaned.replace(/:\s*(string|number|boolean|any|void|object|Array<[^>]+>|\w+\[\])\s*([,\)\{=])/g, "$2");
   cleaned = cleaned.replace(/as\s+\w+(\[\])?/g, "");
   
+  // Remove trailing text after the last closing brace of a function
+  // Find all top-level function definitions and their closing braces
+  let braceCount = 0;
+  let lastValidIndex = 0;
+  let inFunction = false;
+  
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    
+    // Detect start of a function
+    if (!inFunction && cleaned.substring(i).match(/^function\s+render\w*\s*\(/)) {
+      inFunction = true;
+    }
+    
+    if (char === '{') {
+      braceCount++;
+    } else if (char === '}') {
+      braceCount--;
+      if (braceCount === 0 && inFunction) {
+        // End of a top-level function
+        lastValidIndex = i + 1;
+        inFunction = false;
+      }
+    }
+  }
+  
+  // If we found valid function endings, truncate after the last one
+  if (lastValidIndex > 0) {
+    cleaned = cleaned.substring(0, lastValidIndex);
+  }
+  
   return cleaned.trim();
 }
 
