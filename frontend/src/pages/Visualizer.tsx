@@ -1125,94 +1125,87 @@ export default function Visualizer() {
               <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${isSidebarCollapsed ? "flex-1" : ""}`}>
                 {/* Visualization Header */}
                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                  {/* Row 1: Domain name, actions, mode badge, strategy */}
                   <div className="flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-semibold text-slate-900">
-                          {currentDomain?.icon} {currentDomain?.name} Visualization
-                        </h2>
-                        {visualizationMode === "llm" && (
-                          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" />
-                            LLM Mode
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-slate-500 mt-0.5">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg font-semibold text-slate-900">
+                        {currentDomain?.icon} {currentDomain?.name}
+                      </h2>
+                      <span className="text-sm text-slate-500">
                         {plan.length} actions
-                        {isLlmGenerating && " • Generating LLM renderer..."}
-                      </p>
+                      </span>
+                      {/* Mode Badge */}
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1 ${
+                        visualizationMode === "llm" 
+                          ? "bg-purple-100 text-purple-700" 
+                          : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {visualizationMode === "llm" ? (
+                          <><Sparkles className="w-3 h-3" /> LLM Mode</>
+                        ) : (
+                          "Basic Mode"
+                        )}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      {/* Cache Management Buttons (LLM mode only) */}
-                      {visualizationMode === "llm" && (
-                        <>
-                          {/* Browse Cached Files Button */}
-                          <button
-                            onClick={() => setShowCachedFiles(!showCachedFiles)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                              showCachedFiles
-                                ? "bg-indigo-100 text-indigo-700"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
-                            title="Browse cached renderers"
-                          >
-                            <FolderOpen className="w-4 h-4" />
-                            Cached Files
-                          </button>
-                          {/* Clear Cache Button */}
-                          <button
-                            onClick={() => {
-                              // Clear the appropriate cache based on useMcp setting
-                              if (useMcp) {
-                                clearCacheMutation.mutate();
-                              } else {
-                                clearDirectCacheMutation.mutate();
-                              }
-                            }}
-                            disabled={clearCacheMutation.isPending || clearDirectCacheMutation.isPending}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all"
-                            title={useMcp ? "Clear MCP cached renderers" : "Clear Direct cached renderers"}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            {(clearCacheMutation.isPending || clearDirectCacheMutation.isPending) 
-                              ? "Clearing..." 
-                              : `Clear ${useMcp ? 'MCP' : 'Direct'} Cache`}
-                          </button>
-                        </>
-                      )}
-                      {plannerInfo && (
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
-                          plannerInfo.used_planner 
-                            ? "bg-emerald-100 text-emerald-700" 
-                            : "bg-amber-100 text-amber-700"
+                      {/* Strategy Badge */}
+                      {plannerInfo?.strategy && (
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          plannerInfo.strategy.isOptimal 
+                            ? "bg-purple-100 text-purple-700" 
+                            : "bg-blue-100 text-blue-700"
                         }`}>
-                          {plannerInfo.used_planner ? (
-                            <CheckCircle2 className="w-4 h-4" />
-                          ) : (
-                            <AlertTriangle className="w-4 h-4" />
-                          )}
-                          {plannerInfo.info}
-                        </div>
+                          {plannerInfo.strategy.name}
+                        </span>
                       )}
+                      {plannerInfo?.strategy && getSpeedBadge(plannerInfo.strategy.speed)}
                     </div>
                   </div>
                   
-                  {plannerInfo?.strategy && (
+                  {/* Row 2: Cached Files + Clear Cache (LLM mode only) */}
+                  {visualizationMode === "llm" && (
                     <div className="mt-3 flex items-center gap-2">
-                      <span className="text-xs text-slate-500">Strategy:</span>
-                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                        plannerInfo.strategy.isOptimal 
-                          ? "bg-purple-100 text-purple-700" 
-                          : "bg-blue-100 text-blue-700"
-                      }`}>
-                        {plannerInfo.strategy.name}
-                      </span>
-                      {getSpeedBadge(plannerInfo.strategy.speed)}
+                      {/* Browse Cached Files Button */}
+                      <button
+                        onClick={() => setShowCachedFiles(!showCachedFiles)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          showCachedFiles
+                            ? "bg-indigo-100 text-indigo-700"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        }`}
+                        title="Browse cached renderers"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                        Cached Files
+                      </button>
+                      {/* Clear Cache Button */}
+                      <button
+                        onClick={() => {
+                          if (useMcp) {
+                            clearCacheMutation.mutate();
+                          } else {
+                            clearDirectCacheMutation.mutate();
+                          }
+                        }}
+                        disabled={clearCacheMutation.isPending || clearDirectCacheMutation.isPending}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+                        title={useMcp ? "Clear MCP cached renderers" : "Clear Direct cached renderers"}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {(clearCacheMutation.isPending || clearDirectCacheMutation.isPending) 
+                          ? "Clearing..." 
+                          : `Clear ${useMcp ? 'MCP' : 'Direct'} Cache`}
+                      </button>
+                      {isLlmGenerating && (
+                        <span className="text-xs text-purple-600 flex items-center gap-1">
+                          <div className="w-3 h-3 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin" />
+                          Generating...
+                        </span>
+                      )}
                     </div>
                   )}
 
-                  {/* Cached Files Browser */}
+                  {/* Cached Files Dropdown */}
                   {visualizationMode === "llm" && showCachedFiles && (
                     <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                       <div className="flex items-center justify-between mb-2">
@@ -1237,7 +1230,6 @@ export default function Visualizer() {
                               key={file}
                               onClick={() => {
                                 setSelectedCacheFile(file);
-                                // Fetch the specific file
                                 const query = useMcp ? getCachedByFilenameQuery : getDirectCachedByFilenameQuery;
                                 query.refetch().then((result) => {
                                   if (result.data?.found && result.data.code) {
@@ -1261,6 +1253,30 @@ export default function Visualizer() {
                       </div>
                     </div>
                   )}
+
+                  {/* Row 3: Regenerate Button (when cached renderer is active) */}
+                  {visualizationMode === "llm" && llmCode && !isLlmGenerating && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => {
+                          setIsLlmGenerating(true);
+                          setLlmCode(null);
+                          setCachedFilename(null);
+                          setLlmError(null);
+                          llmRendererMutation.mutate({
+                            domainName: selectedDomain,
+                            states: renderedStates,
+                            useMcp: useMcp,
+                          });
+                        }}
+                        disabled={isLlmGenerating}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 transition-all shadow-sm"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        {useMcp ? 'Regenerate with MCP' : 'Regenerate'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Canvas */}
@@ -1279,38 +1295,17 @@ export default function Visualizer() {
                     </div>
                   )}
 
-                  {/* LLM Success Indicator with Regenerate Button */}
+                  {/* LLM Success Indicator - shows cached file info */}
                   {visualizationMode === "llm" && llmCode && !isLlmGenerating && (
                     <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                          <div>
-                            <p className="text-xs text-emerald-700 font-medium">Using cached LLM renderer</p>
-                            {cachedFilename && (
-                              <p className="text-xs text-emerald-600 opacity-75">{cachedFilename}</p>
-                            )}
-                          </div>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        <div>
+                          <p className="text-xs text-emerald-700 font-medium">Using cached LLM renderer</p>
+                          {cachedFilename && (
+                            <p className="text-xs text-emerald-600 opacity-75">{cachedFilename}</p>
+                          )}
                         </div>
-                        <button
-                          onClick={() => {
-                            // Force regenerate - bypass cache
-                            setIsLlmGenerating(true);
-                            setLlmCode(null);
-                            setCachedFilename(null);
-                            setLlmError(null);
-                            llmRendererMutation.mutate({
-                              domainName: selectedDomain,
-                              states: renderedStates,
-                              useMcp: useMcp,
-                            });
-                          }}
-                          disabled={isLlmGenerating}
-                          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 transition-all shadow-sm"
-                        >
-                          <RefreshCw className="w-4 h-4" />
-                          {useMcp ? 'Regenerate with MCP' : 'Regenerate'}
-                        </button>
                       </div>
                     </div>
                   )}
