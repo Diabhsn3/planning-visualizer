@@ -298,6 +298,68 @@ export function clearDirectRendererCache(domainName?: string): { success: boolea
 }
 
 /**
+ * List all cached direct renderers for a domain
+ * Returns array of filenames sorted by date (most recent first)
+ */
+export function listDirectCachedRenderers(domainName: string): { files: string[]; error: string | null } {
+  try {
+    ensureDirectRenderersDir();
+    
+    // Sanitize domain name to match filename format
+    const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, '_');
+    
+    // List all files for this domain
+    const files = fs.readdirSync(DIRECT_RENDERERS_DIR)
+      .filter(f => f.endsWith('.ts') && f.startsWith(sanitizedDomain + '_'))
+      .sort()
+      .reverse(); // Most recent first
+    
+    return {
+      files,
+      error: null
+    };
+  } catch (error) {
+    console.error('[Direct LLM Renderer Cache] Error listing cache:', error);
+    return {
+      files: [],
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+/**
+ * Get a specific cached direct renderer by filename
+ */
+export function getDirectCachedRendererByFilename(filename: string): { code: string; filename: string } | null {
+  try {
+    ensureDirectRenderersDir();
+    
+    const filepath = path.join(DIRECT_RENDERERS_DIR, filename);
+    
+    if (!fs.existsSync(filepath)) {
+      console.log('[Direct LLM Renderer Cache] File not found:', filename);
+      return null;
+    }
+    
+    const content = fs.readFileSync(filepath, 'utf-8');
+    
+    // Extract the actual code (skip the header comment)
+    const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
+    const code = codeMatch ? codeMatch[1].trim() : content;
+    
+    console.log('[Direct LLM Renderer Cache] Loaded renderer:', filename);
+    
+    return {
+      code,
+      filename
+    };
+  } catch (error) {
+    console.error('[Direct LLM Renderer Cache] Error reading file:', error);
+    return null;
+  }
+}
+
+/**
  * Check if direct LLM renderer is available
  */
 export async function checkDirectLLMRendererStatus(): Promise<{

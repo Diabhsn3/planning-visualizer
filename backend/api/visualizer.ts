@@ -5,8 +5,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { generateLLMRenderer, checkLLMRendererStatus, getCachedRenderer, clearRendererCache, getGenerationProgress } from "./llm-renderer.js";
-import { generateDirectLLMRenderer, getCachedDirectRenderer, clearDirectRendererCache } from "./direct-llm-renderer.js";
+import { generateLLMRenderer, checkLLMRendererStatus, getCachedRenderer, clearRendererCache, getGenerationProgress, listCachedRenderers, getCachedRendererByFilename } from "./llm-renderer.js";
+import { generateDirectLLMRenderer, getCachedDirectRenderer, clearDirectRendererCache, listDirectCachedRenderers, getDirectCachedRendererByFilename } from "./direct-llm-renderer.js";
 
 const execAsync = promisify(exec);
 
@@ -630,6 +630,72 @@ export const visualizerRouter = router({
           endTime: progress.endTime,
           error: progress.error,
         }
+      };
+    }),
+
+  /**
+   * List all cached MCP renderers for a domain
+   */
+  listCachedRenderers: publicProcedure
+    .input(z.object({ domainName: z.string() }))
+    .query(({ input }) => {
+      console.log('[listCachedRenderers] Listing cached renderers for:', input.domainName);
+      const result = listCachedRenderers(input.domainName);
+      return result;
+    }),
+
+  /**
+   * List all cached direct renderers for a domain
+   */
+  listDirectCachedRenderers: publicProcedure
+    .input(z.object({ domainName: z.string() }))
+    .query(({ input }) => {
+      console.log('[listDirectCachedRenderers] Listing cached direct renderers for:', input.domainName);
+      const result = listDirectCachedRenderers(input.domainName);
+      return result;
+    }),
+
+  /**
+   * Get a specific cached MCP renderer by filename
+   */
+  getCachedRendererByFilename: publicProcedure
+    .input(z.object({ filename: z.string() }))
+    .query(({ input }) => {
+      console.log('[getCachedRendererByFilename] Getting renderer:', input.filename);
+      const result = getCachedRendererByFilename(input.filename);
+      if (result) {
+        return {
+          found: true,
+          code: result.code,
+          filename: result.filename
+        };
+      }
+      return {
+        found: false,
+        code: null,
+        filename: null
+      };
+    }),
+
+  /**
+   * Get a specific cached direct renderer by filename
+   */
+  getDirectCachedRendererByFilename: publicProcedure
+    .input(z.object({ filename: z.string() }))
+    .query(({ input }) => {
+      console.log('[getDirectCachedRendererByFilename] Getting direct renderer:', input.filename);
+      const result = getDirectCachedRendererByFilename(input.filename);
+      if (result) {
+        return {
+          found: true,
+          code: result.code,
+          filename: result.filename
+        };
+      }
+      return {
+        found: false,
+        code: null,
+        filename: null
       };
     }),
 });

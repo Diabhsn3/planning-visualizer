@@ -467,5 +467,67 @@ export function getGenerationProgress(progressId?: string): GenerationProgress |
   return getLatestProgress();
 }
 
+/**
+ * List all cached renderers for a domain
+ * Returns array of filenames sorted by date (most recent first)
+ */
+export function listCachedRenderers(domainName: string): { files: string[]; error: string | null } {
+  try {
+    ensureRenderersDir();
+    
+    // Sanitize domain name to match filename format
+    const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, '_');
+    
+    // List all files for this domain
+    const files = fs.readdirSync(LLM_RENDERERS_DIR)
+      .filter(f => f.endsWith('.ts') && f.startsWith(sanitizedDomain + '_'))
+      .sort()
+      .reverse(); // Most recent first
+    
+    return {
+      files,
+      error: null
+    };
+  } catch (error) {
+    console.error('[LLM Renderer Cache] Error listing cache:', error);
+    return {
+      files: [],
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+/**
+ * Get a specific cached renderer by filename
+ */
+export function getCachedRendererByFilename(filename: string): { code: string; filename: string } | null {
+  try {
+    ensureRenderersDir();
+    
+    const filepath = path.join(LLM_RENDERERS_DIR, filename);
+    
+    if (!fs.existsSync(filepath)) {
+      console.log('[LLM Renderer Cache] File not found:', filename);
+      return null;
+    }
+    
+    const content = fs.readFileSync(filepath, 'utf-8');
+    
+    // Extract the actual code (skip the header comment)
+    const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
+    const code = codeMatch ? codeMatch[1].trim() : content;
+    
+    console.log('[LLM Renderer Cache] Loaded renderer:', filename);
+    
+    return {
+      code,
+      filename
+    };
+  } catch (error) {
+    console.error('[LLM Renderer Cache] Error reading file:', error);
+    return null;
+  }
+}
+
 // Re-export GenerationProgress type for use in visualizer.ts
 export type { GenerationProgress };

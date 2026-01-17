@@ -6,7 +6,7 @@ import { GenerationProgress } from "@/components/GenerationProgress";
 import { 
   Play, Pause, SkipForward, SkipBack, Upload, FileText, 
   AlertTriangle, Clock, Zap, Settings, 
-  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown, Trash2
+  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown, Trash2, RefreshCw, FolderOpen, Info
 } from "lucide-react";
 
 // Search strategy type
@@ -46,6 +46,9 @@ export default function Visualizer() {
   const [llmCode, setLlmCode] = useState<string | null>(null);
   const [llmError, setLlmError] = useState<string | null>(null);
   const [isLlmGenerating, setIsLlmGenerating] = useState(false);
+  const [showCachedFiles, setShowCachedFiles] = useState(false);
+  const [cachedFilename, setCachedFilename] = useState<string | null>(null);
+  const [selectedCacheFile, setSelectedCacheFile] = useState<string | null>(null);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef = useRef<HTMLDivElement>(null);
   
@@ -344,11 +347,37 @@ export default function Visualizer() {
     { enabled: false } // Manual refetch only
   );
 
+  // List cached MCP renderers
+  const listCachedRenderersQuery = trpc.visualizer.listCachedRenderers.useQuery(
+    { domainName: selectedDomain },
+    { enabled: showCachedFiles && useMcp }
+  );
+
+  // List cached direct renderers
+  const listDirectCachedRenderersQuery = trpc.visualizer.listDirectCachedRenderers.useQuery(
+    { domainName: selectedDomain },
+    { enabled: showCachedFiles && !useMcp }
+  );
+
+  // Get specific cached renderer by filename
+  const getCachedByFilenameQuery = trpc.visualizer.getCachedRendererByFilename.useQuery(
+    { filename: selectedCacheFile || '' },
+    { enabled: !!selectedCacheFile && useMcp }
+  );
+
+  // Get specific direct cached renderer by filename
+  const getDirectCachedByFilenameQuery = trpc.visualizer.getDirectCachedRendererByFilename.useQuery(
+    { filename: selectedCacheFile || '' },
+    { enabled: !!selectedCacheFile && !useMcp }
+  );
+
   // Clear MCP cache mutation
   const clearCacheMutation = trpc.visualizer.clearRendererCache.useMutation({
     onSuccess: () => {
       setLlmCode(null);
       setLlmError(null);
+      setCachedFilename(null);
+      setShowCachedFiles(false);
       console.log('[Visualizer] MCP cache cleared');
     },
   });
@@ -358,6 +387,8 @@ export default function Visualizer() {
     onSuccess: () => {
       setLlmCode(null);
       setLlmError(null);
+      setCachedFilename(null);
+      setShowCachedFiles(false);
       console.log('[Visualizer] Direct cache cleared');
     },
   });
@@ -401,17 +432,19 @@ export default function Visualizer() {
         const cacheQuery = useMcp ? checkCachedRendererQuery : checkCachedDirectRendererQuery;
         const cacheType = useMcp ? 'MCP' : 'Direct';
         
-        cacheQuery.refetch().then((result: { data?: { found: boolean; code: string | null } }) => {
+        cacheQuery.refetch().then((result: { data?: { found: boolean; code: string | null; filename?: string | null } }) => {
           if (result.data?.found && result.data.code) {
             // Use cached renderer
-            console.log(`[Visualizer] Using cached ${cacheType} renderer`);
+            console.log(`[Visualizer] Using cached ${cacheType} renderer: ${result.data.filename}`);
             setLlmCode(result.data.code);
+            setCachedFilename(result.data.filename || null);
             setLlmError(null);
           } else {
             // No cache, generate new
             console.log(`[Visualizer] No cached ${cacheType} renderer, generating new`);
             setIsLlmGenerating(true);
             setLlmCode(null);
+            setCachedFilename(null);
             setLlmError(null);
             llmRendererMutation.mutate({
               domainName: domainForLlm,
@@ -990,11 +1023,15 @@ export default function Visualizer() {
 
                 {visualizationMode === "llm" && (
                   <div className="space-y-3">
+                    {/* Info Note */}
                     <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl">
-                      <p className="text-xs text-purple-800">
-                        <strong>Note:</strong> LLM mode generates fresh TypeScript code using AI.
-                        This may take 30-60 seconds.
-                      </p>
+                      <div className="flex items-start gap-2">
+                        <Info className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-xs text-purple-800 space-y-1">
+                          <p><strong>LLM Mode</strong> generates custom visualization code using AI.</p>
+                          <p>Generation takes <strong>60-90 seconds</strong>. Start with small problems (2-3 objects) for best results.</p>
+                        </div>
+                      </div>
                     </div>
                     
                     {/* MCP Toggle */}
@@ -1005,21 +1042,24 @@ export default function Visualizer() {
                         onChange={(e) => {
                           const newUseMcp = e.target.checked;
                           setUseMcp(newUseMcp);
+                          setShowCachedFiles(false);
                           
                           // When toggling, try to load cached renderer from the appropriate cache
                           if (renderedStates.length > 0) {
                             const cacheQuery = newUseMcp ? checkCachedRendererQuery : checkCachedDirectRendererQuery;
                             const cacheType = newUseMcp ? 'MCP' : 'Direct';
                             
-                            cacheQuery.refetch().then((result: { data?: { found: boolean; code: string | null } }) => {
+                            cacheQuery.refetch().then((result: { data?: { found: boolean; code: string | null; filename?: string | null } }) => {
                               if (result.data?.found && result.data.code) {
                                 console.log(`[Visualizer] Switched to cached ${cacheType} renderer`);
                                 setLlmCode(result.data.code);
+                                setCachedFilename(result.data.filename || null);
                                 setLlmError(null);
                               } else {
                                 // No cached renderer for this mode - clear current code
                                 console.log(`[Visualizer] No cached ${cacheType} renderer available`);
                                 setLlmCode(null);
+                                setCachedFilename(null);
                                 setLlmError(null);
                               }
                             });
@@ -1104,60 +1144,42 @@ export default function Visualizer() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {/* Regenerate Button (LLM mode only) */}
-                      {visualizationMode === "llm" && renderedStates.length > 0 && (
-                        <button
-                          onClick={() => {
-                            // Force regenerate - bypass cache
-                            setIsLlmGenerating(true);
-                            setLlmCode(null);
-                            setLlmError(null);
-                            llmRendererMutation.mutate({
-                              domainName: selectedDomain,
-                              states: renderedStates,
-                              useMcp: useMcp,
-                            });
-                          }}
-                          disabled={isLlmGenerating}
-                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                            isLlmGenerating
-                              ? "bg-purple-100 text-purple-400 cursor-wait"
-                              : "bg-purple-100 text-purple-700 hover:bg-purple-200"
-                          }`}
-                        >
-                          {isLlmGenerating ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-purple-300 border-t-purple-600 rounded-full animate-spin" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-4 h-4" />
-                              Regenerate
-                            </>
-                          )}
-                        </button>
-                      )}
-                      {/* Clear Cache Button (LLM mode only) */}
+                      {/* Cache Management Buttons (LLM mode only) */}
                       {visualizationMode === "llm" && (
-                        <button
-                          onClick={() => {
-                            // Clear the appropriate cache based on useMcp setting
-                            if (useMcp) {
-                              clearCacheMutation.mutate();
-                            } else {
-                              clearDirectCacheMutation.mutate();
-                            }
-                          }}
-                          disabled={clearCacheMutation.isPending || clearDirectCacheMutation.isPending}
-                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
-                          title={useMcp ? "Clear MCP cached renderers" : "Clear Direct cached renderers"}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          {(clearCacheMutation.isPending || clearDirectCacheMutation.isPending) 
-                            ? "Clearing..." 
-                            : `Clear ${useMcp ? 'MCP' : 'Direct'} Cache`}
-                        </button>
+                        <>
+                          {/* Browse Cached Files Button */}
+                          <button
+                            onClick={() => setShowCachedFiles(!showCachedFiles)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                              showCachedFiles
+                                ? "bg-indigo-100 text-indigo-700"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                            title="Browse cached renderers"
+                          >
+                            <FolderOpen className="w-4 h-4" />
+                            Cached Files
+                          </button>
+                          {/* Clear Cache Button */}
+                          <button
+                            onClick={() => {
+                              // Clear the appropriate cache based on useMcp setting
+                              if (useMcp) {
+                                clearCacheMutation.mutate();
+                              } else {
+                                clearDirectCacheMutation.mutate();
+                              }
+                            }}
+                            disabled={clearCacheMutation.isPending || clearDirectCacheMutation.isPending}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+                            title={useMcp ? "Clear MCP cached renderers" : "Clear Direct cached renderers"}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            {(clearCacheMutation.isPending || clearDirectCacheMutation.isPending) 
+                              ? "Clearing..." 
+                              : `Clear ${useMcp ? 'MCP' : 'Direct'} Cache`}
+                          </button>
+                        </>
                       )}
                       {plannerInfo && (
                         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
@@ -1189,6 +1211,56 @@ export default function Visualizer() {
                       {getSpeedBadge(plannerInfo.strategy.speed)}
                     </div>
                   )}
+
+                  {/* Cached Files Browser */}
+                  {visualizationMode === "llm" && showCachedFiles && (
+                    <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-medium text-slate-700">
+                          Cached {useMcp ? 'MCP' : 'Direct'} Renderers for {selectedDomain}
+                        </p>
+                        <button
+                          onClick={() => setShowCachedFiles(false)}
+                          className="text-slate-400 hover:text-slate-600"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {(useMcp ? listCachedRenderersQuery : listDirectCachedRenderersQuery).isLoading ? (
+                          <p className="text-xs text-slate-500">Loading...</p>
+                        ) : (useMcp ? listCachedRenderersQuery : listDirectCachedRenderersQuery).data?.files?.length === 0 ? (
+                          <p className="text-xs text-slate-500">No cached files found</p>
+                        ) : (
+                          (useMcp ? listCachedRenderersQuery : listDirectCachedRenderersQuery).data?.files?.map((file: string) => (
+                            <button
+                              key={file}
+                              onClick={() => {
+                                setSelectedCacheFile(file);
+                                // Fetch the specific file
+                                const query = useMcp ? getCachedByFilenameQuery : getDirectCachedByFilenameQuery;
+                                query.refetch().then((result) => {
+                                  if (result.data?.found && result.data.code) {
+                                    setLlmCode(result.data.code);
+                                    setCachedFilename(file);
+                                    setLlmError(null);
+                                    setShowCachedFiles(false);
+                                  }
+                                });
+                              }}
+                              className={`w-full text-left px-2 py-1.5 text-xs rounded-lg transition-colors ${
+                                cachedFilename === file
+                                  ? "bg-indigo-100 text-indigo-700"
+                                  : "hover:bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {file}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Canvas */}
@@ -1207,12 +1279,38 @@ export default function Visualizer() {
                     </div>
                   )}
 
-                  {/* LLM Success Indicator */}
+                  {/* LLM Success Indicator with Regenerate Button */}
                   {visualizationMode === "llm" && llmCode && !isLlmGenerating && (
                     <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        <p className="text-xs text-emerald-700">LLM-generated renderer active</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <div>
+                            <p className="text-xs text-emerald-700 font-medium">Using cached LLM renderer</p>
+                            {cachedFilename && (
+                              <p className="text-xs text-emerald-600 opacity-75">{cachedFilename}</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            // Force regenerate - bypass cache
+                            setIsLlmGenerating(true);
+                            setLlmCode(null);
+                            setCachedFilename(null);
+                            setLlmError(null);
+                            llmRendererMutation.mutate({
+                              domainName: selectedDomain,
+                              states: renderedStates,
+                              useMcp: useMcp,
+                            });
+                          }}
+                          disabled={isLlmGenerating}
+                          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 transition-all shadow-sm"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                          {useMcp ? 'Regenerate with MCP' : 'Regenerate'}
+                        </button>
                       </div>
                     </div>
                   )}
