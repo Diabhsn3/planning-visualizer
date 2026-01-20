@@ -104,14 +104,139 @@ class AnthropicProvider implements LLMProvider {
 }
 
 // ============================================================================
+// Ollama Provider (for local open-source models)
+// ============================================================================
+
+class OllamaProvider implements LLMProvider {
+  private baseUrl: string;
+  private model: string;
+
+  constructor(model: string = "codellama:13b", baseUrl: string = "http://localhost:11434") {
+    this.baseUrl = process.env.OLLAMA_BASE_URL || baseUrl;
+    this.model = model;
+  }
+
+  getProviderName(): string {
+    return "ollama";
+  }
+
+  getModelName(): string {
+    return this.model;
+  }
+
+  async chat(
+    messages: Message[],
+    systemPrompt: string,
+    _tools?: any[]  // Ollama doesn't support tools yet
+  ): Promise<any> {
+    // Build messages array with system prompt
+    const ollamaMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages.map((m) => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      })),
+    ];
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          messages: ollamaMessages,
+          stream: false,
+          options: {
+            num_predict: 16000,
+            temperature: 0.7,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Convert to Anthropic-like format for compatibility
+      return {
+        content: [{ type: "text", text: data.message?.content || "" }],
+        stop_reason: data.done ? "end_turn" : "max_tokens",
+      };
+    } catch (error) {
+      console.error("[OllamaProvider] Error:", error);
+      throw error;
+    }
+  }
+}
+
+// ============================================================================
+// Provider Factory
+// ============================================================================
+
+export type LLMProviderType = "anthropic" | "ollama";
+
+export interface LLMConfig {
+  provider: LLMProviderType;
+  model?: string;
+  ollamaBaseUrl?: string;
+}
+
+export function createLLMProvider(config: LLMConfig): LLMProvider {
+  switch (config.provider) {
+    case "ollama":
+      return new OllamaProvider(
+        config.model || "codellama:13b",
+        config.ollamaBaseUrl || "http://localhost:11434"
+      );
+    case "anthropic":
+    default:
+      return new AnthropicProvider(config.model || "claude-sonnet-4-20250514");
+  }
+}
+
+// Available models for each provider
+export const AVAILABLE_MODELS = {
+  anthropic: [
+    { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Latest and most capable" },
+    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", description: "Fast and efficient" },
+    { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku", description: "Fastest, good for simple tasks" },
+  ],
+  ollama: [
+    { id: "codellama:13b", name: "CodeLlama 13B", description: "Good balance of speed and quality" },
+    { id: "codellama:34b", name: "CodeLlama 34B", description: "Best code quality, slower" },
+    { id: "llama3.1:8b", name: "Llama 3.1 8B", description: "Fast general purpose" },
+    { id: "llama3.1:70b", name: "Llama 3.1 70B", description: "Most capable open model" },
+    { id: "mistral:7b", name: "Mistral 7B", description: "Fast and efficient" },
+    { id: "mixtral:8x7b", name: "Mixtral 8x7B", description: "Great for code generation" },
+    { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B", description: "Specialized for coding" },
+    { id: "deepseek-coder:6.7b", name: "DeepSeek Coder 6.7B", description: "Excellent code model" },
+  ],
+};
+
+// ============================================================================
 // LLM Orchestrator
 // ============================================================================
 
 export class LLMOrchestrator {
   private provider: LLMProvider;
 
-  constructor(provider?: LLMProvider) {
-    this.provider = provider || new AnthropicProvider();
+  constructor(providerOrConfig?: LLMProvider | LLMConfig) {
+    if (!providerOrConfig) {
+      // Default to Anthropic
+      this.provider = new AnthropicProvider();
+    } else if ('chat' in providerOrConfig) {
+      // It's already a provider
+      this.provider = providerOrConfig as LLMProvider;
+    } else {
+      // It's a config object
+      this.provider = createLLMProvider(providerOrConfig as LLMConfig);
+    }
+  }
+
+  static fromConfig(config: LLMConfig): LLMOrchestrator {
+    return new LLMOrchestrator(config);
   }
 
   getProvider(): LLMProvider {

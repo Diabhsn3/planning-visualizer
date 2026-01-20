@@ -375,10 +375,80 @@ var AnthropicProvider = class {
     return await this.client.messages.create(params);
   }
 };
-var LLMOrchestrator = class {
+var OllamaProvider = class {
+  baseUrl;
+  model;
+  constructor(model = "codellama:13b", baseUrl = "http://localhost:11434") {
+    this.baseUrl = process.env.OLLAMA_BASE_URL || baseUrl;
+    this.model = model;
+  }
+  getProviderName() {
+    return "ollama";
+  }
+  getModelName() {
+    return this.model;
+  }
+  async chat(messages, systemPrompt, tools) {
+    const ollamaMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages.map((m) => ({
+        role: m.role,
+        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content)
+      }))
+    ];
+    try {
+      const response = await fetch(`${this.baseUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          messages: ollamaMessages,
+          stream: false,
+          options: {
+            num_predict: 16e3,
+            temperature: 0.7
+          }
+        })
+      });
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      return {
+        content: [{ type: "text", text: data.message?.content || "" }],
+        stop_reason: data.done ? "end_turn" : "max_tokens"
+      };
+    } catch (error) {
+      console.error("[OllamaProvider] Error:", error);
+      throw error;
+    }
+  }
+};
+function createLLMProvider(config) {
+  switch (config.provider) {
+    case "ollama":
+      return new OllamaProvider(
+        config.model || "codellama:13b",
+        config.ollamaBaseUrl || "http://localhost:11434"
+      );
+    case "anthropic":
+    default:
+      return new AnthropicProvider(config.model || "claude-sonnet-4-20250514");
+  }
+}
+var LLMOrchestrator = class _LLMOrchestrator {
   provider;
-  constructor(provider) {
-    this.provider = provider || new AnthropicProvider();
+  constructor(providerOrConfig) {
+    if (!providerOrConfig) {
+      this.provider = new AnthropicProvider();
+    } else if ("chat" in providerOrConfig) {
+      this.provider = providerOrConfig;
+    } else {
+      this.provider = createLLMProvider(providerOrConfig);
+    }
+  }
+  static fromConfig(config) {
+    return new _LLMOrchestrator(config);
   }
   getProvider() {
     return this.provider;
@@ -446,6 +516,27 @@ function cleanCodeLocally(code) {
   }
   cleaned = cleaned.replace(/:\s*(string|number|boolean|any|void|object|Array<[^>]+>|\w+\[\])\s*([,\)\{=])/g, "$2");
   cleaned = cleaned.replace(/as\s+\w+(\[\])?/g, "");
+  let braceCount = 0;
+  let lastValidIndex = 0;
+  let inFunction = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    if (!inFunction && cleaned.substring(i).match(/^function\s+render\w*\s*\(/)) {
+      inFunction = true;
+    }
+    if (char === "{") {
+      braceCount++;
+    } else if (char === "}") {
+      braceCount--;
+      if (braceCount === 0 && inFunction) {
+        lastValidIndex = i + 1;
+        inFunction = false;
+      }
+    }
+  }
+  if (lastValidIndex > 0) {
+    cleaned = cleaned.substring(0, lastValidIndex);
+  }
   return cleaned.trim();
 }
 function mcpToolsToAnthropicFormat(mcpTools) {
@@ -458,27 +549,27 @@ function mcpToolsToAnthropicFormat(mcpTools) {
 async function generateRendererWithLLM(mcpClient, domainName, exampleState, styleHints, onProgress, onDetailedLog) {
   const orchestrator = new LLMOrchestrator();
   const startTime = Date.now();
+  const TOTAL_STEPS = 6;
   const log = (source, message, level = "info") => {
     const elapsed = ((Date.now() - startTime) / 1e3).toFixed(1);
-    const formattedMessage = `[${elapsed}s] [${source}] ${message}`;
-    console.log(formattedMessage);
+    const formattedMessage = `[${elapsed}s] ${message}`;
+    console.log(`[${source}] ${formattedMessage}`);
     if (onDetailedLog) {
-      onDetailedLog(source, `[${elapsed}s] ${message}`, level);
+      onDetailedLog(source, formattedMessage, level);
     }
   };
-  let stepCounter = 0;
-  const reportProgress = (message) => {
-    stepCounter++;
-    log("LLMOrchestrator", `Step ${stepCounter}: ${message}`);
+  const reportProgress = (step, message) => {
+    const percent = Math.round(step / TOTAL_STEPS * 100);
+    log("LLMOrchestrator", `Step ${step}/${TOTAL_STEPS} (${percent}%): ${message}`);
     if (onProgress) {
-      onProgress(stepCounter, message);
+      onProgress(step, message);
     }
   };
   log("LLMOrchestrator", `Starting INVESTIGATE-FIRST renderer generation for domain: ${domainName}`);
   log("LLMOrchestrator", `Using provider: ${orchestrator.getProvider().getProviderName()}`);
   log("LLMOrchestrator", `Using model: ${orchestrator.getProvider().getModelName()}`);
   try {
-    reportProgress("Fetching system prompt...");
+    reportProgress(1, "Fetching system prompt...");
     const promptResourceUri = `prompt://renderer/system/${DEFAULT_PROMPT_VERSION}`;
     log("MCPClient", `Reading resource: ${promptResourceUri}`);
     const systemPromptResult = await mcpClient.readResource(promptResourceUri);
@@ -490,11 +581,12 @@ async function generateRendererWithLLM(mcpClient, domainName, exampleState, styl
     const systemPrompt = systemPromptResult.content.replace(/{domain_pascal}/g, domainPascal);
     log("LLMOrchestrator", `System prompt loaded (${systemPrompt.length} chars)`);
     log("LLMOrchestrator", `Domain PascalCase: ${domainPascal}`);
-    reportProgress("Discovering available tools...");
+    reportProgress(2, "Discovering available tools...");
     const mcpTools = mcpClient.getToolsForLLM();
     const anthropicTools = mcpToolsToAnthropicFormat(mcpTools);
     log("LLMOrchestrator", `Available tools: ${mcpTools.map((t2) => t2.name).join(", ")}`);
-    reportProgress("Preparing investigation request...");
+    reportProgress(2, "Preparing investigation request...");
+    const stateJsonStr = JSON.stringify(exampleState);
     const userPrompt = `Generate a JavaScript renderer for the "${domainName}" domain.
 
 REQUIRED FUNCTIONS:
@@ -502,26 +594,20 @@ REQUIRED FUNCTIONS:
 - render${domainPascal}Legend(ctx, x, y) - Legend box function  
 - render${domainPascal}Background(ctx, width, height) - Background function [optional]
 
-EXAMPLE STATE DATA:
-${JSON.stringify(exampleState, null, 2)}
-
 ${styleHints ? `STYLE HINTS: ${styleHints}
 ` : ""}
 
-You have access to MCP tools. Use them EFFICIENTLY - call multiple related tools if needed, but don't call unnecessary ones.
+YOUR FIRST ACTION: Call get_generation_context with these parameters:
+{
+  "state_json": ${stateJsonStr},
+  "domain_name": "${domainName}"
+}
 
-RECOMMENDED TOOLS (call these in order):
-1. analyze_state_structure - Pass the example state to understand objects and relations
-2. get_domain_hints - Get domain-specific styling hints for "${domainName}"
-3. get_spatial_relationship_guidelines - ONLY if you see 'in', 'on', 'at-*', or 'holding' relations
-4. get_example_renderer - See a working code example
-5. After generating code, use validate_renderer to check it
+DO NOT skip parameters. Both state_json and domain_name are REQUIRED.
 
-DO NOT call list_available_domains - you already know the domain is "${domainName}".
-DO NOT call get_domain_rendered_data - the state data is already provided above.
-
+After getting the context, generate complete JavaScript code.
 Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
-    reportProgress("Starting investigation phase...");
+    reportProgress(3, "Starting LLM generation...");
     const messages = [
       { role: "user", content: userPrompt }
     ];
@@ -529,25 +615,26 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     let iteration = 0;
     while (iteration < MAX_ITERATIONS) {
       iteration++;
-      log("LLMOrchestrator", `\u2501\u2501\u2501 Iteration ${iteration}/${MAX_ITERATIONS} \u2501\u2501\u2501`);
+      log("LLMOrchestrator", `\u2501\u2501\u2501 Iteration ${iteration} \u2501\u2501\u2501`);
       const llmResponse = await orchestrator.chat(messages, systemPrompt, anthropicTools);
       const toolCalls = orchestrator.extractToolCalls(llmResponse);
       if (toolCalls.length > 0) {
         const toolNames = toolCalls.map((t2) => t2.name).join(", ");
         log("LLMOrchestrator", `LLM calling: ${toolNames}`);
-        reportProgress(`Tool: ${toolCalls[0].name}`);
+        reportProgress(3, `Tool: ${toolCalls[0].name}`);
         messages.push({
           role: "assistant",
           content: llmResponse.content
         });
         const toolResults = [];
         for (const toolCall of toolCalls) {
-          const inputSummary = Object.keys(toolCall.input || {}).length > 0 ? ` with ${Object.keys(toolCall.input).join(", ")}` : "";
+          const toolInput = toolCall.input || {};
+          const inputSummary = Object.keys(toolInput).length > 0 ? ` with ${Object.keys(toolInput).join(", ")}` : "";
           log("MCPClient", `\u2192 ${toolCall.name}${inputSummary}`);
           try {
             const result = await mcpClient.callTool(toolCall.name, toolCall.input);
-            const resultLen = result.content.length;
-            log("MCPClient", `\u2713 ${toolCall.name} returned ${resultLen} chars`);
+            log("MCPClient", `\u2713 ${toolCall.name} output:
+${result.content}`);
             toolResults.push({
               type: "tool_result",
               tool_use_id: toolCall.id,
@@ -569,13 +656,19 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
       } else {
         const textOutput = orchestrator.extractText(llmResponse);
         const stopReason = llmResponse.stop_reason;
+        const looksLikeCode = textOutput.includes("function render");
         if (stopReason === "max_tokens") {
           log("LLMOrchestrator", `\u26A0\uFE0F Output truncated (max_tokens) - ${textOutput.length} chars`, "warning");
+        } else if (looksLikeCode) {
+          log("LLMOrchestrator", `LLM generated code: ${textOutput.length} chars`);
+          const preview = textOutput.substring(0, 100).replace(/\n/g, " ");
+          log("LLMOrchestrator", `Code preview: ${preview}...`);
         } else {
-          log("LLMOrchestrator", `LLM generated ${textOutput.length} chars`);
+          const firstLine = textOutput.split("\n")[0].substring(0, 100);
+          log("LLMOrchestrator", `LLM response: ${firstLine}${textOutput.length > 100 ? "..." : ""}`);
         }
-        if (textOutput.includes("function render")) {
-          reportProgress("Validating code...");
+        if (looksLikeCode) {
+          reportProgress(4, "Validating generated code...");
           const cleanedCode = cleanCodeLocally(textOutput);
           const validation = validateCodeLocally(cleanedCode, domainPascal);
           if (validation.valid) {
@@ -584,7 +677,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
             break;
           } else {
             log("LLMOrchestrator", `\u274C Validation failed: ${validation.errors.join("; ")}`, "warning");
-            reportProgress("Fixing code...");
+            reportProgress(4, "Fixing validation errors...");
             messages.push({
               role: "assistant",
               content: textOutput
@@ -598,20 +691,32 @@ Please fix these issues and provide the corrected code.`
             });
           }
         } else {
-          log("LLMOrchestrator", "LLM did not return code, prompting for generation...", "warning");
-          messages.push({
-            role: "assistant",
-            content: textOutput
-          });
-          messages.push({
-            role: "user",
-            content: "Now that you've analyzed the state structure, please generate the complete JavaScript renderer code. Start with 'function render" + domainPascal + "(ctx, state) {'"
-          });
+          if (iteration > 2) {
+            log("LLMOrchestrator", "Analysis complete, requesting code generation...");
+            messages.push({
+              role: "assistant",
+              content: textOutput
+            });
+            messages.push({
+              role: "user",
+              content: "Now generate the complete JavaScript renderer code. Start with 'function render" + domainPascal + "(ctx, state) {' and include all three functions."
+            });
+          } else {
+            log("LLMOrchestrator", "LLM analyzing, continuing investigation...");
+            messages.push({
+              role: "assistant",
+              content: textOutput
+            });
+            messages.push({
+              role: "user",
+              content: "Please continue with your analysis and then generate the renderer code."
+            });
+          }
         }
       }
     }
     if (finalCode) {
-      reportProgress("Final syntax validation...");
+      reportProgress(5, "Final syntax validation...");
       log("MCPClient", "Running MCP validate_renderer for syntax check");
       try {
         const validateResult = await mcpClient.callTool("validate_renderer", {
@@ -631,11 +736,11 @@ Please fix these issues and provide the corrected code.`
     }
     const totalTime = ((Date.now() - startTime) / 1e3).toFixed(1);
     if (!finalCode || !finalCode.includes("function render")) {
-      reportProgress("Generation failed");
+      reportProgress(6, "Generation failed");
       log("LLMOrchestrator", `\u274C Failed after ${iteration} iterations (${totalTime}s)`, "error");
       return { success: false, code: "", error: `Failed to generate valid renderer after ${iteration} iterations` };
     }
-    reportProgress("Generation complete!");
+    reportProgress(6, "Generation complete!");
     log("LLMOrchestrator", `\u2705 Complete! ${finalCode.length} chars in ${iteration} iterations (${totalTime}s)`, "success");
     return { success: true, code: finalCode };
   } catch (error) {
@@ -651,7 +756,7 @@ var defaultOrchestrator = new LLMOrchestrator();
 
 // generation-progress.ts
 var progressStore = /* @__PURE__ */ new Map();
-var INITIAL_STEPS_ESTIMATE = 10;
+var INITIAL_STEPS_ESTIMATE = 6;
 function createProgress(id, domainName) {
   const progress = {
     id,
@@ -787,15 +892,16 @@ function saveRendererToFile(code, domainName) {
 ${code}
 `;
     fs.writeFileSync(filepath, fileContent, "utf-8");
-    console.log("[LLM Renderer] Saved to file:", filepath);
-    return filepath;
+    console.log("[LLM Renderer] Saved:", filename);
+    return filename;
   } catch (error) {
     console.error("[LLM Renderer] Failed to save file:", error);
     return null;
   }
 }
 async function generateLLMRenderer(request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const provider = request.llm_provider || "anthropic";
+  if (provider === "anthropic" && !process.env.ANTHROPIC_API_KEY) {
     return {
       success: false,
       typescript_code: "",
@@ -813,7 +919,13 @@ async function generateLLMRenderer(request) {
   try {
     logDetail("LLM Renderer", `Starting MCP generation for domain: ${request.domain_name}`);
     logDetail("LLM Renderer", `Progress ID: ${progressId}`);
-    const orchestrator = new LLMOrchestrator();
+    logDetail("LLM Renderer", `Using LLM provider: ${provider}, model: ${request.llm_model || "default"}`);
+    const llmConfig = {
+      provider,
+      model: request.llm_model,
+      ollamaBaseUrl: request.ollama_base_url
+    };
+    const orchestrator = LLMOrchestrator.fromConfig(llmConfig);
     logDetail("MCPClient", "Setting up sampling request handler");
     mcpClient = await createMCPClient({
       enableSampling: true,
@@ -843,7 +955,7 @@ async function generateLLMRenderer(request) {
     if (result.success && result.code) {
       savedFile = saveRendererToFile(result.code, request.domain_name);
       if (savedFile) {
-        logDetail("LLM Renderer", `Saved to file: ${savedFile}`, "success");
+        logDetail("LLM Renderer", `\u{1F4BE} Saved: ${savedFile}`, "success");
       }
     }
     completeProgress(progressId, result.success, result.error);
@@ -989,6 +1101,44 @@ function getGenerationProgress(progressId) {
   }
   return getLatestProgress();
 }
+function listCachedRenderers(domainName) {
+  try {
+    ensureRenderersDir();
+    const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
+    const files = fs.readdirSync(LLM_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
+    return {
+      files,
+      error: null
+    };
+  } catch (error) {
+    console.error("[LLM Renderer Cache] Error listing cache:", error);
+    return {
+      files: [],
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+}
+function getCachedRendererByFilename(filename) {
+  try {
+    ensureRenderersDir();
+    const filepath = path2.join(LLM_RENDERERS_DIR, filename);
+    if (!fs.existsSync(filepath)) {
+      console.log("[LLM Renderer Cache] File not found:", filename);
+      return null;
+    }
+    const content = fs.readFileSync(filepath, "utf-8");
+    const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
+    const code = codeMatch ? codeMatch[1].trim() : content;
+    console.log("[LLM Renderer Cache] Loaded renderer:", filename);
+    return {
+      code,
+      filename
+    };
+  } catch (error) {
+    console.error("[LLM Renderer Cache] Error reading file:", error);
+    return null;
+  }
+}
 
 // direct-llm-renderer.ts
 import Anthropic2 from "@anthropic-ai/sdk";
@@ -997,28 +1147,28 @@ import fs2 from "fs";
 import { fileURLToPath as fileURLToPath3 } from "url";
 var __filename3 = fileURLToPath3(import.meta.url);
 var __dirname3 = path3.dirname(__filename3);
-function getLlmRenderersPath2() {
+function getDirectRenderersPath() {
   if (__dirname3.endsWith("/dist") || __dirname3.endsWith("\\dist")) {
-    return path3.join(__dirname3, "../llm_renderers");
+    return path3.join(__dirname3, "../llm_renderers_direct");
   }
-  return path3.join(__dirname3, "llm_renderers");
+  return path3.join(__dirname3, "llm_renderers_direct");
 }
-var LLM_RENDERERS_DIR2 = getLlmRenderersPath2();
-function ensureRenderersDir2() {
-  if (!fs2.existsSync(LLM_RENDERERS_DIR2)) {
-    fs2.mkdirSync(LLM_RENDERERS_DIR2, { recursive: true });
+var DIRECT_RENDERERS_DIR = getDirectRenderersPath();
+function ensureDirectRenderersDir() {
+  if (!fs2.existsSync(DIRECT_RENDERERS_DIR)) {
+    fs2.mkdirSync(DIRECT_RENDERERS_DIR, { recursive: true });
   }
 }
-function generateRendererFilename2(domainName) {
+function generateDirectRendererFilename(domainName) {
   const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").replace("T", "_").replace("Z", "");
   const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
-  return `${sanitizedDomain}_direct_${timestamp}.ts`;
+  return `${sanitizedDomain}_${timestamp}.ts`;
 }
-function saveRendererToFile2(code, domainName) {
+function saveDirectRendererToFile(code, domainName) {
   try {
-    ensureRenderersDir2();
-    const filename = generateRendererFilename2(domainName);
-    const filepath = path3.join(LLM_RENDERERS_DIR2, filename);
+    ensureDirectRenderersDir();
+    const filename = generateDirectRendererFilename(domainName);
+    const filepath = path3.join(DIRECT_RENDERERS_DIR, filename);
     const fileContent = `/**
  * Direct LLM-Generated Renderer for ${domainName}
  * Generated at: ${(/* @__PURE__ */ new Date()).toISOString()}
@@ -1032,8 +1182,8 @@ function saveRendererToFile2(code, domainName) {
 ${code}
 `;
     fs2.writeFileSync(filepath, fileContent, "utf-8");
-    console.log("[Direct LLM Renderer] Saved to file:", filepath);
-    return filepath;
+    console.log("[Direct LLM Renderer] Saved:", filename);
+    return filename;
   } catch (error) {
     console.error("[Direct LLM Renderer] Failed to save file:", error);
     return null;
@@ -1045,7 +1195,8 @@ When given state data, create JavaScript functions to visualize it on HTML5 Canv
 
 Output only JavaScript code, no explanations.`;
 async function generateDirectLLMRenderer(request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const provider = request.llm_provider || "anthropic";
+  if (provider === "anthropic" && !process.env.ANTHROPIC_API_KEY) {
     return {
       success: false,
       typescript_code: "",
@@ -1053,7 +1204,11 @@ async function generateDirectLLMRenderer(request) {
     };
   }
   console.log("[Direct LLM Renderer] Starting generation for domain:", request.domain_name);
+  console.log("[Direct LLM Renderer] Using provider:", provider, "model:", request.llm_model || "default");
   try {
+    if (provider === "ollama") {
+      return await generateWithOllama(request);
+    }
     const client = new Anthropic2({
       apiKey: process.env.ANTHROPIC_API_KEY
     });
@@ -1093,7 +1248,7 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
         error: "LLM did not generate valid function code"
       };
     }
-    const savedFile = saveRendererToFile2(code, request.domain_name);
+    const savedFile = saveDirectRendererToFile(code, request.domain_name);
     return {
       success: true,
       typescript_code: code,
@@ -1111,6 +1266,166 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
       typescript_code: "",
       error: errorMessage
     };
+  }
+}
+async function generateWithOllama(request) {
+  const baseUrl = request.ollama_base_url || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  const model = request.llm_model || "codellama:13b";
+  console.log("[Direct LLM Renderer] Using Ollama at:", baseUrl, "model:", model);
+  const exampleState = request.states[0] || {};
+  const domainPascal = request.domain_name.split(/[-_\s]+/).map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join("");
+  const userPrompt = `Generate JavaScript renderer functions for "${request.domain_name}" domain.
+
+Here is example state data:
+${JSON.stringify(exampleState, null, 2)}
+
+Create these functions:
+- render${domainPascal}(ctx, state) - main render function
+- render${domainPascal}Legend(ctx, x, y) - legend function
+
+Use canvas 2D context (ctx). Draw something based on the state data.`;
+  try {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: DIRECT_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt }
+        ],
+        stream: false,
+        options: {
+          num_predict: 4096,
+          temperature: 0.7
+        }
+      })
+    });
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    let code = data.message?.content || "";
+    console.log("[Direct LLM Renderer] Received Ollama response, length:", code.length);
+    code = code.replace(/^```(?:javascript|typescript|js|ts)?\s*\n?/gm, "");
+    code = code.replace(/\n?```\s*$/gm, "");
+    code = code.trim();
+    if (!code.includes("function")) {
+      return {
+        success: false,
+        typescript_code: "",
+        error: "Ollama did not generate valid function code"
+      };
+    }
+    const savedFile = saveDirectRendererToFile(code, request.domain_name);
+    return {
+      success: true,
+      typescript_code: code,
+      error: null,
+      saved_file: savedFile || void 0
+    };
+  } catch (error) {
+    console.error("[Direct LLM Renderer] Ollama error:", error);
+    let errorMessage = "Unknown error during Ollama generation";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    return {
+      success: false,
+      typescript_code: "",
+      error: `Ollama error: ${errorMessage}. Make sure Ollama is running at ${baseUrl}`
+    };
+  }
+}
+function getCachedDirectRenderer(domainName) {
+  try {
+    ensureDirectRenderersDir();
+    const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
+    const files = fs2.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
+    if (files.length === 0) {
+      console.log("[Direct LLM Renderer Cache] No cached renderer for domain:", domainName);
+      return null;
+    }
+    const latestFile = files[0];
+    const filepath = path3.join(DIRECT_RENDERERS_DIR, latestFile);
+    const content = fs2.readFileSync(filepath, "utf-8");
+    const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
+    const code = codeMatch ? codeMatch[1].trim() : content;
+    console.log("[Direct LLM Renderer Cache] Found cached renderer:", latestFile);
+    return {
+      code,
+      filename: latestFile
+    };
+  } catch (error) {
+    console.error("[Direct LLM Renderer Cache] Error reading cache:", error);
+    return null;
+  }
+}
+function clearDirectRendererCache(domainName) {
+  try {
+    ensureDirectRenderersDir();
+    let files = fs2.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f !== ".gitkeep");
+    if (domainName) {
+      const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
+      files = files.filter((f) => f.startsWith(sanitizedDomain + "_"));
+    }
+    let deletedCount = 0;
+    for (const file of files) {
+      const filepath = path3.join(DIRECT_RENDERERS_DIR, file);
+      fs2.unlinkSync(filepath);
+      deletedCount++;
+    }
+    console.log("[Direct LLM Renderer Cache] Cleared", deletedCount, "cached renderers");
+    return {
+      success: true,
+      deletedCount,
+      error: null
+    };
+  } catch (error) {
+    console.error("[Direct LLM Renderer Cache] Error clearing cache:", error);
+    return {
+      success: false,
+      deletedCount: 0,
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+}
+function listDirectCachedRenderers(domainName) {
+  try {
+    ensureDirectRenderersDir();
+    const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
+    const files = fs2.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
+    return {
+      files,
+      error: null
+    };
+  } catch (error) {
+    console.error("[Direct LLM Renderer Cache] Error listing cache:", error);
+    return {
+      files: [],
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+}
+function getDirectCachedRendererByFilename(filename) {
+  try {
+    ensureDirectRenderersDir();
+    const filepath = path3.join(DIRECT_RENDERERS_DIR, filename);
+    if (!fs2.existsSync(filepath)) {
+      console.log("[Direct LLM Renderer Cache] File not found:", filename);
+      return null;
+    }
+    const content = fs2.readFileSync(filepath, "utf-8");
+    const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
+    const code = codeMatch ? codeMatch[1].trim() : content;
+    console.log("[Direct LLM Renderer Cache] Loaded renderer:", filename);
+    return {
+      code,
+      filename
+    };
+  } catch (error) {
+    console.error("[Direct LLM Renderer Cache] Error reading file:", error);
+    return null;
   }
 }
 
@@ -1490,24 +1805,31 @@ var visualizerRouter = router({
       domainName: z2.string(),
       states: z2.array(z2.any()),
       styleHints: z2.string().optional(),
-      useMcp: z2.boolean().optional().default(true)
+      useMcp: z2.boolean().optional().default(true),
+      llmProvider: z2.enum(["anthropic", "ollama"]).optional().default("anthropic"),
+      llmModel: z2.string().optional(),
+      ollamaBaseUrl: z2.string().optional()
     })
   ).mutation(async ({ input }) => {
     console.log("[generateLLMRenderer] Starting for domain:", input.domainName);
     console.log("[generateLLMRenderer] Number of states:", input.states.length);
     console.log("[generateLLMRenderer] Using MCP:", input.useMcp);
+    console.log("[generateLLMRenderer] LLM Provider:", input.llmProvider, "Model:", input.llmModel || "default");
     if (input.useMcp) {
       const result = await generateLLMRenderer({
         domain_name: input.domainName,
         states: input.states,
-        style_hints: input.styleHints
+        style_hints: input.styleHints,
+        llm_provider: input.llmProvider,
+        llm_model: input.llmModel,
+        ollama_base_url: input.ollamaBaseUrl
       });
       console.log("[generateLLMRenderer] MCP Result success:", result.success);
       if (!result.success) {
         console.error("[generateLLMRenderer] Error:", result.error);
       }
       if (result.saved_file) {
-        console.log("[generateLLMRenderer] Saved to:", result.saved_file);
+        console.log("[generateLLMRenderer] Saved:", result.saved_file);
       }
       return {
         success: result.success,
@@ -1520,14 +1842,17 @@ var visualizerRouter = router({
       const result = await generateDirectLLMRenderer({
         domain_name: input.domainName,
         states: input.states,
-        style_hints: input.styleHints
+        style_hints: input.styleHints,
+        llm_provider: input.llmProvider,
+        llm_model: input.llmModel,
+        ollama_base_url: input.ollamaBaseUrl
       });
       console.log("[generateLLMRenderer] Direct Result success:", result.success);
       if (!result.success) {
         console.error("[generateLLMRenderer] Error:", result.error);
       }
       if (result.saved_file) {
-        console.log("[generateLLMRenderer] Saved to:", result.saved_file);
+        console.log("[generateLLMRenderer] Saved:", result.saved_file);
       }
       return {
         success: result.success,
@@ -1567,12 +1892,42 @@ var visualizerRouter = router({
     };
   }),
   /**
-   * Clear all cached renderers
+   * Clear all cached MCP renderers
    */
   clearRendererCache: publicProcedure.mutation(async () => {
-    console.log("[clearRendererCache] Clearing all cached renderers");
+    console.log("[clearRendererCache] Clearing all cached MCP renderers");
     const result = clearRendererCache();
     console.log("[clearRendererCache] Result:", result);
+    return result;
+  }),
+  /**
+   * Get cached direct (non-MCP) renderer for a domain
+   */
+  getCachedDirectRenderer: publicProcedure.input(z2.object({ domainName: z2.string() })).query(({ input }) => {
+    console.log("[getCachedDirectRenderer] Looking for cached direct renderer for:", input.domainName);
+    const cached = getCachedDirectRenderer(input.domainName);
+    if (cached) {
+      console.log("[getCachedDirectRenderer] Found cached direct renderer:", cached.filename);
+      return {
+        found: true,
+        code: cached.code,
+        filename: cached.filename
+      };
+    }
+    console.log("[getCachedDirectRenderer] No cached direct renderer found");
+    return {
+      found: false,
+      code: null,
+      filename: null
+    };
+  }),
+  /**
+   * Clear all cached direct (non-MCP) renderers
+   */
+  clearDirectRendererCache: publicProcedure.mutation(async () => {
+    console.log("[clearDirectRendererCache] Clearing all cached direct renderers");
+    const result = clearDirectRendererCache();
+    console.log("[clearDirectRendererCache] Result:", result);
     return result;
   }),
   /**
@@ -1603,6 +1958,96 @@ var visualizerRouter = router({
         endTime: progress.endTime,
         error: progress.error
       }
+    };
+  }),
+  /**
+   * List all cached MCP renderers for a domain
+   */
+  listCachedRenderers: publicProcedure.input(z2.object({ domainName: z2.string() })).query(({ input }) => {
+    console.log("[listCachedRenderers] Listing cached renderers for:", input.domainName);
+    const result = listCachedRenderers(input.domainName);
+    return result;
+  }),
+  /**
+   * List all cached direct renderers for a domain
+   */
+  listDirectCachedRenderers: publicProcedure.input(z2.object({ domainName: z2.string() })).query(({ input }) => {
+    console.log("[listDirectCachedRenderers] Listing cached direct renderers for:", input.domainName);
+    const result = listDirectCachedRenderers(input.domainName);
+    return result;
+  }),
+  /**
+   * Get a specific cached MCP renderer by filename
+   */
+  getCachedRendererByFilename: publicProcedure.input(z2.object({ filename: z2.string() })).query(({ input }) => {
+    console.log("[getCachedRendererByFilename] Getting renderer:", input.filename);
+    const result = getCachedRendererByFilename(input.filename);
+    if (result) {
+      return {
+        found: true,
+        code: result.code,
+        filename: result.filename
+      };
+    }
+    return {
+      found: false,
+      code: null,
+      filename: null
+    };
+  }),
+  /**
+   * Get a specific cached direct renderer by filename
+   */
+  getDirectCachedRendererByFilename: publicProcedure.input(z2.object({ filename: z2.string() })).query(({ input }) => {
+    console.log("[getDirectCachedRendererByFilename] Getting direct renderer:", input.filename);
+    const result = getDirectCachedRendererByFilename(input.filename);
+    if (result) {
+      return {
+        found: true,
+        code: result.code,
+        filename: result.filename
+      };
+    }
+    return {
+      found: false,
+      code: null,
+      filename: null
+    };
+  }),
+  /**
+   * Get available LLM providers and models
+   */
+  getAvailableLLMModels: publicProcedure.query(() => {
+    return {
+      providers: [
+        {
+          id: "anthropic",
+          name: "Anthropic (Claude)",
+          description: "Cloud-based, requires API key",
+          requiresApiKey: true,
+          models: [
+            { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Latest and most capable" },
+            { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", description: "Fast and efficient" },
+            { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku", description: "Fastest, good for simple tasks" }
+          ]
+        },
+        {
+          id: "ollama",
+          name: "Ollama (Local)",
+          description: "Free, runs locally, requires Ollama installed",
+          requiresApiKey: false,
+          models: [
+            { id: "codellama:13b", name: "CodeLlama 13B", description: "Good balance of speed and quality" },
+            { id: "codellama:34b", name: "CodeLlama 34B", description: "Best code quality, slower" },
+            { id: "llama3.1:8b", name: "Llama 3.1 8B", description: "Fast general purpose" },
+            { id: "llama3.1:70b", name: "Llama 3.1 70B", description: "Most capable open model" },
+            { id: "mistral:7b", name: "Mistral 7B", description: "Fast and efficient" },
+            { id: "mixtral:8x7b", name: "Mixtral 8x7B", description: "Great for code generation" },
+            { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B", description: "Specialized for coding" },
+            { id: "deepseek-coder:6.7b", name: "DeepSeek Coder 6.7B", description: "Excellent code model" }
+          ]
+        }
+      ]
     };
   })
 });

@@ -20,7 +20,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { createMCPClient, MCPClient } from "./mcp-client.js";
-import { generateRendererWithLLM, LLMOrchestrator, ProgressCallback, DetailedLogCallback } from "./llm-orchestrator.js";
+import { generateRendererWithLLM, LLMOrchestrator, ProgressCallback, DetailedLogCallback, LLMConfig } from "./llm-orchestrator.js";
 import {
   createProgress,
   updateProgress,
@@ -67,6 +67,9 @@ export interface LLMRendererRequest {
   domain_name: string;
   states: unknown[];
   style_hints?: string;
+  llm_provider?: 'anthropic' | 'ollama';
+  llm_model?: string;
+  ollama_base_url?: string;
 }
 
 export interface LLMRendererResponse {
@@ -135,8 +138,11 @@ ${code}
 export async function generateLLMRenderer(
   request: LLMRendererRequest
 ): Promise<LLMRendererResponse> {
-  // Check for API key
-  if (!process.env.ANTHROPIC_API_KEY) {
+  // Determine which provider to use
+  const provider = request.llm_provider || 'anthropic';
+  
+  // Check for API key only if using Anthropic
+  if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
     return {
       success: false,
       typescript_code: "",
@@ -162,9 +168,17 @@ export async function generateLLMRenderer(
   try {
     logDetail('LLM Renderer', `Starting MCP generation for domain: ${request.domain_name}`);
     logDetail('LLM Renderer', `Progress ID: ${progressId}`);
+    logDetail('LLM Renderer', `Using LLM provider: ${provider}, model: ${request.llm_model || 'default'}`);
+    
+    // Create LLM config based on request
+    const llmConfig: LLMConfig = {
+      provider: provider,
+      model: request.llm_model,
+      ollamaBaseUrl: request.ollama_base_url,
+    };
     
     // Create and connect MCP client with sampling support
-    const orchestrator = new LLMOrchestrator();
+    const orchestrator = LLMOrchestrator.fromConfig(llmConfig);
     logDetail('MCPClient', 'Setting up sampling request handler');
     mcpClient = await createMCPClient({
       enableSampling: true,

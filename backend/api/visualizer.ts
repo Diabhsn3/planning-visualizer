@@ -469,12 +469,16 @@ export const visualizerRouter = router({
         states: z.array(z.any()),
         styleHints: z.string().optional(),
         useMcp: z.boolean().optional().default(true),
+        llmProvider: z.enum(['anthropic', 'ollama']).optional().default('anthropic'),
+        llmModel: z.string().optional(),
+        ollamaBaseUrl: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
       console.log('[generateLLMRenderer] Starting for domain:', input.domainName);
       console.log('[generateLLMRenderer] Number of states:', input.states.length);
       console.log('[generateLLMRenderer] Using MCP:', input.useMcp);
+      console.log('[generateLLMRenderer] LLM Provider:', input.llmProvider, 'Model:', input.llmModel || 'default');
       
       if (input.useMcp) {
         // Use MCP-based generation with tools and validation
@@ -482,6 +486,9 @@ export const visualizerRouter = router({
           domain_name: input.domainName,
           states: input.states,
           style_hints: input.styleHints,
+          llm_provider: input.llmProvider,
+          llm_model: input.llmModel,
+          ollama_base_url: input.ollamaBaseUrl,
         });
         
         console.log('[generateLLMRenderer] MCP Result success:', result.success);
@@ -505,6 +512,9 @@ export const visualizerRouter = router({
           domain_name: input.domainName,
           states: input.states,
           style_hints: input.styleHints,
+          llm_provider: input.llmProvider,
+          llm_model: input.llmModel,
+          ollama_base_url: input.ollamaBaseUrl,
         });
         
         console.log('[generateLLMRenderer] Direct Result success:', result.success);
@@ -696,6 +706,44 @@ export const visualizerRouter = router({
         found: false,
         code: null,
         filename: null
+      };
+    }),
+
+  /**
+   * Get available LLM providers and models
+   */
+  getAvailableLLMModels: publicProcedure
+    .query(() => {
+      return {
+        providers: [
+          {
+            id: 'anthropic',
+            name: 'Anthropic (Claude)',
+            description: 'Cloud-based, requires API key',
+            requiresApiKey: true,
+            models: [
+              { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', description: 'Latest and most capable' },
+              { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet', description: 'Fast and efficient' },
+              { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku', description: 'Fastest, good for simple tasks' },
+            ]
+          },
+          {
+            id: 'ollama',
+            name: 'Ollama (Local)',
+            description: 'Free, runs locally, requires Ollama installed',
+            requiresApiKey: false,
+            models: [
+              { id: 'codellama:13b', name: 'CodeLlama 13B', description: 'Good balance of speed and quality' },
+              { id: 'codellama:34b', name: 'CodeLlama 34B', description: 'Best code quality, slower' },
+              { id: 'llama3.1:8b', name: 'Llama 3.1 8B', description: 'Fast general purpose' },
+              { id: 'llama3.1:70b', name: 'Llama 3.1 70B', description: 'Most capable open model' },
+              { id: 'mistral:7b', name: 'Mistral 7B', description: 'Fast and efficient' },
+              { id: 'mixtral:8x7b', name: 'Mixtral 8x7B', description: 'Great for code generation' },
+              { id: 'qwen2.5-coder:7b', name: 'Qwen 2.5 Coder 7B', description: 'Specialized for coding' },
+              { id: 'deepseek-coder:6.7b', name: 'DeepSeek Coder 6.7B', description: 'Excellent code model' },
+            ]
+          }
+        ]
       };
     }),
 });

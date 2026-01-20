@@ -52,6 +52,9 @@ export interface DirectLLMRendererRequest {
   domain_name: string;
   states: unknown[];
   style_hints?: string;
+  llm_provider?: 'anthropic' | 'ollama';
+  llm_model?: string;
+  ollama_base_url?: string;
 }
 
 export interface DirectLLMRendererResponse {
@@ -118,8 +121,11 @@ Output only JavaScript code, no explanations.`;
 export async function generateDirectLLMRenderer(
   request: DirectLLMRendererRequest
 ): Promise<DirectLLMRendererResponse> {
-  // Check for API key
-  if (!process.env.ANTHROPIC_API_KEY) {
+  // Determine which provider to use
+  const provider = request.llm_provider || 'anthropic';
+  
+  // Check for API key only if using Anthropic
+  if (provider === 'anthropic' && !process.env.ANTHROPIC_API_KEY) {
     return {
       success: false,
       typescript_code: "",
@@ -128,8 +134,15 @@ export async function generateDirectLLMRenderer(
   }
 
   console.log('[Direct LLM Renderer] Starting generation for domain:', request.domain_name);
+  console.log('[Direct LLM Renderer] Using provider:', provider, 'model:', request.llm_model || 'default');
 
   try {
+    // Use Ollama if specified
+    if (provider === 'ollama') {
+      return await generateWithOllama(request);
+    }
+    
+    // Default to Anthropic
     const client = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
@@ -211,6 +224,104 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
       success: false,
       typescript_code: "",
       error: errorMessage
+    };
+  }
+}
+
+/**
+ * Generate renderer using Ollama (local open-source models)
+ */
+async function generateWithOllama(
+  request: DirectLLMRendererRequest
+): Promise<DirectLLMRendererResponse> {
+  const baseUrl = request.ollama_base_url || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+  const model = request.llm_model || 'codellama:13b';
+  
+  console.log('[Direct LLM Renderer] Using Ollama at:', baseUrl, 'model:', model);
+  
+  // Get example state
+  const exampleState = request.states[0] || {};
+  
+  // Convert domain name to PascalCase
+  const domainPascal = request.domain_name
+    .split(/[-_\s]+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join('');
+
+  // USER PROMPT
+  const userPrompt = `Generate JavaScript renderer functions for "${request.domain_name}" domain.
+
+Here is example state data:
+${JSON.stringify(exampleState, null, 2)}
+
+Create these functions:
+- render${domainPascal}(ctx, state) - main render function
+- render${domainPascal}Legend(ctx, x, y) - legend function
+
+Use canvas 2D context (ctx). Draw something based on the state data.`;
+
+  try {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: DIRECT_SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt }
+        ],
+        stream: false,
+        options: {
+          num_predict: 4096,
+          temperature: 0.7,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    let code = data.message?.content || '';
+
+    console.log('[Direct LLM Renderer] Received Ollama response, length:', code.length);
+
+    // Basic cleanup - remove markdown code blocks if present
+    code = code.replace(/^```(?:javascript|typescript|js|ts)?\s*\n?/gm, '');
+    code = code.replace(/\n?```\s*$/gm, '');
+    code = code.trim();
+
+    // Check if we got something that looks like code
+    if (!code.includes('function')) {
+      return {
+        success: false,
+        typescript_code: '',
+        error: 'Ollama did not generate valid function code'
+      };
+    }
+
+    // Save to file
+    const savedFile = saveDirectRendererToFile(code, request.domain_name);
+
+    return {
+      success: true,
+      typescript_code: code,
+      error: null,
+      saved_file: savedFile || undefined
+    };
+  } catch (error) {
+    console.error('[Direct LLM Renderer] Ollama error:', error);
+    
+    let errorMessage = 'Unknown error during Ollama generation';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    return {
+      success: false,
+      typescript_code: '',
+      error: `Ollama error: ${errorMessage}. Make sure Ollama is running at ${baseUrl}`
     };
   }
 }
