@@ -392,9 +392,11 @@ export async function generateRendererWithLLM(
   exampleState: any,
   styleHints?: string,
   onProgress?: ProgressCallback,
-  onDetailedLog?: DetailedLogCallback
+  onDetailedLog?: DetailedLogCallback,
+  orchestrator?: LLMOrchestrator
 ): Promise<GenerationResult> {
-  const orchestrator = new LLMOrchestrator();
+  // Use provided orchestrator or create default
+  const llmOrchestrator = orchestrator || new LLMOrchestrator();
 
   // Helper for logging with timestamps
   const startTime = Date.now();
@@ -419,8 +421,8 @@ export async function generateRendererWithLLM(
   };
 
   log('LLMOrchestrator', `Starting INVESTIGATE-FIRST renderer generation for domain: ${domainName}`);
-  log('LLMOrchestrator', `Using provider: ${orchestrator.getProvider().getProviderName()}`);
-  log('LLMOrchestrator', `Using model: ${orchestrator.getProvider().getModelName()}`);
+  log('LLMOrchestrator', `Using provider: ${llmOrchestrator.getProvider().getProviderName()}`);
+  log('LLMOrchestrator', `Using model: ${llmOrchestrator.getProvider().getModelName()}`);
 
   try {
     // =========================================================================
@@ -507,10 +509,10 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
       log('LLMOrchestrator', `━━━ Iteration ${iteration} ━━━`);
       
       // Make LLM call with tools available
-      const llmResponse = await orchestrator.chat(messages, systemPrompt, anthropicTools);
+      const llmResponse = await llmOrchestrator.chat(messages, systemPrompt, anthropicTools);
       
       // Check if LLM wants to use tools
-      const toolCalls = orchestrator.extractToolCalls(llmResponse);
+      const toolCalls = llmOrchestrator.extractToolCalls(llmResponse);
       
       if (toolCalls.length > 0) {
         // LLM is investigating - execute tool calls
@@ -562,7 +564,7 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
         
       } else {
         // LLM returned text - check if it's the final code
-        const textOutput = orchestrator.extractText(llmResponse);
+        const textOutput = llmOrchestrator.extractText(llmResponse);
         const stopReason = llmResponse.stop_reason;
         
         // Check if this looks like code (contains function render)

@@ -211,7 +211,8 @@ export async function generateLLMRenderer(
       exampleState,
       request.style_hints,
       onProgress,
-      onDetailedLog
+      onDetailedLog,
+      orchestrator  // Pass the configured orchestrator
     );
     
     logDetail('LLM Renderer', `Generation complete, success: ${result.success}`, result.success ? 'success' : 'error');

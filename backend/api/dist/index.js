@@ -388,7 +388,7 @@ var OllamaProvider = class {
   getModelName() {
     return this.model;
   }
-  async chat(messages, systemPrompt, tools) {
+  async chat(messages, systemPrompt, _tools) {
     const ollamaMessages = [
       { role: "system", content: systemPrompt },
       ...messages.map((m) => ({
@@ -546,8 +546,8 @@ function mcpToolsToAnthropicFormat(mcpTools) {
     input_schema: tool.inputSchema || { type: "object", properties: {} }
   }));
 }
-async function generateRendererWithLLM(mcpClient, domainName, exampleState, styleHints, onProgress, onDetailedLog) {
-  const orchestrator = new LLMOrchestrator();
+async function generateRendererWithLLM(mcpClient, domainName, exampleState, styleHints, onProgress, onDetailedLog, orchestrator) {
+  const llmOrchestrator = orchestrator || new LLMOrchestrator();
   const startTime = Date.now();
   const TOTAL_STEPS = 6;
   const log = (source, message, level = "info") => {
@@ -566,8 +566,8 @@ async function generateRendererWithLLM(mcpClient, domainName, exampleState, styl
     }
   };
   log("LLMOrchestrator", `Starting INVESTIGATE-FIRST renderer generation for domain: ${domainName}`);
-  log("LLMOrchestrator", `Using provider: ${orchestrator.getProvider().getProviderName()}`);
-  log("LLMOrchestrator", `Using model: ${orchestrator.getProvider().getModelName()}`);
+  log("LLMOrchestrator", `Using provider: ${llmOrchestrator.getProvider().getProviderName()}`);
+  log("LLMOrchestrator", `Using model: ${llmOrchestrator.getProvider().getModelName()}`);
   try {
     reportProgress(1, "Fetching system prompt...");
     const promptResourceUri = `prompt://renderer/system/${DEFAULT_PROMPT_VERSION}`;
@@ -616,8 +616,8 @@ Generate complete, working JavaScript code. Do not truncate or abbreviate.`;
     while (iteration < MAX_ITERATIONS) {
       iteration++;
       log("LLMOrchestrator", `\u2501\u2501\u2501 Iteration ${iteration} \u2501\u2501\u2501`);
-      const llmResponse = await orchestrator.chat(messages, systemPrompt, anthropicTools);
-      const toolCalls = orchestrator.extractToolCalls(llmResponse);
+      const llmResponse = await llmOrchestrator.chat(messages, systemPrompt, anthropicTools);
+      const toolCalls = llmOrchestrator.extractToolCalls(llmResponse);
       if (toolCalls.length > 0) {
         const toolNames = toolCalls.map((t2) => t2.name).join(", ");
         log("LLMOrchestrator", `LLM calling: ${toolNames}`);
@@ -654,7 +654,7 @@ ${result.content}`);
           content: toolResults
         });
       } else {
-        const textOutput = orchestrator.extractText(llmResponse);
+        const textOutput = llmOrchestrator.extractText(llmResponse);
         const stopReason = llmResponse.stop_reason;
         const looksLikeCode = textOutput.includes("function render");
         if (stopReason === "max_tokens") {
@@ -948,7 +948,9 @@ async function generateLLMRenderer(request) {
       exampleState,
       request.style_hints,
       onProgress,
-      onDetailedLog
+      onDetailedLog,
+      orchestrator
+      // Pass the configured orchestrator
     );
     logDetail("LLM Renderer", `Generation complete, success: ${result.success}`, result.success ? "success" : "error");
     let savedFile = null;
