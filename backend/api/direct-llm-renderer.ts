@@ -52,9 +52,8 @@ export interface DirectLLMRendererRequest {
   domain_name: string;
   states: unknown[];
   style_hints?: string;
-  llm_provider?: 'anthropic' | 'ollama';
+  llm_provider?: 'anthropic' | 'huggingface';
   llm_model?: string;
-  ollama_base_url?: string;
 }
 
 export interface DirectLLMRendererResponse {
@@ -137,9 +136,9 @@ export async function generateDirectLLMRenderer(
   console.log('[Direct LLM Renderer] Using provider:', provider, 'model:', request.llm_model || 'default');
 
   try {
-    // Use Ollama if specified
-    if (provider === 'ollama') {
-      return await generateWithOllama(request);
+    // Use HuggingFace if specified
+    if (provider === 'huggingface') {
+      return await generateWithHuggingFace(request);
     }
     
     // Default to Anthropic
@@ -229,15 +228,24 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
 }
 
 /**
- * Generate renderer using Ollama (local open-source models)
+ * Generate renderer using HuggingFace Inference API (open-source models)
  */
-async function generateWithOllama(
+async function generateWithHuggingFace(
   request: DirectLLMRendererRequest
 ): Promise<DirectLLMRendererResponse> {
-  const baseUrl = request.ollama_base_url || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-  const model = request.llm_model || 'codellama:13b';
+  const apiKey = process.env.HF_API_KEY;
+  const model = request.llm_model || 'codellama/CodeLlama-13b-Instruct-hf';
+  const baseUrl = 'https://api-inference.huggingface.co/models';
   
-  console.log('[Direct LLM Renderer] Using Ollama at:', baseUrl, 'model:', model);
+  if (!apiKey) {
+    return {
+      success: false,
+      typescript_code: '',
+      error: 'HuggingFace API key not configured. Set HF_API_KEY environment variable.'
+    };
+  }
+  
+  console.log('[Direct LLM Renderer] Using HuggingFace model:', model);
   
   // Get example state
   const exampleState = request.states[0] || {};
@@ -248,8 +256,11 @@ async function generateWithOllama(
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('');
 
-  // USER PROMPT
-  const userPrompt = `Generate JavaScript renderer functions for "${request.domain_name}" domain.
+  // Format prompt based on model type
+  const modelLower = model.toLowerCase();
+  let prompt: string;
+  
+  const userContent = `Generate JavaScript renderer functions for "${request.domain_name}" domain.
 
 Here is example state data:
 ${JSON.stringify(exampleState, null, 2)}
@@ -260,32 +271,71 @@ Create these functions:
 
 Use canvas 2D context (ctx). Draw something based on the state data.`;
 
+  if (modelLower.includes('codellama') || modelLower.includes('llama')) {
+    // Llama/CodeLlama Instruct format
+    prompt = `<s>[INST] <<SYS>>\n${DIRECT_SYSTEM_PROMPT}\n<</SYS>>\n\n${userContent} [/INST] `;
+  } else if (modelLower.includes('mistral') || modelLower.includes('mixtral')) {
+    // Mistral Instruct format
+    prompt = `<s>[INST] ${DIRECT_SYSTEM_PROMPT}\n\n${userContent} [/INST]`;
+  } else if (modelLower.includes('starcoder') || modelLower.includes('bigcode')) {
+    // StarCoder format
+    prompt = `### System:\n${DIRECT_SYSTEM_PROMPT}\n\n### User:\n${userContent}\n\n### Assistant:\n`;
+  } else {
+    // Generic format
+    prompt = `System: ${DIRECT_SYSTEM_PROMPT}\n\nUser: ${userContent}\n\nAssistant: `;
+  }
+
   try {
-    const response = await fetch(`${baseUrl}/api/chat`, {
+    // Extended timeout for large models (5 minutes)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
+    
+    const response = await fetch(`${baseUrl}/${model}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: DIRECT_SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt }
-        ],
-        stream: false,
-        options: {
-          num_predict: 4096,
+        inputs: prompt,
+        parameters: {
+          max_new_tokens: 4096,
           temperature: 0.7,
+          return_full_text: false,
+          do_sample: true,
         },
       }),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('[Direct LLM Renderer] HuggingFace API error:', response.status, errorText);
+      
+      if (response.status === 503) {
+        throw new Error(`Model is loading. Please try again in a few seconds. (${errorText})`);
+      }
+      if (response.status === 429) {
+        throw new Error(`Rate limit exceeded. Please wait and try again. (${errorText})`);
+      }
+      throw new Error(`HuggingFace API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    let code = data.message?.content || '';
+    
+    // Handle different response formats
+    let code = '';
+    if (Array.isArray(data)) {
+      code = data[0]?.generated_text || '';
+    } else if (data.generated_text) {
+      code = data.generated_text;
+    } else if (typeof data === 'string') {
+      code = data;
+    }
 
-    console.log('[Direct LLM Renderer] Received Ollama response, length:', code.length);
+    console.log('[Direct LLM Renderer] Received HuggingFace response, length:', code.length);
 
     // Basic cleanup - remove markdown code blocks if present
     code = code.replace(/^```(?:javascript|typescript|js|ts)?\s*\n?/gm, '');
@@ -297,7 +347,7 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
       return {
         success: false,
         typescript_code: '',
-        error: 'Ollama did not generate valid function code'
+        error: 'HuggingFace did not generate valid function code'
       };
     }
 
@@ -311,17 +361,21 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
       saved_file: savedFile || undefined
     };
   } catch (error) {
-    console.error('[Direct LLM Renderer] Ollama error:', error);
+    console.error('[Direct LLM Renderer] HuggingFace error:', error);
     
-    let errorMessage = 'Unknown error during Ollama generation';
+    let errorMessage = 'Unknown error during HuggingFace generation';
     if (error instanceof Error) {
-      errorMessage = error.message;
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timed out. The model may be loading or overloaded.';
+      } else {
+        errorMessage = error.message;
+      }
     }
 
     return {
       success: false,
       typescript_code: '',
-      error: `Ollama error: ${errorMessage}. Make sure Ollama is running at ${baseUrl}`
+      error: `HuggingFace error: ${errorMessage}`
     };
   }
 }

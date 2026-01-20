@@ -469,9 +469,8 @@ export const visualizerRouter = router({
         states: z.array(z.any()),
         styleHints: z.string().optional(),
         useMcp: z.boolean().optional().default(true),
-        llmProvider: z.enum(['anthropic', 'ollama']).optional().default('anthropic'),
+        llmProvider: z.enum(['anthropic', 'huggingface']).optional().default('anthropic'),
         llmModel: z.string().optional(),
-        ollamaBaseUrl: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -488,7 +487,6 @@ export const visualizerRouter = router({
           style_hints: input.styleHints,
           llm_provider: input.llmProvider,
           llm_model: input.llmModel,
-          ollama_base_url: input.ollamaBaseUrl,
         });
         
         console.log('[generateLLMRenderer] MCP Result success:', result.success);
@@ -514,7 +512,6 @@ export const visualizerRouter = router({
           style_hints: input.styleHints,
           llm_provider: input.llmProvider,
           llm_model: input.llmModel,
-          ollama_base_url: input.ollamaBaseUrl,
         });
         
         console.log('[generateLLMRenderer] Direct Result success:', result.success);
@@ -728,19 +725,17 @@ export const visualizerRouter = router({
             ]
           },
           {
-            id: 'ollama',
-            name: 'Ollama (Local)',
-            description: 'Free, runs locally, requires Ollama installed',
-            requiresApiKey: false,
+            id: 'huggingface',
+            name: 'HuggingFace',
+            description: 'Open source models via HuggingFace Inference API',
+            requiresApiKey: true,
             models: [
-              { id: 'codellama:13b', name: 'CodeLlama 13B', description: 'Good balance of speed and quality' },
-              { id: 'codellama:34b', name: 'CodeLlama 34B', description: 'Best code quality, slower' },
-              { id: 'llama3.1:8b', name: 'Llama 3.1 8B', description: 'Fast general purpose' },
-              { id: 'llama3.1:70b', name: 'Llama 3.1 70B', description: 'Most capable open model' },
-              { id: 'mistral:7b', name: 'Mistral 7B', description: 'Fast and efficient' },
-              { id: 'mixtral:8x7b', name: 'Mixtral 8x7B', description: 'Great for code generation' },
-              { id: 'qwen2.5-coder:7b', name: 'Qwen 2.5 Coder 7B', description: 'Specialized for coding' },
-              { id: 'deepseek-coder:6.7b', name: 'DeepSeek Coder 6.7B', description: 'Excellent code model' },
+              { id: 'codellama/CodeLlama-13b-Instruct-hf', name: 'CodeLlama 13B', description: 'Good for code generation' },
+              { id: 'codellama/CodeLlama-34b-Instruct-hf', name: 'CodeLlama 34B', description: 'Best code quality' },
+              { id: 'bigcode/starcoder2-15b', name: 'StarCoder2 15B', description: 'Excellent for code' },
+              { id: 'mistralai/Mistral-7B-Instruct-v0.2', name: 'Mistral 7B', description: 'Fast and efficient' },
+              { id: 'mistralai/Mixtral-8x7B-Instruct-v0.1', name: 'Mixtral 8x7B', description: 'Great quality' },
+              { id: 'Qwen/Qwen2.5-Coder-7B-Instruct', name: 'Qwen 2.5 Coder 7B', description: 'Specialized for coding' },
             ]
           }
         ]

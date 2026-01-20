@@ -104,20 +104,22 @@ class AnthropicProvider implements LLMProvider {
 }
 
 // ============================================================================
-// Ollama Provider (for local open-source models)
+// HuggingFace Inference API Provider (for open-source models)
 // ============================================================================
 
-class OllamaProvider implements LLMProvider {
-  private baseUrl: string;
+class HuggingFaceProvider implements LLMProvider {
+  private apiKey: string;
   private model: string;
+  private baseUrl: string;
 
-  constructor(model: string = "codellama:13b", baseUrl: string = "http://localhost:11434") {
-    this.baseUrl = process.env.OLLAMA_BASE_URL || baseUrl;
+  constructor(model: string = "codellama/CodeLlama-13b-Instruct-hf") {
+    this.apiKey = process.env.HF_API_KEY || "";
     this.model = model;
+    this.baseUrl = "https://api-inference.huggingface.co/models";
   }
 
   getProviderName(): string {
-    return "ollama";
+    return "huggingface";
   }
 
   getModelName(): string {
@@ -127,32 +129,35 @@ class OllamaProvider implements LLMProvider {
   async chat(
     messages: Message[],
     systemPrompt: string,
-    _tools?: any[]  // Ollama doesn't support tools yet
+    _tools?: any[]  // HF Inference API doesn't support tools
   ): Promise<any> {
-    // Build messages array with system prompt
-    const ollamaMessages = [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({
-        role: m.role,
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-      })),
-    ];
+    if (!this.apiKey) {
+      throw new Error("HuggingFace API key not configured. Set HF_API_KEY environment variable.");
+    }
+
+    // Format prompt based on model type
+    const prompt = this.formatPrompt(messages, systemPrompt);
 
     try {
-      // Extended timeout for large models (10 minutes)
+      // Extended timeout for large models (5 minutes)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutes
+      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000);
 
-      const response = await fetch(`${this.baseUrl}/api/chat`, {
+      console.log(`[HuggingFaceProvider] Calling model: ${this.model}`);
+
+      const response = await fetch(`${this.baseUrl}/${this.model}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          model: this.model,
-          messages: ollamaMessages,
-          stream: false,
-          options: {
-            num_predict: 16000,
+          inputs: prompt,
+          parameters: {
+            max_new_tokens: 8000,
             temperature: 0.7,
+            return_full_text: false,
+            do_sample: true,
           },
         }),
         signal: controller.signal,
@@ -161,19 +166,103 @@ class OllamaProvider implements LLMProvider {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`[HuggingFaceProvider] API error: ${response.status}`, errorText);
+        
+        // Handle specific HF errors
+        if (response.status === 503) {
+          throw new Error(`Model is loading. Please try again in a few seconds. (${errorText})`);
+        }
+        if (response.status === 429) {
+          throw new Error(`Rate limit exceeded. Please wait and try again. (${errorText})`);
+        }
+        throw new Error(`HuggingFace API error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log(`[HuggingFaceProvider] Response received`);
+
+      // Handle different response formats
+      let generatedText = "";
+      if (Array.isArray(data)) {
+        generatedText = data[0]?.generated_text || "";
+      } else if (data.generated_text) {
+        generatedText = data.generated_text;
+      } else if (typeof data === "string") {
+        generatedText = data;
+      }
 
       // Convert to Anthropic-like format for compatibility
       return {
-        content: [{ type: "text", text: data.message?.content || "" }],
-        stop_reason: data.done ? "end_turn" : "max_tokens",
+        content: [{ type: "text", text: generatedText }],
+        stop_reason: "end_turn",
       };
     } catch (error) {
-      console.error("[OllamaProvider] Error:", error);
+      console.error("[HuggingFaceProvider] Error:", error);
       throw error;
+    }
+  }
+
+  private formatPrompt(messages: Message[], systemPrompt: string): string {
+    // Different models need different prompt formats
+    const modelLower = this.model.toLowerCase();
+
+    if (modelLower.includes("codellama") || modelLower.includes("llama")) {
+      // Llama/CodeLlama Instruct format
+      let prompt = `<s>[INST] <<SYS>>\n${systemPrompt}\n<</SYS>>\n\n`;
+      
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        
+        if (msg.role === "user") {
+          prompt += `${content} [/INST] `;
+        } else if (msg.role === "assistant") {
+          prompt += `${content} </s><s>[INST] `;
+        }
+      }
+      
+      return prompt;
+    } else if (modelLower.includes("mistral") || modelLower.includes("mixtral")) {
+      // Mistral Instruct format
+      let prompt = `<s>[INST] ${systemPrompt}\n\n`;
+      
+      for (const msg of messages) {
+        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        if (msg.role === "user") {
+          prompt += `${content} [/INST]`;
+        } else {
+          prompt += ` ${content}</s> [INST] `;
+        }
+      }
+      
+      return prompt;
+    } else if (modelLower.includes("starcoder") || modelLower.includes("bigcode")) {
+      // StarCoder format (simpler)
+      let prompt = `### System:\n${systemPrompt}\n\n`;
+      
+      for (const msg of messages) {
+        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        if (msg.role === "user") {
+          prompt += `### User:\n${content}\n\n### Assistant:\n`;
+        } else {
+          prompt += `${content}\n\n`;
+        }
+      }
+      
+      return prompt;
+    } else {
+      // Generic chat format
+      let prompt = `System: ${systemPrompt}\n\n`;
+      
+      for (const msg of messages) {
+        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+        const role = msg.role === "user" ? "User" : "Assistant";
+        prompt += `${role}: ${content}\n\n`;
+      }
+      
+      prompt += "Assistant: ";
+      return prompt;
     }
   }
 }
@@ -182,20 +271,18 @@ class OllamaProvider implements LLMProvider {
 // Provider Factory
 // ============================================================================
 
-export type LLMProviderType = "anthropic" | "ollama";
+export type LLMProviderType = "anthropic" | "huggingface";
 
 export interface LLMConfig {
   provider: LLMProviderType;
   model?: string;
-  ollamaBaseUrl?: string;
 }
 
 export function createLLMProvider(config: LLMConfig): LLMProvider {
   switch (config.provider) {
-    case "ollama":
-      return new OllamaProvider(
-        config.model || "codellama:13b",
-        config.ollamaBaseUrl || "http://localhost:11434"
+    case "huggingface":
+      return new HuggingFaceProvider(
+        config.model || "codellama/CodeLlama-13b-Instruct-hf"
       );
     case "anthropic":
     default:
@@ -210,14 +297,13 @@ export const AVAILABLE_MODELS = {
     { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", description: "Fast and efficient" },
     { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku", description: "Fastest, good for simple tasks" },
   ],
-  ollama: [
-    { id: "codellama:13b", name: "CodeLlama 13B", description: "Good balance of speed and quality" },
-    { id: "codellama:34b", name: "CodeLlama 34B", description: "Best code quality, slower" },
-    { id: "llama3.1:8b", name: "Llama 3.1 8B", description: "Fast general purpose" },
-    { id: "llama3.1:70b", name: "Llama 3.1 70B", description: "Most capable open model" },
-    { id: "mistral:7b", name: "Mistral 7B", description: "Fast and efficient" },
-    { id: "mixtral:8x7b", name: "Mixtral 8x7B", description: "Great for code generation" },
-    { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B", description: "Specialized for coding" },
+  huggingface: [
+    { id: "codellama/CodeLlama-13b-Instruct-hf", name: "CodeLlama 13B", description: "Good for code generation" },
+    { id: "codellama/CodeLlama-34b-Instruct-hf", name: "CodeLlama 34B", description: "Best code quality" },
+    { id: "bigcode/starcoder2-15b", name: "StarCoder2 15B", description: "Excellent for code" },
+    { id: "mistralai/Mistral-7B-Instruct-v0.2", name: "Mistral 7B", description: "Fast and efficient" },
+    { id: "mistralai/Mixtral-8x7B-Instruct-v0.1", name: "Mixtral 8x7B", description: "Great quality" },
+    { id: "Qwen/Qwen2.5-Coder-7B-Instruct", name: "Qwen 2.5 Coder 7B", description: "Specialized for coding" },
     { id: "deepseek-coder:6.7b", name: "DeepSeek Coder 6.7B", description: "Excellent code model" },
   ],
 };

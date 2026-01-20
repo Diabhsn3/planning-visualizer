@@ -88,14 +88,14 @@ var systemRouter = router({
 // visualizer.ts
 import { z as z2 } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
-import path4 from "path";
+import path5 from "path";
 import { fileURLToPath as fileURLToPath4 } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
 
 // llm-renderer.ts
-import path2 from "path";
-import fs from "fs";
+import path3 from "path";
+import fs2 from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
 
 // mcp-client.ts
@@ -375,65 +375,150 @@ var AnthropicProvider = class {
     return await this.client.messages.create(params);
   }
 };
-var OllamaProvider = class {
-  baseUrl;
+var HuggingFaceProvider = class {
+  apiKey;
   model;
-  constructor(model = "codellama:13b", baseUrl = "http://localhost:11434") {
-    this.baseUrl = process.env.OLLAMA_BASE_URL || baseUrl;
+  baseUrl;
+  constructor(model = "codellama/CodeLlama-13b-Instruct-hf") {
+    this.apiKey = process.env.HF_API_KEY || "";
     this.model = model;
+    this.baseUrl = "https://api-inference.huggingface.co/models";
   }
   getProviderName() {
-    return "ollama";
+    return "huggingface";
   }
   getModelName() {
     return this.model;
   }
   async chat(messages, systemPrompt, _tools) {
-    const ollamaMessages = [
-      { role: "system", content: systemPrompt },
-      ...messages.map((m) => ({
-        role: m.role,
-        content: typeof m.content === "string" ? m.content : JSON.stringify(m.content)
-      }))
-    ];
+    if (!this.apiKey) {
+      throw new Error("HuggingFace API key not configured. Set HF_API_KEY environment variable.");
+    }
+    const prompt = this.formatPrompt(messages, systemPrompt);
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1e3);
-      const response = await fetch(`${this.baseUrl}/api/chat`, {
+      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1e3);
+      console.log(`[HuggingFaceProvider] Calling model: ${this.model}`);
+      const response = await fetch(`${this.baseUrl}/${this.model}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({
-          model: this.model,
-          messages: ollamaMessages,
-          stream: false,
-          options: {
-            num_predict: 16e3,
-            temperature: 0.7
+          inputs: prompt,
+          parameters: {
+            max_new_tokens: 8e3,
+            temperature: 0.7,
+            return_full_text: false,
+            do_sample: true
           }
         }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
       if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`[HuggingFaceProvider] API error: ${response.status}`, errorText);
+        if (response.status === 503) {
+          throw new Error(`Model is loading. Please try again in a few seconds. (${errorText})`);
+        }
+        if (response.status === 429) {
+          throw new Error(`Rate limit exceeded. Please wait and try again. (${errorText})`);
+        }
+        throw new Error(`HuggingFace API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      console.log(`[HuggingFaceProvider] Response received`);
+      let generatedText = "";
+      if (Array.isArray(data)) {
+        generatedText = data[0]?.generated_text || "";
+      } else if (data.generated_text) {
+        generatedText = data.generated_text;
+      } else if (typeof data === "string") {
+        generatedText = data;
+      }
       return {
-        content: [{ type: "text", text: data.message?.content || "" }],
-        stop_reason: data.done ? "end_turn" : "max_tokens"
+        content: [{ type: "text", text: generatedText }],
+        stop_reason: "end_turn"
       };
     } catch (error) {
-      console.error("[OllamaProvider] Error:", error);
+      console.error("[HuggingFaceProvider] Error:", error);
       throw error;
+    }
+  }
+  formatPrompt(messages, systemPrompt) {
+    const modelLower = this.model.toLowerCase();
+    if (modelLower.includes("codellama") || modelLower.includes("llama")) {
+      let prompt = `<s>[INST] <<SYS>>
+${systemPrompt}
+<</SYS>>
+
+`;
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+        if (msg.role === "user") {
+          prompt += `${content} [/INST] `;
+        } else if (msg.role === "assistant") {
+          prompt += `${content} </s><s>[INST] `;
+        }
+      }
+      return prompt;
+    } else if (modelLower.includes("mistral") || modelLower.includes("mixtral")) {
+      let prompt = `<s>[INST] ${systemPrompt}
+
+`;
+      for (const msg of messages) {
+        const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+        if (msg.role === "user") {
+          prompt += `${content} [/INST]`;
+        } else {
+          prompt += ` ${content}</s> [INST] `;
+        }
+      }
+      return prompt;
+    } else if (modelLower.includes("starcoder") || modelLower.includes("bigcode")) {
+      let prompt = `### System:
+${systemPrompt}
+
+`;
+      for (const msg of messages) {
+        const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+        if (msg.role === "user") {
+          prompt += `### User:
+${content}
+
+### Assistant:
+`;
+        } else {
+          prompt += `${content}
+
+`;
+        }
+      }
+      return prompt;
+    } else {
+      let prompt = `System: ${systemPrompt}
+
+`;
+      for (const msg of messages) {
+        const content = typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content);
+        const role = msg.role === "user" ? "User" : "Assistant";
+        prompt += `${role}: ${content}
+
+`;
+      }
+      prompt += "Assistant: ";
+      return prompt;
     }
   }
 };
 function createLLMProvider(config) {
   switch (config.provider) {
-    case "ollama":
-      return new OllamaProvider(
-        config.model || "codellama:13b",
-        config.ollamaBaseUrl || "http://localhost:11434"
+    case "huggingface":
+      return new HuggingFaceProvider(
+        config.model || "codellama/CodeLlama-13b-Instruct-hf"
       );
     case "anthropic":
     default:
@@ -853,19 +938,161 @@ function generateProgressId() {
   return `gen_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
+// training-data-collector.ts
+import * as fs from "fs";
+import * as path2 from "path";
+var TrainingDataCollector = class {
+  dataDir;
+  dataFile;
+  statsFile;
+  constructor(dataDir) {
+    this.dataDir = dataDir || path2.join(process.cwd(), "..", "..", "training_data");
+    this.dataFile = path2.join(this.dataDir, "successful_renderers.jsonl");
+    this.statsFile = path2.join(this.dataDir, "stats.json");
+    this.ensureDataDir();
+  }
+  ensureDataDir() {
+    if (!fs.existsSync(this.dataDir)) {
+      fs.mkdirSync(this.dataDir, { recursive: true });
+      console.log(`[TrainingDataCollector] Created data directory: ${this.dataDir}`);
+    }
+  }
+  /**
+   * Save a successful renderer generation as a training example
+   */
+  async saveSuccessfulGeneration(params) {
+    const id = this.generateId();
+    const example = {
+      id,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      domain: params.domain,
+      provider: params.provider,
+      model: params.model,
+      input: {
+        domainName: params.domain,
+        states: params.states,
+        stateCount: params.states.length
+      },
+      output: {
+        rendererCode: params.rendererCode,
+        functionName: params.functionName
+      },
+      metadata: {
+        usedMcp: params.usedMcp,
+        generationTimeMs: params.generationTimeMs,
+        codeLength: params.rendererCode.length,
+        validated: true
+      }
+    };
+    const line = JSON.stringify(example) + "\n";
+    fs.appendFileSync(this.dataFile, line, "utf-8");
+    await this.updateStats(example);
+    console.log(`[TrainingDataCollector] Saved training example: ${id} (domain: ${params.domain})`);
+    return id;
+  }
+  /**
+   * Update statistics file
+   */
+  async updateStats(example) {
+    let stats;
+    if (fs.existsSync(this.statsFile)) {
+      stats = JSON.parse(fs.readFileSync(this.statsFile, "utf-8"));
+    } else {
+      stats = {
+        totalExamples: 0,
+        byDomain: {},
+        byProvider: {},
+        lastUpdated: ""
+      };
+    }
+    stats.totalExamples++;
+    stats.byDomain[example.domain] = (stats.byDomain[example.domain] || 0) + 1;
+    stats.byProvider[example.provider] = (stats.byProvider[example.provider] || 0) + 1;
+    stats.lastUpdated = (/* @__PURE__ */ new Date()).toISOString();
+    fs.writeFileSync(this.statsFile, JSON.stringify(stats, null, 2), "utf-8");
+  }
+  /**
+   * Get current statistics
+   */
+  getStats() {
+    if (!fs.existsSync(this.statsFile)) {
+      return null;
+    }
+    return JSON.parse(fs.readFileSync(this.statsFile, "utf-8"));
+  }
+  /**
+   * Get all training examples
+   */
+  getAllExamples() {
+    if (!fs.existsSync(this.dataFile)) {
+      return [];
+    }
+    const content = fs.readFileSync(this.dataFile, "utf-8");
+    const lines = content.trim().split("\n").filter((line) => line.length > 0);
+    return lines.map((line) => JSON.parse(line));
+  }
+  /**
+   * Get examples for a specific domain
+   */
+  getExamplesByDomain(domain) {
+    return this.getAllExamples().filter((ex) => ex.domain === domain);
+  }
+  /**
+   * Export data in format suitable for fine-tuning
+   */
+  exportForFineTuning(outputPath) {
+    const examples = this.getAllExamples();
+    const exportPath = outputPath || path2.join(this.dataDir, "finetune_dataset.jsonl");
+    const fineTuneData = examples.map((ex) => ({
+      // Format for instruction fine-tuning
+      instruction: `Generate a JavaScript canvas renderer function for the "${ex.domain}" planning domain. The function should visualize the following states:
+
+${JSON.stringify(ex.input.states.slice(0, 2), null, 2)}${ex.input.states.length > 2 ? "\n... and more states" : ""}`,
+      input: `Domain: ${ex.domain}
+Number of states: ${ex.input.stateCount}`,
+      output: ex.output.rendererCode
+    }));
+    const content = fineTuneData.map((d) => JSON.stringify(d)).join("\n");
+    fs.writeFileSync(exportPath, content, "utf-8");
+    console.log(`[TrainingDataCollector] Exported ${examples.length} examples to: ${exportPath}`);
+    return exportPath;
+  }
+  /**
+   * Generate unique ID for training example
+   */
+  generateId() {
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2, 8);
+    return `train_${timestamp}_${random}`;
+  }
+  /**
+   * Get the path to the data directory
+   */
+  getDataDir() {
+    return this.dataDir;
+  }
+};
+var collectorInstance = null;
+function getTrainingDataCollector() {
+  if (!collectorInstance) {
+    collectorInstance = new TrainingDataCollector();
+  }
+  return collectorInstance;
+}
+
 // llm-renderer.ts
 var __filename2 = fileURLToPath2(import.meta.url);
-var __dirname2 = path2.dirname(__filename2);
+var __dirname2 = path3.dirname(__filename2);
 function getLlmRenderersPath() {
   if (__dirname2.endsWith("/dist") || __dirname2.endsWith("\\dist")) {
-    return path2.join(__dirname2, "../llm_renderers");
+    return path3.join(__dirname2, "../llm_renderers");
   }
-  return path2.join(__dirname2, "llm_renderers");
+  return path3.join(__dirname2, "llm_renderers");
 }
 var LLM_RENDERERS_DIR = getLlmRenderersPath();
 function ensureRenderersDir() {
-  if (!fs.existsSync(LLM_RENDERERS_DIR)) {
-    fs.mkdirSync(LLM_RENDERERS_DIR, { recursive: true });
+  if (!fs2.existsSync(LLM_RENDERERS_DIR)) {
+    fs2.mkdirSync(LLM_RENDERERS_DIR, { recursive: true });
   }
 }
 function generateRendererFilename(domainName) {
@@ -877,7 +1104,7 @@ function saveRendererToFile(code, domainName) {
   try {
     ensureRenderersDir();
     const filename = generateRendererFilename(domainName);
-    const filepath = path2.join(LLM_RENDERERS_DIR, filename);
+    const filepath = path3.join(LLM_RENDERERS_DIR, filename);
     const fileContent = `/**
  * LLM-Generated Renderer for ${domainName}
  * Generated at: ${(/* @__PURE__ */ new Date()).toISOString()}
@@ -895,7 +1122,7 @@ function saveRendererToFile(code, domainName) {
 
 ${code}
 `;
-    fs.writeFileSync(filepath, fileContent, "utf-8");
+    fs2.writeFileSync(filepath, fileContent, "utf-8");
     console.log("[LLM Renderer] Saved:", filename);
     return filename;
   } catch (error) {
@@ -926,9 +1153,9 @@ async function generateLLMRenderer(request) {
     logDetail("LLM Renderer", `Using LLM provider: ${provider}, model: ${request.llm_model || "default"}`);
     const llmConfig = {
       provider,
-      model: request.llm_model,
-      ollamaBaseUrl: request.ollama_base_url
+      model: request.llm_model
     };
+    const generationStartTime = Date.now();
     const orchestrator = LLMOrchestrator.fromConfig(llmConfig);
     logDetail("MCPClient", "Setting up sampling request handler");
     mcpClient = await createMCPClient({
@@ -962,6 +1189,20 @@ async function generateLLMRenderer(request) {
       savedFile = saveRendererToFile(result.code, request.domain_name);
       if (savedFile) {
         logDetail("LLM Renderer", `\u{1F4BE} Saved: ${savedFile}`, "success");
+        const generationDuration = Date.now() - generationStartTime;
+        const trainingCollector = getTrainingDataCollector();
+        const domainPascal = request.domain_name.split(/[-_\s]+/).map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join("");
+        trainingCollector.saveSuccessfulGeneration({
+          domain: request.domain_name,
+          states: request.states,
+          rendererCode: result.code,
+          functionName: `render${domainPascal}`,
+          provider,
+          model: request.llm_model || "default",
+          usedMcp: true,
+          generationTimeMs: generationDuration
+        });
+        logDetail("Training Data", `\u{1F4CA} Collected training sample for ${request.domain_name}`, "success");
       }
     }
     completeProgress(progressId, result.success, result.error);
@@ -1056,14 +1297,14 @@ function getCachedRenderer(domainName) {
   try {
     ensureRenderersDir();
     const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
-    const files = fs.readdirSync(LLM_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
+    const files = fs2.readdirSync(LLM_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
     if (files.length === 0) {
       console.log("[LLM Renderer Cache] No cached renderer for domain:", domainName);
       return null;
     }
     const latestFile = files[0];
-    const filepath = path2.join(LLM_RENDERERS_DIR, latestFile);
-    const content = fs.readFileSync(filepath, "utf-8");
+    const filepath = path3.join(LLM_RENDERERS_DIR, latestFile);
+    const content = fs2.readFileSync(filepath, "utf-8");
     const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
     const code = codeMatch ? codeMatch[1].trim() : content;
     console.log("[LLM Renderer Cache] Found cached renderer:", latestFile);
@@ -1079,11 +1320,11 @@ function getCachedRenderer(domainName) {
 function clearRendererCache() {
   try {
     ensureRenderersDir();
-    const files = fs.readdirSync(LLM_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f !== ".gitkeep");
+    const files = fs2.readdirSync(LLM_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f !== ".gitkeep");
     let deletedCount = 0;
     for (const file of files) {
-      const filepath = path2.join(LLM_RENDERERS_DIR, file);
-      fs.unlinkSync(filepath);
+      const filepath = path3.join(LLM_RENDERERS_DIR, file);
+      fs2.unlinkSync(filepath);
       deletedCount++;
     }
     console.log("[LLM Renderer Cache] Cleared", deletedCount, "cached renderers");
@@ -1111,7 +1352,7 @@ function listCachedRenderers(domainName) {
   try {
     ensureRenderersDir();
     const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
-    const files = fs.readdirSync(LLM_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
+    const files = fs2.readdirSync(LLM_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
     return {
       files,
       error: null
@@ -1127,12 +1368,12 @@ function listCachedRenderers(domainName) {
 function getCachedRendererByFilename(filename) {
   try {
     ensureRenderersDir();
-    const filepath = path2.join(LLM_RENDERERS_DIR, filename);
-    if (!fs.existsSync(filepath)) {
+    const filepath = path3.join(LLM_RENDERERS_DIR, filename);
+    if (!fs2.existsSync(filepath)) {
       console.log("[LLM Renderer Cache] File not found:", filename);
       return null;
     }
-    const content = fs.readFileSync(filepath, "utf-8");
+    const content = fs2.readFileSync(filepath, "utf-8");
     const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
     const code = codeMatch ? codeMatch[1].trim() : content;
     console.log("[LLM Renderer Cache] Loaded renderer:", filename);
@@ -1148,21 +1389,21 @@ function getCachedRendererByFilename(filename) {
 
 // direct-llm-renderer.ts
 import Anthropic2 from "@anthropic-ai/sdk";
-import path3 from "path";
-import fs2 from "fs";
+import path4 from "path";
+import fs3 from "fs";
 import { fileURLToPath as fileURLToPath3 } from "url";
 var __filename3 = fileURLToPath3(import.meta.url);
-var __dirname3 = path3.dirname(__filename3);
+var __dirname3 = path4.dirname(__filename3);
 function getDirectRenderersPath() {
   if (__dirname3.endsWith("/dist") || __dirname3.endsWith("\\dist")) {
-    return path3.join(__dirname3, "../llm_renderers_direct");
+    return path4.join(__dirname3, "../llm_renderers_direct");
   }
-  return path3.join(__dirname3, "llm_renderers_direct");
+  return path4.join(__dirname3, "llm_renderers_direct");
 }
 var DIRECT_RENDERERS_DIR = getDirectRenderersPath();
 function ensureDirectRenderersDir() {
-  if (!fs2.existsSync(DIRECT_RENDERERS_DIR)) {
-    fs2.mkdirSync(DIRECT_RENDERERS_DIR, { recursive: true });
+  if (!fs3.existsSync(DIRECT_RENDERERS_DIR)) {
+    fs3.mkdirSync(DIRECT_RENDERERS_DIR, { recursive: true });
   }
 }
 function generateDirectRendererFilename(domainName) {
@@ -1174,7 +1415,7 @@ function saveDirectRendererToFile(code, domainName) {
   try {
     ensureDirectRenderersDir();
     const filename = generateDirectRendererFilename(domainName);
-    const filepath = path3.join(DIRECT_RENDERERS_DIR, filename);
+    const filepath = path4.join(DIRECT_RENDERERS_DIR, filename);
     const fileContent = `/**
  * Direct LLM-Generated Renderer for ${domainName}
  * Generated at: ${(/* @__PURE__ */ new Date()).toISOString()}
@@ -1187,7 +1428,7 @@ function saveDirectRendererToFile(code, domainName) {
 
 ${code}
 `;
-    fs2.writeFileSync(filepath, fileContent, "utf-8");
+    fs3.writeFileSync(filepath, fileContent, "utf-8");
     console.log("[Direct LLM Renderer] Saved:", filename);
     return filename;
   } catch (error) {
@@ -1212,8 +1453,8 @@ async function generateDirectLLMRenderer(request) {
   console.log("[Direct LLM Renderer] Starting generation for domain:", request.domain_name);
   console.log("[Direct LLM Renderer] Using provider:", provider, "model:", request.llm_model || "default");
   try {
-    if (provider === "ollama") {
-      return await generateWithOllama(request);
+    if (provider === "huggingface") {
+      return await generateWithHuggingFace(request);
     }
     const client = new Anthropic2({
       apiKey: process.env.ANTHROPIC_API_KEY
@@ -1274,13 +1515,23 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
     };
   }
 }
-async function generateWithOllama(request) {
-  const baseUrl = request.ollama_base_url || process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-  const model = request.llm_model || "codellama:13b";
-  console.log("[Direct LLM Renderer] Using Ollama at:", baseUrl, "model:", model);
+async function generateWithHuggingFace(request) {
+  const apiKey = process.env.HF_API_KEY;
+  const model = request.llm_model || "codellama/CodeLlama-13b-Instruct-hf";
+  const baseUrl = "https://api-inference.huggingface.co/models";
+  if (!apiKey) {
+    return {
+      success: false,
+      typescript_code: "",
+      error: "HuggingFace API key not configured. Set HF_API_KEY environment variable."
+    };
+  }
+  console.log("[Direct LLM Renderer] Using HuggingFace model:", model);
   const exampleState = request.states[0] || {};
   const domainPascal = request.domain_name.split(/[-_\s]+/).map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join("");
-  const userPrompt = `Generate JavaScript renderer functions for "${request.domain_name}" domain.
+  const modelLower = model.toLowerCase();
+  let prompt;
+  const userContent = `Generate JavaScript renderer functions for "${request.domain_name}" domain.
 
 Here is example state data:
 ${JSON.stringify(exampleState, null, 2)}
@@ -1290,29 +1541,74 @@ Create these functions:
 - render${domainPascal}Legend(ctx, x, y) - legend function
 
 Use canvas 2D context (ctx). Draw something based on the state data.`;
+  if (modelLower.includes("codellama") || modelLower.includes("llama")) {
+    prompt = `<s>[INST] <<SYS>>
+${DIRECT_SYSTEM_PROMPT}
+<</SYS>>
+
+${userContent} [/INST] `;
+  } else if (modelLower.includes("mistral") || modelLower.includes("mixtral")) {
+    prompt = `<s>[INST] ${DIRECT_SYSTEM_PROMPT}
+
+${userContent} [/INST]`;
+  } else if (modelLower.includes("starcoder") || modelLower.includes("bigcode")) {
+    prompt = `### System:
+${DIRECT_SYSTEM_PROMPT}
+
+### User:
+${userContent}
+
+### Assistant:
+`;
+  } else {
+    prompt = `System: ${DIRECT_SYSTEM_PROMPT}
+
+User: ${userContent}
+
+Assistant: `;
+  }
   try {
-    const response = await fetch(`${baseUrl}/api/chat`, {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1e3);
+    const response = await fetch(`${baseUrl}/${model}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: DIRECT_SYSTEM_PROMPT },
-          { role: "user", content: userPrompt }
-        ],
-        stream: false,
-        options: {
-          num_predict: 4096,
-          temperature: 0.7
+        inputs: prompt,
+        parameters: {
+          max_new_tokens: 4096,
+          temperature: 0.7,
+          return_full_text: false,
+          do_sample: true
         }
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+      const errorText = await response.text();
+      console.error("[Direct LLM Renderer] HuggingFace API error:", response.status, errorText);
+      if (response.status === 503) {
+        throw new Error(`Model is loading. Please try again in a few seconds. (${errorText})`);
+      }
+      if (response.status === 429) {
+        throw new Error(`Rate limit exceeded. Please wait and try again. (${errorText})`);
+      }
+      throw new Error(`HuggingFace API error: ${response.status} - ${errorText}`);
     }
     const data = await response.json();
-    let code = data.message?.content || "";
-    console.log("[Direct LLM Renderer] Received Ollama response, length:", code.length);
+    let code = "";
+    if (Array.isArray(data)) {
+      code = data[0]?.generated_text || "";
+    } else if (data.generated_text) {
+      code = data.generated_text;
+    } else if (typeof data === "string") {
+      code = data;
+    }
+    console.log("[Direct LLM Renderer] Received HuggingFace response, length:", code.length);
     code = code.replace(/^```(?:javascript|typescript|js|ts)?\s*\n?/gm, "");
     code = code.replace(/\n?```\s*$/gm, "");
     code = code.trim();
@@ -1320,7 +1616,7 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
       return {
         success: false,
         typescript_code: "",
-        error: "Ollama did not generate valid function code"
+        error: "HuggingFace did not generate valid function code"
       };
     }
     const savedFile = saveDirectRendererToFile(code, request.domain_name);
@@ -1331,15 +1627,19 @@ Use canvas 2D context (ctx). Draw something based on the state data.`;
       saved_file: savedFile || void 0
     };
   } catch (error) {
-    console.error("[Direct LLM Renderer] Ollama error:", error);
-    let errorMessage = "Unknown error during Ollama generation";
+    console.error("[Direct LLM Renderer] HuggingFace error:", error);
+    let errorMessage = "Unknown error during HuggingFace generation";
     if (error instanceof Error) {
-      errorMessage = error.message;
+      if (error.name === "AbortError") {
+        errorMessage = "Request timed out. The model may be loading or overloaded.";
+      } else {
+        errorMessage = error.message;
+      }
     }
     return {
       success: false,
       typescript_code: "",
-      error: `Ollama error: ${errorMessage}. Make sure Ollama is running at ${baseUrl}`
+      error: `HuggingFace error: ${errorMessage}`
     };
   }
 }
@@ -1347,14 +1647,14 @@ function getCachedDirectRenderer(domainName) {
   try {
     ensureDirectRenderersDir();
     const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
-    const files = fs2.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
+    const files = fs3.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
     if (files.length === 0) {
       console.log("[Direct LLM Renderer Cache] No cached renderer for domain:", domainName);
       return null;
     }
     const latestFile = files[0];
-    const filepath = path3.join(DIRECT_RENDERERS_DIR, latestFile);
-    const content = fs2.readFileSync(filepath, "utf-8");
+    const filepath = path4.join(DIRECT_RENDERERS_DIR, latestFile);
+    const content = fs3.readFileSync(filepath, "utf-8");
     const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
     const code = codeMatch ? codeMatch[1].trim() : content;
     console.log("[Direct LLM Renderer Cache] Found cached renderer:", latestFile);
@@ -1370,15 +1670,15 @@ function getCachedDirectRenderer(domainName) {
 function clearDirectRendererCache(domainName) {
   try {
     ensureDirectRenderersDir();
-    let files = fs2.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f !== ".gitkeep");
+    let files = fs3.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f !== ".gitkeep");
     if (domainName) {
       const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
       files = files.filter((f) => f.startsWith(sanitizedDomain + "_"));
     }
     let deletedCount = 0;
     for (const file of files) {
-      const filepath = path3.join(DIRECT_RENDERERS_DIR, file);
-      fs2.unlinkSync(filepath);
+      const filepath = path4.join(DIRECT_RENDERERS_DIR, file);
+      fs3.unlinkSync(filepath);
       deletedCount++;
     }
     console.log("[Direct LLM Renderer Cache] Cleared", deletedCount, "cached renderers");
@@ -1400,7 +1700,7 @@ function listDirectCachedRenderers(domainName) {
   try {
     ensureDirectRenderersDir();
     const sanitizedDomain = domainName.replace(/[^a-zA-Z0-9-_]/g, "_");
-    const files = fs2.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
+    const files = fs3.readdirSync(DIRECT_RENDERERS_DIR).filter((f) => f.endsWith(".ts") && f.startsWith(sanitizedDomain + "_")).sort().reverse();
     return {
       files,
       error: null
@@ -1416,12 +1716,12 @@ function listDirectCachedRenderers(domainName) {
 function getDirectCachedRendererByFilename(filename) {
   try {
     ensureDirectRenderersDir();
-    const filepath = path3.join(DIRECT_RENDERERS_DIR, filename);
-    if (!fs2.existsSync(filepath)) {
+    const filepath = path4.join(DIRECT_RENDERERS_DIR, filename);
+    if (!fs3.existsSync(filepath)) {
       console.log("[Direct LLM Renderer Cache] File not found:", filename);
       return null;
     }
-    const content = fs2.readFileSync(filepath, "utf-8");
+    const content = fs3.readFileSync(filepath, "utf-8");
     const codeMatch = content.match(/\*\/\s*\n\n([\s\S]+)/);
     const code = codeMatch ? codeMatch[1].trim() : content;
     console.log("[Direct LLM Renderer Cache] Loaded renderer:", filename);
@@ -1438,8 +1738,8 @@ function getDirectCachedRendererByFilename(filename) {
 // visualizer.ts
 var execAsync = promisify(exec);
 var __filename4 = fileURLToPath4(import.meta.url);
-var __dirname4 = path4.dirname(__filename4);
-var DATA_DIR = path4.join(__dirname4, "data");
+var __dirname4 = path5.dirname(__filename4);
+var DATA_DIR = path5.join(__dirname4, "data");
 function getPythonCommand() {
   if (process.env.PYTHON_CMD) {
     console.log("[Python Detection] Using PYTHON_CMD from environment:", process.env.PYTHON_CMD);
@@ -1475,16 +1775,16 @@ var PYTHON_CMD = getPythonCommand();
 console.log("[Python Detection] Using Python command:", PYTHON_CMD);
 function resolvePlannerDir() {
   if (__dirname4.endsWith("/dist") || __dirname4.endsWith("\\dist")) {
-    return path4.join(__dirname4, "../../planner");
+    return path5.join(__dirname4, "../../planner");
   } else {
-    return path4.join(__dirname4, "../planner");
+    return path5.join(__dirname4, "../planner");
   }
 }
 function resolvePlanningToolsDir() {
   if (__dirname4.endsWith("/dist") || __dirname4.endsWith("\\dist")) {
-    return path4.join(__dirname4, "../../../planning-tools");
+    return path5.join(__dirname4, "../../../planning-tools");
   } else {
-    return path4.join(__dirname4, "../../planning-tools");
+    return path5.join(__dirname4, "../../planning-tools");
   }
 }
 var PLANNER_DIR = resolvePlannerDir();
@@ -1496,32 +1796,32 @@ var DOMAIN_CONFIGS = {
   "blocks-world": {
     name: "Blocks World",
     description: "Classic block stacking problem",
-    domainFile: path4.join(PLANNER_DIR, "domains/blocks_world/domain.pddl")
+    domainFile: path5.join(PLANNER_DIR, "domains/blocks_world/domain.pddl")
   },
   "gripper": {
     name: "Gripper",
     description: "Robot with grippers moving balls between rooms",
-    domainFile: path4.join(PLANNER_DIR, "domains/gripper/domain.pddl")
+    domainFile: path5.join(PLANNER_DIR, "domains/gripper/domain.pddl")
   },
   "depot": {
     name: "Depot",
     description: "Trucks deliver packages between depots and distributors",
-    domainFile: path4.join(PLANNER_DIR, "domains/depot/domain.pddl")
+    domainFile: path5.join(PLANNER_DIR, "domains/depot/domain.pddl")
   },
   "hanoi": {
     name: "Hanoi",
     description: "Moving disks between pegs (Tower of Hanoi)",
-    domainFile: path4.join(PLANNER_DIR, "domains/hanoi/domain.pddl")
+    domainFile: path5.join(PLANNER_DIR, "domains/hanoi/domain.pddl")
   },
   "rovers": {
     name: "Rovers",
     description: "Planetary rovers navigating between waypoints and collecting images",
-    domainFile: path4.join(PLANNER_DIR, "domains/rovers/domain.pddl")
+    domainFile: path5.join(PLANNER_DIR, "domains/rovers/domain.pddl")
   },
   "satellite": {
     name: "Satellite",
     description: "Satellites calibrate instruments, take images, and transmit them",
-    domainFile: path4.join(PLANNER_DIR, "domains/satellite/domain.pddl")
+    domainFile: path5.join(PLANNER_DIR, "domains/satellite/domain.pddl")
   }
 };
 var VALID_STRATEGY_IDS = [
@@ -1546,7 +1846,7 @@ var visualizerRouter = router({
     })
   ).mutation(async ({ input }) => {
     try {
-      const dataFile = path4.join(
+      const dataFile = path5.join(
         DATA_DIR,
         `${input.domain.replace("-", "_")}_rendered.json`
       );
@@ -1590,7 +1890,7 @@ var visualizerRouter = router({
     let domainPath = "";
     let problemPath = "";
     try {
-      const uploadsDir = path4.join(__dirname4, "uploads");
+      const uploadsDir = path5.join(__dirname4, "uploads");
       await mkdir(uploadsDir, { recursive: true });
       const timestamp = Date.now();
       if (!input.domainContent || input.domainContent.trim() === "") {
@@ -1600,12 +1900,12 @@ var visualizerRouter = router({
         }
         domainPath = domainConfig.domainFile;
       } else {
-        domainPath = path4.join(uploadsDir, `domain_${timestamp}.pddl`);
+        domainPath = path5.join(uploadsDir, `domain_${timestamp}.pddl`);
         await writeFile(domainPath, input.domainContent, "utf-8");
       }
-      problemPath = path4.join(uploadsDir, `problem_${timestamp}.pddl`);
+      problemPath = path5.join(uploadsDir, `problem_${timestamp}.pddl`);
       await writeFile(problemPath, input.problemContent, "utf-8");
-      const pythonScript = path4.join(PLANNER_DIR, "visualizer_api.py");
+      const pythonScript = path5.join(PLANNER_DIR, "visualizer_api.py");
       console.log("[uploadAndGenerate] Running Python script...");
       console.log("[uploadAndGenerate] Using Python command:", PYTHON_CMD);
       const { stdout, stderr } = await execAsync(
@@ -1692,7 +1992,7 @@ var visualizerRouter = router({
    */
   listStrategies: publicProcedure.query(async () => {
     try {
-      const pythonScript = path4.join(PLANNER_DIR, "visualizer_api.py");
+      const pythonScript = path5.join(PLANNER_DIR, "visualizer_api.py");
       const { stdout } = await execAsync(
         `"${PYTHON_CMD}" "${pythonScript}" list-strategies`,
         {
@@ -1758,7 +2058,7 @@ var visualizerRouter = router({
       status.python.available = false;
     }
     try {
-      const fdPath = path4.join(PLANNING_TOOLS_DIR, "downward/fast-downward.py");
+      const fdPath = path5.join(PLANNING_TOOLS_DIR, "downward/fast-downward.py");
       const { stdout } = await execAsync(`"${PYTHON_CMD}" "${fdPath}" --help`, { timeout: 5e3 });
       if (stdout.includes("Fast Downward")) {
         status.fastDownward.available = true;
@@ -1766,7 +2066,7 @@ var visualizerRouter = router({
       }
     } catch (error) {
       try {
-        const altFdPath = path4.join(__dirname4, "../../planning-tools/downward/fast-downward.py");
+        const altFdPath = path5.join(__dirname4, "../../planning-tools/downward/fast-downward.py");
         const { stdout } = await execAsync(`"${PYTHON_CMD}" "${altFdPath}" --help`, { timeout: 5e3 });
         if (stdout.includes("Fast Downward")) {
           status.fastDownward.available = true;
@@ -1812,9 +2112,8 @@ var visualizerRouter = router({
       states: z2.array(z2.any()),
       styleHints: z2.string().optional(),
       useMcp: z2.boolean().optional().default(true),
-      llmProvider: z2.enum(["anthropic", "ollama"]).optional().default("anthropic"),
-      llmModel: z2.string().optional(),
-      ollamaBaseUrl: z2.string().optional()
+      llmProvider: z2.enum(["anthropic", "huggingface"]).optional().default("anthropic"),
+      llmModel: z2.string().optional()
     })
   ).mutation(async ({ input }) => {
     console.log("[generateLLMRenderer] Starting for domain:", input.domainName);
@@ -1827,8 +2126,7 @@ var visualizerRouter = router({
         states: input.states,
         style_hints: input.styleHints,
         llm_provider: input.llmProvider,
-        llm_model: input.llmModel,
-        ollama_base_url: input.ollamaBaseUrl
+        llm_model: input.llmModel
       });
       console.log("[generateLLMRenderer] MCP Result success:", result.success);
       if (!result.success) {
@@ -1850,8 +2148,7 @@ var visualizerRouter = router({
         states: input.states,
         style_hints: input.styleHints,
         llm_provider: input.llmProvider,
-        llm_model: input.llmModel,
-        ollama_base_url: input.ollamaBaseUrl
+        llm_model: input.llmModel
       });
       console.log("[generateLLMRenderer] Direct Result success:", result.success);
       if (!result.success) {
@@ -2038,19 +2335,17 @@ var visualizerRouter = router({
           ]
         },
         {
-          id: "ollama",
-          name: "Ollama (Local)",
-          description: "Free, runs locally, requires Ollama installed",
-          requiresApiKey: false,
+          id: "huggingface",
+          name: "HuggingFace",
+          description: "Open source models via HuggingFace Inference API",
+          requiresApiKey: true,
           models: [
-            { id: "codellama:13b", name: "CodeLlama 13B", description: "Good balance of speed and quality" },
-            { id: "codellama:34b", name: "CodeLlama 34B", description: "Best code quality, slower" },
-            { id: "llama3.1:8b", name: "Llama 3.1 8B", description: "Fast general purpose" },
-            { id: "llama3.1:70b", name: "Llama 3.1 70B", description: "Most capable open model" },
-            { id: "mistral:7b", name: "Mistral 7B", description: "Fast and efficient" },
-            { id: "mixtral:8x7b", name: "Mixtral 8x7B", description: "Great for code generation" },
-            { id: "qwen2.5-coder:7b", name: "Qwen 2.5 Coder 7B", description: "Specialized for coding" },
-            { id: "deepseek-coder:6.7b", name: "DeepSeek Coder 6.7B", description: "Excellent code model" }
+            { id: "codellama/CodeLlama-13b-Instruct-hf", name: "CodeLlama 13B", description: "Good for code generation" },
+            { id: "codellama/CodeLlama-34b-Instruct-hf", name: "CodeLlama 34B", description: "Best code quality" },
+            { id: "bigcode/starcoder2-15b", name: "StarCoder2 15B", description: "Excellent for code" },
+            { id: "mistralai/Mistral-7B-Instruct-v0.2", name: "Mistral 7B", description: "Fast and efficient" },
+            { id: "mistralai/Mixtral-8x7B-Instruct-v0.1", name: "Mixtral 8x7B", description: "Great quality" },
+            { id: "Qwen/Qwen2.5-Coder-7B-Instruct", name: "Qwen 2.5 Coder 7B", description: "Specialized for coding" }
           ]
         }
       ]

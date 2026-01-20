@@ -43,7 +43,7 @@ export default function Visualizer() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [visualizationMode, setVisualizationMode] = useState<"basic" | "llm">("basic");
   const [useMcp, setUseMcp] = useState(true); // Toggle between MCP-based and direct LLM generation
-  const [llmProvider, setLlmProvider] = useState<'anthropic' | 'ollama'>('anthropic');
+  const [llmProvider, setLlmProvider] = useState<'anthropic' | 'huggingface'>('anthropic');
   const [llmModel, setLlmModel] = useState<string>('claude-sonnet-4-20250514');
   const [llmCode, setLlmCode] = useState<string | null>(null);
   const [llmError, setLlmError] = useState<string | null>(null);
@@ -1106,20 +1106,20 @@ export default function Visualizer() {
                         </button>
                         <button
                           onClick={() => {
-                            setLlmProvider('ollama');
-                            setLlmModel('codellama:7b');
+                            setLlmProvider('huggingface');
+                            setLlmModel('codellama/CodeLlama-13b-Instruct-hf');
                           }}
                           className={`p-3 rounded-xl border-2 transition-all text-left ${
-                            llmProvider === 'ollama'
-                              ? 'border-green-500 bg-green-50'
+                            llmProvider === 'huggingface'
+                              ? 'border-amber-500 bg-amber-50'
                               : 'border-slate-200 hover:border-slate-300 bg-white'
                           }`}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-lg">🦙</span>
+                            <span className="text-lg">🤗</span>
                             <div>
-                              <div className="text-sm font-medium text-slate-900">Ollama</div>
-                              <div className="text-xs text-slate-500">Local (Free)</div>
+                              <div className="text-sm font-medium text-slate-900">HuggingFace</div>
+                              <div className="text-xs text-slate-500">Open Source</div>
                             </div>
                           </div>
                         </button>
@@ -1139,22 +1139,20 @@ export default function Visualizer() {
                           </>
                         ) : (
                           <>
-                            <option value="codellama:7b">CodeLlama 7B (Fast)</option>
-                            <option value="codellama:13b">CodeLlama 13B</option>
-                            <option value="codellama:34b">CodeLlama 34B (Best)</option>
-                            <option value="llama3.1:8b">Llama 3.1 8B</option>
-                            <option value="mistral:7b">Mistral 7B</option>
-                            <option value="mixtral:8x7b">Mixtral 8x7B</option>
-                            <option value="qwen2.5-coder:7b">Qwen 2.5 Coder 7B</option>
-                            <option value="deepseek-coder:6.7b">DeepSeek Coder 6.7B</option>
+                            <option value="codellama/CodeLlama-13b-Instruct-hf">CodeLlama 13B (Recommended)</option>
+                            <option value="codellama/CodeLlama-34b-Instruct-hf">CodeLlama 34B (Best)</option>
+                            <option value="bigcode/starcoder2-15b">StarCoder2 15B</option>
+                            <option value="mistralai/Mistral-7B-Instruct-v0.2">Mistral 7B (Fast)</option>
+                            <option value="mistralai/Mixtral-8x7B-Instruct-v0.1">Mixtral 8x7B</option>
+                            <option value="Qwen/Qwen2.5-Coder-7B-Instruct">Qwen 2.5 Coder 7B</option>
                           </>
                         )}
                       </select>
                       
-                      {llmProvider === 'ollama' && (
+                      {llmProvider === 'huggingface' && (
                         <p className="text-xs text-amber-600 flex items-center gap-1">
                           <Info className="w-3 h-3" />
-                          Make sure Ollama is running locally
+                          Requires HF_API_KEY environment variable
                         </p>
                       )}
                     </div>

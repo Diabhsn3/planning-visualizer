@@ -32,6 +32,7 @@ import {
   cleanupOldProgress,
   type GenerationProgress
 } from "./generation-progress.js";
+import { getTrainingDataCollector } from "./training-data-collector.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,9 +68,8 @@ export interface LLMRendererRequest {
   domain_name: string;
   states: unknown[];
   style_hints?: string;
-  llm_provider?: 'anthropic' | 'ollama';
+  llm_provider?: 'anthropic' | 'huggingface';
   llm_model?: string;
-  ollama_base_url?: string;
 }
 
 export interface LLMRendererResponse {
@@ -174,8 +174,10 @@ export async function generateLLMRenderer(
     const llmConfig: LLMConfig = {
       provider: provider,
       model: request.llm_model,
-      ollamaBaseUrl: request.ollama_base_url,
     };
+    
+    // Track generation start time for training data
+    const generationStartTime = Date.now();
     
     // Create and connect MCP client with sampling support
     const orchestrator = LLMOrchestrator.fromConfig(llmConfig);
@@ -223,6 +225,29 @@ export async function generateLLMRenderer(
       savedFile = saveRendererToFile(result.code, request.domain_name);
       if (savedFile) {
         logDetail('LLM Renderer', `💾 Saved: ${savedFile}`, 'success');
+        
+        // Collect training data for future fine-tuning
+        const generationDuration = Date.now() - generationStartTime;
+        const trainingCollector = getTrainingDataCollector();
+        
+        // Convert domain name to PascalCase for function name
+        const domainPascal = request.domain_name
+          .split(/[-_\s]+/)
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join('');
+        
+        trainingCollector.saveSuccessfulGeneration({
+          domain: request.domain_name,
+          states: request.states,
+          rendererCode: result.code,
+          functionName: `render${domainPascal}`,
+          provider: provider,
+          model: request.llm_model || 'default',
+          usedMcp: true,
+          generationTimeMs: generationDuration,
+        });
+        
+        logDetail('Training Data', `📊 Collected training sample for ${request.domain_name}`, 'success');
       }
     }
     
