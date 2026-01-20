@@ -397,6 +397,8 @@ var OllamaProvider = class {
       }))
     ];
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1e3);
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -408,8 +410,10 @@ var OllamaProvider = class {
             num_predict: 16e3,
             temperature: 0.7
           }
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       if (!response.ok) {
         throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
       }

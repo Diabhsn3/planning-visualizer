@@ -139,6 +139,10 @@ class OllamaProvider implements LLMProvider {
     ];
 
     try {
+      // Extended timeout for large models (10 minutes)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000); // 10 minutes
+
       const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -151,7 +155,10 @@ class OllamaProvider implements LLMProvider {
             temperature: 0.7,
           },
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
