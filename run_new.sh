@@ -29,14 +29,25 @@ echo "Step 1: Checking Python installation..."
 if command -v python3 &> /dev/null; then
     PYTHON_VERSION=$(python3 --version 2>&1)
     echo "[OK] Found $PYTHON_VERSION"
-    echo "PYTHON_CMD=python3" > backend/api/.env
+    PYTHON_CMD_VALUE="python3"
 elif command -v python &> /dev/null; then
     PYTHON_VERSION=$(python --version 2>&1)
     echo "[OK] Found $PYTHON_VERSION"
-    echo "PYTHON_CMD=python" > backend/api/.env
+    PYTHON_CMD_VALUE="python"
 else
     echo "[ERROR] Python not found. Please install Python 3.11 or later."
     exit 1
+fi
+
+# Update PYTHON_CMD in .env without overwriting other entries (like API keys)
+ENV_FILE="backend/api/.env"
+if [ -f "$ENV_FILE" ]; then
+    # Remove existing PYTHON_CMD line if present, then add the new one
+    grep -v "^PYTHON_CMD=" "$ENV_FILE" > "$ENV_FILE.tmp" || true
+    echo "PYTHON_CMD=$PYTHON_CMD_VALUE" >> "$ENV_FILE.tmp"
+    mv "$ENV_FILE.tmp" "$ENV_FILE"
+else
+    echo "PYTHON_CMD=$PYTHON_CMD_VALUE" > "$ENV_FILE"
 fi
 
 # Step 2: Check Node.js and pnpm

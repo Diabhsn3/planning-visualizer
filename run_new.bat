@@ -12,10 +12,19 @@ where python >nul 2>nul
 if %errorlevel%==0 (
     for /f "tokens=*" %%i in ('python --version') do set PYVER=%%i
     echo [OK] Found %PYVER%
-    echo PYTHON_CMD=python > backend\api\.env
+    set PYTHON_CMD_VALUE=python
 ) else (
     echo [ERROR] Python not found. Please install Python 3.11 or later.
     exit /b
+)
+
+:: Update PYTHON_CMD in .env without overwriting other entries (like API keys)
+if exist backend\api\.env (
+    findstr /v "^PYTHON_CMD=" backend\api\.env > backend\api\.env.tmp 2>nul
+    echo PYTHON_CMD=!PYTHON_CMD_VALUE! >> backend\api\.env.tmp
+    move /y backend\api\.env.tmp backend\api\.env >nul
+) else (
+    echo PYTHON_CMD=!PYTHON_CMD_VALUE! > backend\api\.env
 )
 
 :: Step 2: Check Node.js and pnpm
