@@ -22,3 +22,6 @@ planning-tools/downward/builds/
 planning-tools/downward/output.sas
 planning-tools/downward/*.sas
 planning-tools/downward/plan.txt
+
+# Claude Skills API cache
+backend/api/.claude-skill-id

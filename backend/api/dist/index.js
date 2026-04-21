@@ -91,20 +91,28 @@ import { readFile as readFile2, writeFile as writeFile2, mkdir as mkdir2, unlink
 
 // llm-renderer.ts
 import Anthropic from "@anthropic-ai/sdk";
+import { toFile } from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ts from "typescript";
 import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createReadStream } from "fs";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
-var SKILL_PROMPT_PATH = path.join(__dirname, "prompts", "renderer-skill.txt");
+var SKILLS_DIR = path.join(__dirname, "skills", "canvas-renderer");
+var SKILL_MD_PATH = path.join(SKILLS_DIR, "SKILL.md");
+var SKILL_INTERFACES_PATH = path.join(SKILLS_DIR, "interfaces.ts");
+var SKILL_EXAMPLE_PATH = path.join(SKILLS_DIR, "example-hanoi.ts");
+var SKILL_RULES_PATH = path.join(SKILLS_DIR, "rules.md");
+var GEMINI_PROMPT_PATH = path.join(__dirname, "prompts", "renderer-skill.txt");
 var CACHE_DIR = path.join(__dirname, "llm_renderers");
+var SKILL_ID_CACHE_PATH = path.join(__dirname, ".claude-skill-id");
 var MODELS = {
   claude: {
     id: "claude-sonnet-4-20250514",
     name: "Claude Sonnet 4",
-    maxTokens: 8192
+    maxTokens: 16384
   },
   gemini: {
     id: "gemini-2.5-pro",
@@ -112,16 +120,72 @@ var MODELS = {
     maxTokens: 8192
   }
 };
-var cachedSkillPrompt = null;
-async function loadSkillPrompt() {
-  if (cachedSkillPrompt) return cachedSkillPrompt;
+var cachedSkillId = null;
+async function getOrCreateClaudeSkill(client) {
+  if (cachedSkillId) {
+    console.log(`[LLM Renderer] Using cached Claude skill: ${cachedSkillId}`);
+    return cachedSkillId;
+  }
   try {
-    cachedSkillPrompt = await readFile(SKILL_PROMPT_PATH, "utf-8");
-    console.log("[LLM Renderer] Skill prompt loaded, length:", cachedSkillPrompt.length);
-    return cachedSkillPrompt;
+    const savedId = await readFile(SKILL_ID_CACHE_PATH, "utf-8");
+    if (savedId.trim()) {
+      try {
+        await client.beta.skills.retrieve(savedId.trim(), {
+          betas: ["skills-2025-10-02"]
+        });
+        cachedSkillId = savedId.trim();
+        console.log(`[LLM Renderer] Loaded Claude skill from disk: ${cachedSkillId}`);
+        return cachedSkillId;
+      } catch (err) {
+        console.log("[LLM Renderer] Saved skill_id is invalid, will re-create");
+      }
+    }
+  } catch {
+  }
+  console.log("[LLM Renderer] Creating new Claude skill...");
+  const skillDir = "canvas-renderer";
+  const skill = await client.beta.skills.create({
+    display_title: "Canvas Renderer Generator",
+    files: [
+      await toFile(
+        createReadStream(SKILL_MD_PATH),
+        `${skillDir}/SKILL.md`,
+        { type: "text/markdown" }
+      ),
+      await toFile(
+        createReadStream(SKILL_INTERFACES_PATH),
+        `${skillDir}/interfaces.ts`,
+        { type: "text/plain" }
+      ),
+      await toFile(
+        createReadStream(SKILL_EXAMPLE_PATH),
+        `${skillDir}/example-hanoi.ts`,
+        { type: "text/plain" }
+      ),
+      await toFile(
+        createReadStream(SKILL_RULES_PATH),
+        `${skillDir}/rules.md`,
+        { type: "text/markdown" }
+      )
+    ],
+    betas: ["skills-2025-10-02"]
+  });
+  cachedSkillId = skill.id;
+  console.log(`[LLM Renderer] Created Claude skill: ${cachedSkillId}`);
+  console.log(`[LLM Renderer] Skill version: ${skill.latest_version}`);
+  await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
+  return cachedSkillId;
+}
+var cachedGeminiPrompt = null;
+async function loadGeminiPrompt() {
+  if (cachedGeminiPrompt) return cachedGeminiPrompt;
+  try {
+    cachedGeminiPrompt = await readFile(GEMINI_PROMPT_PATH, "utf-8");
+    console.log("[LLM Renderer] Gemini prompt loaded, length:", cachedGeminiPrompt.length);
+    return cachedGeminiPrompt;
   } catch (error) {
-    console.error("[LLM Renderer] Failed to load skill prompt:", error);
-    throw new Error("Skill prompt file not found. Ensure backend/api/prompts/renderer-skill.txt exists.");
+    console.error("[LLM Renderer] Failed to load Gemini prompt:", error);
+    throw new Error("Gemini prompt file not found. Ensure backend/api/prompts/renderer-skill.txt exists.");
   }
 }
 function extractCode(response) {
@@ -158,6 +222,9 @@ function validateCode(code, domainName) {
   }
   return { valid: issues.length === 0, issues };
 }
+function transpileCachedCode(code) {
+  return transpileToJS(code);
+}
 function transpileToJS(tsCode) {
   let cleaned = tsCode.replace(/^(\s*)export\s+/gm, "$1");
   const result = ts.transpileModule(cleaned, {
@@ -178,38 +245,95 @@ function transpileToJS(tsCode) {
   output = output.replace(/^exports\.\w+\s*=\s*\w+;\s*\n?/gm, "");
   return output;
 }
-async function generateWithClaude(skillPrompt, userMessage) {
+async function generateWithClaude(userMessage) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY environment variable is not set.");
   }
   const client = new Anthropic({ apiKey });
   const model = MODELS.claude;
-  console.log(`[LLM Renderer] Calling Claude (${model.id})...`);
-  const response = await client.messages.create({
+  const skillId = await getOrCreateClaudeSkill(client);
+  console.log(`[LLM Renderer] Using Claude skill: ${skillId}`);
+  console.log(`[LLM Renderer] Calling Claude (${model.id}) with Skills API...`);
+  const response = await client.beta.messages.create({
     model: model.id,
     max_tokens: model.maxTokens,
-    system: skillPrompt,
-    messages: [{ role: "user", content: userMessage }]
+    betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+    container: {
+      skills: [
+        {
+          type: "custom",
+          skill_id: skillId,
+          version: "latest"
+        }
+      ]
+    },
+    messages: [{ role: "user", content: userMessage }],
+    tools: [
+      {
+        type: "code_execution_20250825",
+        name: "code_execution"
+      }
+    ]
   });
-  const textBlock = response.content.find((block) => block.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
+  let finalResponse = response;
+  let retries = 0;
+  const maxRetries = 5;
+  while (finalResponse.stop_reason === "pause_turn" && retries < maxRetries) {
+    console.log(`[LLM Renderer] Claude paused (turn ${retries + 1}), continuing...`);
+    retries++;
+    const continueMessages = [
+      { role: "user", content: userMessage },
+      { role: "assistant", content: finalResponse.content },
+      { role: "user", content: "Please continue." }
+    ];
+    finalResponse = await client.beta.messages.create({
+      model: model.id,
+      max_tokens: model.maxTokens,
+      betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+      container: {
+        id: finalResponse.container?.id,
+        skills: [
+          {
+            type: "custom",
+            skill_id: skillId,
+            version: "latest"
+          }
+        ]
+      },
+      messages: continueMessages,
+      tools: [
+        {
+          type: "code_execution_20250825",
+          name: "code_execution"
+        }
+      ]
+    });
+  }
+  let fullText = "";
+  for (const block of finalResponse.content) {
+    if (block.type === "text") {
+      fullText += block.text;
+    }
+  }
+  if (!fullText) {
     throw new Error("Claude returned no text content.");
   }
-  console.log(`[LLM Renderer] Claude response received, length: ${textBlock.text.length}`);
-  return textBlock.text;
+  console.log(`[LLM Renderer] Claude response received, length: ${fullText.length}`);
+  return fullText;
 }
-async function generateWithGemini(skillPrompt, userMessage) {
+async function generateWithGemini(userMessage) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY environment variable is not set.");
   }
+  const geminiPrompt = await loadGeminiPrompt();
   const genAI = new GoogleGenerativeAI(apiKey);
   const modelConfig = MODELS.gemini;
   console.log(`[LLM Renderer] Calling Gemini (${modelConfig.id})...`);
   const model = genAI.getGenerativeModel({
     model: modelConfig.id,
-    systemInstruction: skillPrompt
+    systemInstruction: geminiPrompt
   });
   const result = await model.generateContent(userMessage);
   const response = result.response;
@@ -242,11 +366,19 @@ async function listCachedRenderers(domain) {
       if (domain && fileDomain !== domain) continue;
       const filepath = path.join(CACHE_DIR, file);
       const content = await readFile(filepath, "utf-8");
+      const tIdx = fileTimestamp.indexOf("T");
+      let parsedTimestamp = fileTimestamp;
+      if (tIdx !== -1) {
+        const datePart = fileTimestamp.substring(0, tIdx);
+        const timePart = fileTimestamp.substring(tIdx);
+        const timeFixed = timePart.replace(/-(\d{3}Z)$/, ".$1").replace(/-/g, ":");
+        parsedTimestamp = datePart + timeFixed;
+      }
       renderers.push({
         filename: file,
         domain: fileDomain,
         provider: fileProvider,
-        timestamp: fileTimestamp.replace(/-/g, ":").replace("T", " "),
+        timestamp: parsedTimestamp,
         size: content.length
       });
     }
@@ -286,7 +418,6 @@ async function generateRenderer(request) {
   console.log(`[LLM Renderer] Provider: ${provider} (${model.name})`);
   console.log(`[LLM Renderer] Sample states: ${states.length}`);
   try {
-    const skillPrompt = await loadSkillPrompt();
     const sampleStates = states.slice(0, 3);
     const userMessage = `Generate a complete Canvas renderer for the "${domainName}" domain.
 
@@ -295,12 +426,13 @@ Here are ${sampleStates.length} sample states showing the data structure you nee
 ${JSON.stringify(sampleStates, null, 2)}
 
 Analyze the objects, their types, positions, properties, and the relations between them.
-Then generate the three TypeScript functions as specified in the instructions.`;
+Then generate the three TypeScript functions as specified in the instructions.
+Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code.`;
     let rawResponse;
     if (provider === "claude") {
-      rawResponse = await generateWithClaude(skillPrompt, userMessage);
+      rawResponse = await generateWithClaude(userMessage);
     } else if (provider === "gemini") {
-      rawResponse = await generateWithGemini(skillPrompt, userMessage);
+      rawResponse = await generateWithGemini(userMessage);
     } else {
       throw new Error(`Unknown provider: ${provider}`);
     }
@@ -751,7 +883,8 @@ var visualizerRouter = router({
     if (!code) {
       throw new Error(`Cached renderer not found: ${input.filename}`);
     }
-    return { filename: input.filename, code };
+    const cleanCode = transpileCachedCode(code);
+    return { filename: input.filename, code: cleanCode };
   }),
   /**
    * Delete a specific cached renderer by filename.

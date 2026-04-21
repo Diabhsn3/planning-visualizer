@@ -2,39 +2,59 @@
  * LLM Renderer Module
  * 
  * Generates domain-specific Canvas rendering code using LLMs (Claude or Gemini).
- * Uses a skill/prompt template to guide the LLM in producing correct TypeScript
- * renderer functions that follow the project's RenderedState interface.
+ * 
+ * Claude: Uses the formal Claude Skills API with code execution sandbox.
+ *   - Skill is uploaded once via `client.beta.skills.create()`
+ *   - Subsequent calls reference the skill by `skill_id`
+ *   - Claude can validate generated code in the sandbox before returning it
+ * 
+ * Gemini: Uses a system prompt approach with the skill loaded as text.
  * 
  * Supports:
- * - Anthropic Claude (claude-sonnet-4-20250514)
- * - Google Gemini (gemini-2.5-pro)
+ * - Anthropic Claude (claude-sonnet-4-20250514) via Skills API
+ * - Google Gemini (gemini-2.5-pro) via system prompt
  * 
  * Features:
  * - Disk-based caching of generated renderers per domain
  * - Automatic code extraction from LLM responses
+ * - TypeScript to JavaScript transpilation via TS compiler API
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { toFile } from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ts from "typescript";
 import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createReadStream } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ==================== CONFIGURATION ====================
 
-const SKILL_PROMPT_PATH = path.join(__dirname, "prompts", "renderer-skill.txt");
+// Claude Skills API files
+const SKILLS_DIR = path.join(__dirname, "skills", "canvas-renderer");
+const SKILL_MD_PATH = path.join(SKILLS_DIR, "SKILL.md");
+const SKILL_INTERFACES_PATH = path.join(SKILLS_DIR, "interfaces.ts");
+const SKILL_EXAMPLE_PATH = path.join(SKILLS_DIR, "example-hanoi.ts");
+const SKILL_RULES_PATH = path.join(SKILLS_DIR, "rules.md");
+
+// Gemini still uses the flat prompt file
+const GEMINI_PROMPT_PATH = path.join(__dirname, "prompts", "renderer-skill.txt");
+
 const CACHE_DIR = path.join(__dirname, "llm_renderers");
+
+// File to persist the skill_id after first upload
+const SKILL_ID_CACHE_PATH = path.join(__dirname, ".claude-skill-id");
 
 // Model configurations
 const MODELS = {
   claude: {
     id: "claude-sonnet-4-20250514",
     name: "Claude Sonnet 4",
-    maxTokens: 8192,
+    maxTokens: 16384,
   },
   gemini: {
     id: "gemini-2.5-pro",
@@ -70,20 +90,100 @@ export interface CachedRenderer {
   size: number;
 }
 
-// ==================== SKILL LOADER ====================
+// ==================== CLAUDE SKILLS API ====================
 
-let cachedSkillPrompt: string | null = null;
+let cachedSkillId: string | null = null;
 
-async function loadSkillPrompt(): Promise<string> {
-  if (cachedSkillPrompt) return cachedSkillPrompt;
+/**
+ * Get or create the Claude Skill.
+ * 
+ * On first call, uploads the skill files (SKILL.md, interfaces.ts, example-hanoi.ts, rules.md)
+ * to Claude's Skills API and saves the returned skill_id to disk.
+ * On subsequent calls, returns the cached skill_id.
+ */
+async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
+  // 1. Check in-memory cache
+  if (cachedSkillId) {
+    console.log(`[LLM Renderer] Using cached Claude skill: ${cachedSkillId}`);
+    return cachedSkillId;
+  }
+
+  // 2. Check disk cache
+  try {
+    const savedId = await readFile(SKILL_ID_CACHE_PATH, "utf-8");
+    if (savedId.trim()) {
+      // Verify the skill still exists
+      try {
+        await client.beta.skills.retrieve(savedId.trim(), {
+          betas: ["skills-2025-10-02"],
+        });
+        cachedSkillId = savedId.trim();
+        console.log(`[LLM Renderer] Loaded Claude skill from disk: ${cachedSkillId}`);
+        return cachedSkillId;
+      } catch (err) {
+        console.log("[LLM Renderer] Saved skill_id is invalid, will re-create");
+      }
+    }
+  } catch {
+    // No cached skill_id file, will create new
+  }
+
+  // 3. Create new skill
+  console.log("[LLM Renderer] Creating new Claude skill...");
+
+  const skillDir = "canvas-renderer";
+
+  const skill = await client.beta.skills.create({
+    display_title: "Canvas Renderer Generator",
+    files: [
+      await toFile(
+        createReadStream(SKILL_MD_PATH),
+        `${skillDir}/SKILL.md`,
+        { type: "text/markdown" }
+      ),
+      await toFile(
+        createReadStream(SKILL_INTERFACES_PATH),
+        `${skillDir}/interfaces.ts`,
+        { type: "text/plain" }
+      ),
+      await toFile(
+        createReadStream(SKILL_EXAMPLE_PATH),
+        `${skillDir}/example-hanoi.ts`,
+        { type: "text/plain" }
+      ),
+      await toFile(
+        createReadStream(SKILL_RULES_PATH),
+        `${skillDir}/rules.md`,
+        { type: "text/markdown" }
+      ),
+    ],
+    betas: ["skills-2025-10-02"],
+  });
+
+  cachedSkillId = skill.id;
+  console.log(`[LLM Renderer] Created Claude skill: ${cachedSkillId}`);
+  console.log(`[LLM Renderer] Skill version: ${skill.latest_version}`);
+
+  // Save to disk for persistence across restarts
+  await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
+
+  return cachedSkillId;
+}
+
+// ==================== GEMINI PROMPT LOADER ====================
+
+let cachedGeminiPrompt: string | null = null;
+
+async function loadGeminiPrompt(): Promise<string> {
+  if (cachedGeminiPrompt) return cachedGeminiPrompt;
 
   try {
-    cachedSkillPrompt = await readFile(SKILL_PROMPT_PATH, "utf-8");
-    console.log("[LLM Renderer] Skill prompt loaded, length:", cachedSkillPrompt.length);
-    return cachedSkillPrompt;
+    cachedGeminiPrompt = await readFile(GEMINI_PROMPT_PATH, "utf-8");
+    console.log("[LLM Renderer] Gemini prompt loaded, length:", cachedGeminiPrompt.length);
+    return cachedGeminiPrompt;
   } catch (error) {
-    console.error("[LLM Renderer] Failed to load skill prompt:", error);
-    throw new Error("Skill prompt file not found. Ensure backend/api/prompts/renderer-skill.txt exists.");
+    console.error("[LLM Renderer] Failed to load Gemini prompt:", error);
+    throw new Error("Gemini prompt file not found. Ensure backend/api/prompts/renderer-skill.txt exists.");
   }
 }
 
@@ -124,21 +224,17 @@ function validateCode(code: string, domainName: string): { valid: boolean; issue
   const issues: string[] = [];
 
   // Check for at least one render function (any name starting with 'render')
-  // The frontend discovers functions by name pattern, so exact domain-name matching
-  // is not required. The LLM may use any naming convention.
   if (!/function\s+render\w*\s*\(/.test(code)) {
     issues.push("Missing main render function (expected a function named render<Something>)");
   }
 
-  // Check for a background function (any function with 'background' in the name)
+  // Check for a background function (optional)
   if (!/(?:function\s+\w*[Bb]ackground|\w*[Bb]ackground\s*=\s*(?:function|\())/i.test(code)) {
-    // Not a hard failure - the frontend handles missing background gracefully
     console.log(`[LLM Renderer] Note: No background function found for ${domainName} (optional)`);
   }
 
-  // Check for a legend function (any function with 'legend' in the name)
+  // Check for a legend function (optional)
   if (!/(?:function\s+\w*[Ll]egend|\w*[Ll]egend\s*=\s*(?:function|\())/i.test(code)) {
-    // Not a hard failure - the frontend handles missing legend gracefully
     console.log(`[LLM Renderer] Note: No legend function found for ${domainName} (optional)`);
   }
 
@@ -169,10 +265,6 @@ export function transpileCachedCode(code: string): string {
 
 function transpileToJS(tsCode: string): string {
   // Step 1: Strip 'export' keywords before transpilation.
-  // If the LLM generates `export function renderX(...)`, the TS compiler
-  // converts it to CommonJS `exports.renderX = renderX;` which breaks
-  // when executed via `new Function()` (no `exports` object in that scope).
-  // Removing `export` first makes the compiler emit plain function declarations.
   let cleaned = tsCode.replace(/^(\s*)export\s+/gm, '$1');
 
   const result = ts.transpileModule(cleaned, {
@@ -189,8 +281,7 @@ function transpileToJS(tsCode: string): string {
     console.warn("[LLM Renderer] Transpilation warnings:", errors);
   }
 
-  // Step 2: Remove any remaining CommonJS artifacts that the compiler may add.
-  // Even with ModuleKind.None, some TS versions add "use strict" and Object.defineProperty.
+  // Step 2: Remove any remaining CommonJS artifacts
   let output = result.outputText;
   output = output.replace(/"use strict";\s*\n?/g, '');
   output = output.replace(/Object\.defineProperty\(exports,\s*"__esModule",\s*\{[^}]*\}\);\s*\n?/g, '');
@@ -202,12 +293,14 @@ function transpileToJS(tsCode: string): string {
 // ==================== LLM PROVIDERS ====================
 
 /**
- * Generate renderer code using Anthropic Claude.
+ * Generate renderer code using Anthropic Claude via the formal Skills API.
+ * 
+ * This uses:
+ * - `client.beta.skills` to upload/reference the skill
+ * - `client.beta.messages.create()` with `container.skills` and `code_execution` tool
+ * - Claude validates the generated code in its sandbox before returning it
  */
-async function generateWithClaude(
-  skillPrompt: string,
-  userMessage: string
-): Promise<string> {
+async function generateWithClaude(userMessage: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY environment variable is not set.");
@@ -216,36 +309,100 @@ async function generateWithClaude(
   const client = new Anthropic({ apiKey });
   const model = MODELS.claude;
 
-  console.log(`[LLM Renderer] Calling Claude (${model.id})...`);
+  // Get or create the skill
+  const skillId = await getOrCreateClaudeSkill(client);
+  console.log(`[LLM Renderer] Using Claude skill: ${skillId}`);
+  console.log(`[LLM Renderer] Calling Claude (${model.id}) with Skills API...`);
 
-  const response = await client.messages.create({
+  // Call Claude with the skill and code execution
+  const response = await client.beta.messages.create({
     model: model.id,
     max_tokens: model.maxTokens,
-    system: skillPrompt,
+    betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+    container: {
+      skills: [
+        {
+          type: "custom" as const,
+          skill_id: skillId,
+          version: "latest",
+        },
+      ],
+    },
     messages: [{ role: "user", content: userMessage }],
+    tools: [
+      {
+        type: "code_execution_20250825" as const,
+        name: "code_execution",
+      },
+    ],
   });
 
-  // Extract text from response
-  const textBlock = response.content.find((block) => block.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
+  // Handle pause_turn for long operations
+  let finalResponse = response;
+  let retries = 0;
+  const maxRetries = 5;
+
+  while (finalResponse.stop_reason === "pause_turn" && retries < maxRetries) {
+    console.log(`[LLM Renderer] Claude paused (turn ${retries + 1}), continuing...`);
+    retries++;
+
+    const continueMessages: any[] = [
+      { role: "user", content: userMessage },
+      { role: "assistant", content: finalResponse.content },
+      { role: "user", content: "Please continue." },
+    ];
+
+    finalResponse = await client.beta.messages.create({
+      model: model.id,
+      max_tokens: model.maxTokens,
+      betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+      container: {
+        id: finalResponse.container?.id,
+        skills: [
+          {
+            type: "custom" as const,
+            skill_id: skillId,
+            version: "latest",
+          },
+        ],
+      },
+      messages: continueMessages,
+      tools: [
+        {
+          type: "code_execution_20250825" as const,
+          name: "code_execution",
+        },
+      ],
+    });
+  }
+
+  // Extract text from response content blocks
+  // The response may contain text blocks and code execution result blocks
+  let fullText = "";
+  for (const block of finalResponse.content) {
+    if (block.type === "text") {
+      fullText += block.text;
+    }
+  }
+
+  if (!fullText) {
     throw new Error("Claude returned no text content.");
   }
 
-  console.log(`[LLM Renderer] Claude response received, length: ${textBlock.text.length}`);
-  return textBlock.text;
+  console.log(`[LLM Renderer] Claude response received, length: ${fullText.length}`);
+  return fullText;
 }
 
 /**
- * Generate renderer code using Google Gemini.
+ * Generate renderer code using Google Gemini (system prompt approach).
  */
-async function generateWithGemini(
-  skillPrompt: string,
-  userMessage: string
-): Promise<string> {
+async function generateWithGemini(userMessage: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY environment variable is not set.");
   }
+
+  const geminiPrompt = await loadGeminiPrompt();
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const modelConfig = MODELS.gemini;
@@ -254,7 +411,7 @@ async function generateWithGemini(
 
   const model = genAI.getGenerativeModel({
     model: modelConfig.id,
-    systemInstruction: skillPrompt,
+    systemInstruction: geminiPrompt,
   });
 
   const result = await model.generateContent(userMessage);
@@ -318,16 +475,14 @@ export async function listCachedRenderers(domain?: string): Promise<CachedRender
       // Restore ISO timestamp from filename format:
       // Filename format: 2026-04-21T16-23-22-502Z
       // Need to restore to: 2026-04-21T16:23:22.502Z
-      // Only replace dashes AFTER the 'T' (time portion), not in the date portion
       const tIdx = fileTimestamp.indexOf('T');
       let parsedTimestamp = fileTimestamp;
       if (tIdx !== -1) {
-        const datePart = fileTimestamp.substring(0, tIdx); // 2026-04-21
-        const timePart = fileTimestamp.substring(tIdx);     // T16-23-22-502Z
-        // Replace dashes in time part with colons, but last dash before Z is milliseconds (use dot)
+        const datePart = fileTimestamp.substring(0, tIdx);
+        const timePart = fileTimestamp.substring(tIdx);
         const timeFixed = timePart
-          .replace(/-(\d{3}Z)$/, '.$1')  // -502Z -> .502Z
-          .replace(/-/g, ':');            // T16:23:22
+          .replace(/-(\d{3}Z)$/, '.$1')
+          .replace(/-/g, ':');
         parsedTimestamp = datePart + timeFixed;
       }
 
@@ -410,10 +565,13 @@ export async function clearCache(domain?: string): Promise<number> {
 /**
  * Generate a domain-specific Canvas renderer using an LLM.
  * 
- * 1. Loads the skill prompt
- * 2. Builds the user message with domain name + sample states
- * 3. Calls the selected LLM provider
- * 4. Extracts and validates the generated code
+ * For Claude: Uses the formal Skills API with code execution sandbox.
+ * For Gemini: Uses the system prompt approach.
+ * 
+ * 1. Builds the user message with domain name + sample states
+ * 2. Calls the selected LLM provider
+ * 3. Extracts and validates the generated code
+ * 4. Transpiles TypeScript to JavaScript
  * 5. Caches the result to disk
  * 6. Returns the code
  */
@@ -428,11 +586,7 @@ export async function generateRenderer(
   console.log(`[LLM Renderer] Sample states: ${states.length}`);
 
   try {
-    // 1. Load skill prompt
-    const skillPrompt = await loadSkillPrompt();
-
-    // 2. Build user message
-    // Send only first 2-3 states to keep token count reasonable
+    // 1. Build user message
     const sampleStates = states.slice(0, 3);
     const userMessage = `Generate a complete Canvas renderer for the "${domainName}" domain.
 
@@ -441,35 +595,33 @@ Here are ${sampleStates.length} sample states showing the data structure you nee
 ${JSON.stringify(sampleStates, null, 2)}
 
 Analyze the objects, their types, positions, properties, and the relations between them.
-Then generate the three TypeScript functions as specified in the instructions.`;
+Then generate the three TypeScript functions as specified in the instructions.
+Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code.`;
 
-    // 3. Call LLM
+    // 2. Call LLM
     let rawResponse: string;
     if (provider === "claude") {
-      rawResponse = await generateWithClaude(skillPrompt, userMessage);
+      rawResponse = await generateWithClaude(userMessage);
     } else if (provider === "gemini") {
-      rawResponse = await generateWithGemini(skillPrompt, userMessage);
+      rawResponse = await generateWithGemini(userMessage);
     } else {
       throw new Error(`Unknown provider: ${provider}`);
     }
 
-    // 4. Extract code
+    // 3. Extract code
     const tsCode = extractCode(rawResponse);
 
-    // 5. Validate (on the TypeScript source)
+    // 4. Validate (on the TypeScript source)
     const validation = validateCode(tsCode, domainName);
     if (!validation.valid) {
       console.warn("[LLM Renderer] Validation issues:", validation.issues);
-      // Still return the code but log warnings - the frontend will handle execution errors
     }
 
-    // 6. Transpile TypeScript to JavaScript
-    // Using the TypeScript compiler API ensures all type annotations, interfaces,
-    // generics, callback types, etc. are correctly removed — no fragile regex needed.
+    // 5. Transpile TypeScript to JavaScript
     const transpiled = transpileToJS(tsCode);
     console.log(`[LLM Renderer] Transpiled TS (${tsCode.length} chars) -> JS (${transpiled.length} chars)`);
 
-    // 7. Cache (save the transpiled JS so cached renderers are ready to use)
+    // 6. Cache
     const savedFile = await saveToCache(transpiled, domainName, provider);
 
     return {
