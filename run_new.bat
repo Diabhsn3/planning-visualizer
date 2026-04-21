@@ -42,23 +42,18 @@ if %errorlevel%==0 (
 echo.
 echo Step 3: Installing dependencies...
 
-if not exist backend\api\node_modules (
-    echo [INFO] Installing backend dependencies...
-    pushd backend\api
-    pnpm install
-    popd
-) else (
-    echo [OK] Backend dependencies already installed
-)
+:: Always run pnpm install to catch new packages (fast when nothing changed)
+echo [INFO] Installing/updating backend dependencies...
+pushd backend\api
+pnpm install
+popd
+echo [OK] Backend dependencies up to date
 
-if not exist frontend\node_modules (
-    echo [INFO] Installing frontend dependencies...
-    pushd frontend
-    pnpm install
-    popd
-) else (
-    echo [OK] Frontend dependencies already installed
-)
+echo [INFO] Installing/updating frontend dependencies...
+pushd frontend
+pnpm install
+popd
+echo [OK] Frontend dependencies up to date
 
 :: Step 4: Setup VS Build Tools
 echo.

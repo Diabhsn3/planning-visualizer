@@ -61,27 +61,20 @@ fi
 echo ""
 echo "Step 3: Installing dependencies..."
 
-# Install backend dependencies
-if [ ! -d "backend/api/node_modules" ]; then
-    echo "[INFO] Installing backend dependencies..."
-    cd backend/api
-    pnpm install
-    cd ../..
-    echo "[OK] Backend dependencies installed"
-else
-    echo "[OK] Backend dependencies already installed"
-fi
+# Install/update backend dependencies
+# Always run pnpm install to catch new packages (it's fast when nothing changed)
+echo "[INFO] Installing/updating backend dependencies..."
+cd backend/api
+pnpm install
+cd ../..
+echo "[OK] Backend dependencies up to date"
 
-# Install frontend dependencies
-if [ ! -d "frontend/node_modules" ]; then
-    echo "[INFO] Installing frontend dependencies..."
-    cd frontend
-    pnpm install
-    cd ..
-    echo "[OK] Frontend dependencies installed"
-else
-    echo "[OK] Frontend dependencies already installed"
-fi
+# Install/update frontend dependencies
+echo "[INFO] Installing/updating frontend dependencies..."
+cd frontend
+pnpm install
+cd ..
+echo "[OK] Frontend dependencies up to date"
 
 # Step 4: Check Fast Downward
 echo ""
