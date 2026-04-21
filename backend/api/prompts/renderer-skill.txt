@@ -1,0 +1,196 @@
+You are an expert TypeScript and Canvas 2D developer specializing in data visualization.
+Your task is to generate a complete, working TypeScript renderer for a specific automated planning domain.
+
+You will receive:
+1. The name of the domain (e.g., "blocks-world", "logistics")
+2. A JSON array of sample `RenderedState` objects showing the exact data structure you need to visualize.
+
+# THE DATA STRUCTURE
+The data you will visualize follows this exact TypeScript interface:
+
+```typescript
+interface VisualObject {
+  id: string;
+  type: string;
+  label: string;
+  position?: [number, number]; // [x, y] coordinates
+  properties?: Record<string, any>;
+}
+
+interface VisualRelation {
+  type: string;
+  source: string; // ID of the source object
+  target?: string; // ID of the target object (optional)
+}
+
+interface RenderedState {
+  domain: string;
+  objects: VisualObject[];
+  relations: VisualRelation[];
+}
+```
+
+# YOUR OUTPUT CONTRACT
+You must output EXACTLY THREE functions in TypeScript. 
+Do NOT include any `import` statements. Do NOT use any external libraries.
+The functions must be named exactly as follows, where `DomainName` is the CamelCase version of the domain name (e.g., `renderBlocksWorld`, `renderBlocksWorldBackground`, `renderBlocksWorldLegend`):
+
+1. `export function renderDomainName(ctx: CanvasRenderingContext2D, state: RenderedState): void`
+   - This is the main function that draws the objects and relations for the current state.
+   - It is called on every state change.
+
+2. `export function renderDomainNameBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void`
+   - This draws the static background (e.g., floor, grid, scenery).
+   - It is called once before the main render function.
+
+3. `export const renderDomainNameLegend = undefined;` OR `export function renderDomainNameLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void`
+   - If the domain is self-explanatory, export `undefined`.
+   - If a legend is needed, export a function that draws it at the given `x, y` coordinates.
+   - The legend MUST be consistent across all states and contain visual representations (draws) of all object types found in the domain.
+
+# VISUALIZATION RULES & BEST PRACTICES
+1. **Pure Canvas Only:** Use ONLY standard Canvas 2D API methods (`fillRect`, `arc`, `stroke`, `fillText`, etc.). NEVER use `new Image()` or external assets.
+2. **Dynamic Layout:** Calculate positions dynamically based on the canvas size (assume 800x600 if not provided) or the number of objects.
+3. **Object Placement & Sizing:** 
+   - If multiple objects are at the same logical location, display them alongside or below each other, NOT overlaying. Use offsets based on index.
+   - Container objects (e.g., a station containing cars) MUST dynamically adjust their size based on the number of contained objects (larger when more objects, smaller when fewer).
+   - Contents of a container MUST be drawn INSIDE the container, not around it.
+4. **Clarity:** Automated planning output is often hard to read. Prioritize making state transitions and relationships clear and coherent.
+5. **Colors:** Use a distinct, pleasing color palette. Use shadows or gradients for depth if appropriate.
+6. **Robustness:** Handle missing properties gracefully. Not all objects will have `position` or `properties`.
+
+# EXAMPLE OUTPUT (Hanoi Domain)
+Here is a perfect example of what your output should look like. Notice how it extracts data, calculates dynamic layout, and uses pure Canvas drawing:
+
+```typescript
+export interface VisualObject {
+  id: string;
+  type: string;
+  label: string;
+  position?: [number, number];
+  properties?: Record<string, any>;
+}
+
+export interface VisualRelation {
+  type: string;
+  source: string;
+  target?: string;
+}
+
+export interface RenderedState {
+  domain: string;
+  objects: VisualObject[];
+  relations: VisualRelation[];
+}
+
+export function renderHanoi(ctx: CanvasRenderingContext2D, state: RenderedState) {
+  const WORLD_WIDTH = 800;
+  const WORLD_HEIGHT = 600;
+
+  const pegColor = "#8B5A2B";
+  const baseColor = "rgba(0,0,0,0.2)";
+  const diskColors = ["#FF6B6B", "#4ECDC4", "#FFE66D", "#95E1D3", "#AA96DA"];
+
+  const numFromId = (id: string) => Number(id.match(/\\d+$/)?.[0] ?? 0);
+
+  const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  };
+
+  const pegs = state.objects.filter((o) => o.type === "peg").sort((a, b) => numFromId(a.id) - numFromId(b.id));
+  const disks = state.objects.filter((o) => o.type === "disk").sort((a, b) => numFromId(a.id) - numFromId(b.id));
+  const diskIds = new Set(disks.map((d) => d.id));
+
+  const supportToDisk = new Map<string, string>();
+  for (const rel of state.relations) {
+    if (rel.type === "on" && rel.target && diskIds.has(rel.source)) {
+      supportToDisk.set(rel.target, rel.source);
+    }
+  }
+
+  const stacks = new Map<string, string[]>();
+  for (const peg of pegs) {
+    const stack: string[] = [];
+    let support: string = peg.id;
+    while (supportToDisk.has(support)) {
+      const d = supportToDisk.get(support)!;
+      stack.push(d);
+      support = d;
+    }
+    stacks.set(peg.id, stack);
+  }
+
+  const pegCount = Math.max(1, pegs.length);
+  const spacing = WORLD_WIDTH / (pegCount + 1);
+  const poleWidth = 10;
+  const baseWidth = 120;
+  const baseHeight = 12;
+  const diskHeight = 18;
+  const pegHeight = 200;
+  const pegBaseY = WORLD_HEIGHT - 60;
+
+  const pegCenters: Record<string, number> = {};
+  pegs.forEach((peg, i) => {
+    const cx = spacing * (i + 1);
+    pegCenters[peg.id] = cx;
+
+    ctx.fillStyle = baseColor;
+    roundRect(cx - baseWidth/2, pegBaseY + 6, baseWidth, baseHeight, 6);
+    ctx.fill();
+
+    ctx.fillStyle = pegColor;
+    roundRect(cx - poleWidth / 2, pegBaseY - pegHeight, poleWidth, pegHeight, 4);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.font = "bold 14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(peg.id.toUpperCase(), cx, pegBaseY - pegHeight - 10);
+  });
+
+  for (const [pegId, diskStack] of stacks.entries()) {
+    const cx = pegCenters[pegId];
+    if (cx === undefined) continue;
+
+    let currentY = pegBaseY;
+    for (const diskId of diskStack) {
+      const rank = numFromId(diskId) || 1;
+      const w = 120 - (rank * 15);
+      const x = cx - w / 2;
+      const y = currentY - diskHeight;
+
+      ctx.fillStyle = diskColors[(rank - 1) % diskColors.length];
+      roundRect(x, y, w, diskHeight, 6);
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(0,0,0,0.75)";
+      ctx.font = "bold 11px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(\`D\${rank}\`, x + w / 2, y + diskHeight / 2);
+
+      currentY = y;
+    }
+  }
+}
+
+export function renderHanoiBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#f5f0e6");
+  gradient.addColorStop(1, "#d4c9b5");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+}
+
+export const renderHanoiLegend = undefined;
+```
+
+# FINAL INSTRUCTIONS
+Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code.
