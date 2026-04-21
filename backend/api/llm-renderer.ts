@@ -163,6 +163,10 @@ function validateCode(code: string, domainName: string): { valid: boolean; issue
  * This handles all TS syntax correctly: interfaces, type annotations, generics,
  * callback types, union types, etc. — unlike fragile regex-based stripping.
  */
+export function transpileCachedCode(code: string): string {
+  return transpileToJS(code);
+}
+
 function transpileToJS(tsCode: string): string {
   // Step 1: Strip 'export' keywords before transpilation.
   // If the LLM generates `export function renderX(...)`, the TS compiler
@@ -311,11 +315,27 @@ export async function listCachedRenderers(domain?: string): Promise<CachedRender
       const filepath = path.join(CACHE_DIR, file);
       const content = await readFile(filepath, "utf-8");
 
+      // Restore ISO timestamp from filename format:
+      // Filename format: 2026-04-21T16-23-22-502Z
+      // Need to restore to: 2026-04-21T16:23:22.502Z
+      // Only replace dashes AFTER the 'T' (time portion), not in the date portion
+      const tIdx = fileTimestamp.indexOf('T');
+      let parsedTimestamp = fileTimestamp;
+      if (tIdx !== -1) {
+        const datePart = fileTimestamp.substring(0, tIdx); // 2026-04-21
+        const timePart = fileTimestamp.substring(tIdx);     // T16-23-22-502Z
+        // Replace dashes in time part with colons, but last dash before Z is milliseconds (use dot)
+        const timeFixed = timePart
+          .replace(/-(\d{3}Z)$/, '.$1')  // -502Z -> .502Z
+          .replace(/-/g, ':');            // T16:23:22
+        parsedTimestamp = datePart + timeFixed;
+      }
+
       renderers.push({
         filename: file,
         domain: fileDomain,
         provider: fileProvider,
-        timestamp: fileTimestamp.replace(/-/g, ":").replace("T", " "),
+        timestamp: parsedTimestamp,
         size: content.length,
       });
     }

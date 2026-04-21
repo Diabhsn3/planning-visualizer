@@ -453,10 +453,10 @@ export default function Visualizer() {
     try {
       setLlmError(null);
       const response = await fetch(
-        `/api/trpc/visualizer.llmLoadCachedRenderer?input=${encodeURIComponent(JSON.stringify({ filename }))}`
+        `/api/trpc/visualizer.llmLoadCachedRenderer?input=${encodeURIComponent(JSON.stringify({ json: { filename } }))}`
       );
-      const json = await response.json();
-      const data = json?.result?.data;
+      const responseJson = await response.json();
+      const data = responseJson?.result?.data?.json;
       if (data?.code) {
         setLlmRendererCode(data.code);
         setSelectedCachedFile(filename);

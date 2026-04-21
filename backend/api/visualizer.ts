@@ -1,13 +1,7 @@
 import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
-import {
-  generateRenderer,
-  listCachedRenderers,
-  loadCachedRenderer,
-  deleteCachedRenderer,
-  type LLMProvider,
-} from "./llm-renderer";
+import { generateRenderer, listCachedRenderers, loadCachedRenderer, deleteCachedRenderer, transpileCachedCode, type LLMProvider } from "./llm-renderer";
 import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
@@ -521,7 +515,9 @@ export const visualizerRouter = router({
       if (!code) {
         throw new Error(`Cached renderer not found: ${input.filename}`);
       }
-      return { filename: input.filename, code };
+      // Transpile the cached code to clean JS (handles old files with CommonJS exports)
+      const cleanCode = transpileCachedCode(code);
+      return { filename: input.filename, code: cleanCode };
     }),
 
   /**
