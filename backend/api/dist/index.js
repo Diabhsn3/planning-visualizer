@@ -142,10 +142,27 @@ async function getOrCreateClaudeSkill(client) {
     }
   } catch {
   }
+  const SKILL_DISPLAY_TITLE = "Canvas Renderer Generator";
+  console.log(`[LLM Renderer] Looking for existing skill: "${SKILL_DISPLAY_TITLE}"...`);
+  try {
+    const skillsList = await client.beta.skills.list({
+      betas: ["skills-2025-10-02"]
+    });
+    for await (const existingSkill of skillsList) {
+      if (existingSkill.display_title === SKILL_DISPLAY_TITLE) {
+        cachedSkillId = existingSkill.id;
+        console.log(`[LLM Renderer] Found existing Claude skill: ${cachedSkillId}`);
+        await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
+        return cachedSkillId;
+      }
+    }
+  } catch (listErr) {
+    console.warn("[LLM Renderer] Could not list skills:", listErr);
+  }
   console.log("[LLM Renderer] Creating new Claude skill...");
   const skillDir = "canvas-renderer-generator";
   const skill = await client.beta.skills.create({
-    display_title: "Canvas Renderer Generator",
+    display_title: SKILL_DISPLAY_TITLE,
     files: [
       await toFile(
         createReadStream(SKILL_MD_PATH),
