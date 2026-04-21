@@ -100,7 +100,7 @@ import { fileURLToPath } from "url";
 import { createReadStream } from "fs";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
-var SKILLS_DIR = path.join(__dirname, "skills", "canvas-renderer");
+var SKILLS_DIR = path.join(__dirname, "skills", "canvas-renderer-generator");
 var SKILL_MD_PATH = path.join(SKILLS_DIR, "SKILL.md");
 var SKILL_INTERFACES_PATH = path.join(SKILLS_DIR, "interfaces.ts");
 var SKILL_EXAMPLE_PATH = path.join(SKILLS_DIR, "example-hanoi.ts");
@@ -143,7 +143,7 @@ async function getOrCreateClaudeSkill(client) {
   } catch {
   }
   console.log("[LLM Renderer] Creating new Claude skill...");
-  const skillDir = "canvas-renderer";
+  const skillDir = "canvas-renderer-generator";
   const skill = await client.beta.skills.create({
     display_title: "Canvas Renderer Generator",
     files: [

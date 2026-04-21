@@ -35,7 +35,7 @@ const __dirname = path.dirname(__filename);
 // ==================== CONFIGURATION ====================
 
 // Claude Skills API files
-const SKILLS_DIR = path.join(__dirname, "skills", "canvas-renderer");
+const SKILLS_DIR = path.join(__dirname, "skills", "canvas-renderer-generator");
 const SKILL_MD_PATH = path.join(SKILLS_DIR, "SKILL.md");
 const SKILL_INTERFACES_PATH = path.join(SKILLS_DIR, "interfaces.ts");
 const SKILL_EXAMPLE_PATH = path.join(SKILLS_DIR, "example-hanoi.ts");
@@ -131,7 +131,7 @@ async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
   // 3. Create new skill
   console.log("[LLM Renderer] Creating new Claude skill...");
 
-  const skillDir = "canvas-renderer";
+  const skillDir = "canvas-renderer-generator";
 
   const skill = await client.beta.skills.create({
     display_title: "Canvas Renderer Generator",

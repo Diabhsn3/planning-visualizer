@@ -1,0 +1,40 @@
+## Research: Can Gemini Use a Formal Skills API Like Claude?
+
+### Key Findings:
+
+1. **Gemini does NOT have a formal Skills API equivalent to Claude's `beta.skills.create()`**
+   - Claude Skills API: Upload SKILL.md + reference files → get skill_id → reference in messages
+   - Gemini has NO equivalent API endpoint for creating/managing skills
+
+2. **Gemini "Skills" are a different concept**
+   - Gemini Skills (from ai.google.dev/gemini-api/docs/coding-agents) are for CODING AGENTS
+   - They are installed via `npx skills add` into coding environments (Cursor, Claude Code, Gemini CLI)
+   - They are NOT an API you call programmatically
+   - They are for developer tools, not for application backends
+
+3. **Gemini Code Execution Tool**
+   - Gemini HAS a code execution tool (similar to Claude's)
+   - BUT it only runs Python, NOT TypeScript/JavaScript
+   - So it CANNOT validate our generated Canvas renderers
+   - Enabled via: tools=[types.Tool(code_execution=types.ToolCodeExecution)]
+
+4. **Gemini Context Caching API**
+   - Gemini HAS a context caching API that can cache system instructions + files
+   - This is the CLOSEST equivalent to Claude Skills for our use case
+   - Upload files via Files API → Create cached content → Reference in messages
+   - Cached content has a TTL (minimum 1 minute, default varies)
+   - Reduces cost for repeated calls with same context
+   - BUT it's just caching, not a "skill" with sandbox execution
+
+5. **Gemini Files API**
+   - Can upload files (up to 2GB) to Google's cloud
+   - Files expire after 48 hours
+   - Can be referenced in messages as context
+   - Could upload our skill files as context documents
+
+### Conclusion:
+- There is NO way to use Claude's formal Skills API with Gemini
+- The closest Gemini equivalent is: Files API + Context Caching + system instructions
+- Gemini's code execution only runs Python (not useful for TypeScript validation)
+- For Gemini, the best approach remains: system prompt with skill content
+- We CAN improve the Gemini approach by using Context Caching to reduce token costs
