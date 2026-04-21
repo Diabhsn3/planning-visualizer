@@ -35,19 +35,29 @@ const __dirname = path.dirname(__filename);
 // ==================== CONFIGURATION ====================
 
 // Claude Skills API files
-const SKILLS_DIR = path.join(__dirname, "skills", "canvas-renderer-generator");
+// In production (dist/index.js), __dirname is backend/api/dist, so we need to go up one level
+const SKILLS_DIR = __dirname.endsWith("dist")
+  ? path.join(__dirname, "..", "skills", "canvas-renderer-generator")
+  : path.join(__dirname, "skills", "canvas-renderer-generator");
 const SKILL_MD_PATH = path.join(SKILLS_DIR, "SKILL.md");
 const SKILL_INTERFACES_PATH = path.join(SKILLS_DIR, "interfaces.ts");
 const SKILL_EXAMPLE_PATH = path.join(SKILLS_DIR, "example-hanoi.ts");
 const SKILL_RULES_PATH = path.join(SKILLS_DIR, "rules.md");
 
 // Gemini still uses the flat prompt file
-const GEMINI_PROMPT_PATH = path.join(__dirname, "prompts", "renderer-skill.txt");
+// In production (dist/index.js), __dirname is backend/api/dist, so we need to go up one level
+const GEMINI_PROMPT_PATH = __dirname.endsWith("dist") 
+  ? path.join(__dirname, "..", "prompts", "renderer-skill.txt")
+  : path.join(__dirname, "prompts", "renderer-skill.txt");
 
-const CACHE_DIR = path.join(__dirname, "llm_renderers");
+const CACHE_DIR = __dirname.endsWith("dist")
+  ? path.join(__dirname, "..", "llm_renderers")
+  : path.join(__dirname, "llm_renderers");
 
 // File to persist the skill_id after first upload
-const SKILL_ID_CACHE_PATH = path.join(__dirname, ".claude-skill-id");
+const SKILL_ID_CACHE_PATH = __dirname.endsWith("dist")
+  ? path.join(__dirname, "..", ".claude-skill-id")
+  : path.join(__dirname, ".claude-skill-id");
 
 // Model configurations
 const MODELS = {

@@ -100,14 +100,14 @@ import { fileURLToPath } from "url";
 import { createReadStream } from "fs";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
-var SKILLS_DIR = path.join(__dirname, "skills", "canvas-renderer-generator");
+var SKILLS_DIR = __dirname.endsWith("dist") ? path.join(__dirname, "..", "skills", "canvas-renderer-generator") : path.join(__dirname, "skills", "canvas-renderer-generator");
 var SKILL_MD_PATH = path.join(SKILLS_DIR, "SKILL.md");
 var SKILL_INTERFACES_PATH = path.join(SKILLS_DIR, "interfaces.ts");
 var SKILL_EXAMPLE_PATH = path.join(SKILLS_DIR, "example-hanoi.ts");
 var SKILL_RULES_PATH = path.join(SKILLS_DIR, "rules.md");
-var GEMINI_PROMPT_PATH = path.join(__dirname, "prompts", "renderer-skill.txt");
-var CACHE_DIR = path.join(__dirname, "llm_renderers");
-var SKILL_ID_CACHE_PATH = path.join(__dirname, ".claude-skill-id");
+var GEMINI_PROMPT_PATH = __dirname.endsWith("dist") ? path.join(__dirname, "..", "prompts", "renderer-skill.txt") : path.join(__dirname, "prompts", "renderer-skill.txt");
+var CACHE_DIR = __dirname.endsWith("dist") ? path.join(__dirname, "..", "llm_renderers") : path.join(__dirname, "llm_renderers");
+var SKILL_ID_CACHE_PATH = __dirname.endsWith("dist") ? path.join(__dirname, "..", ".claude-skill-id") : path.join(__dirname, ".claude-skill-id");
 var MODELS = {
   claude: {
     id: "claude-sonnet-4-20250514",
