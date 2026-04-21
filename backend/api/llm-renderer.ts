@@ -1,0 +1,440 @@
+/**
+ * LLM Renderer Module
+ * 
+ * Generates domain-specific Canvas rendering code using LLMs (Claude or Gemini).
+ * Uses a skill/prompt template to guide the LLM in producing correct TypeScript
+ * renderer functions that follow the project's RenderedState interface.
+ * 
+ * Supports:
+ * - Anthropic Claude (claude-sonnet-4-20250514)
+ * - Google Gemini (gemini-2.5-flash)
+ * 
+ * Features:
+ * - Disk-based caching of generated renderers per domain
+ * - Automatic code extraction from LLM responses
+ */
+
+import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ==================== CONFIGURATION ====================
+
+const SKILL_PROMPT_PATH = path.join(__dirname, "prompts", "renderer-skill.txt");
+const CACHE_DIR = path.join(__dirname, "llm_renderers");
+
+// Model configurations
+const MODELS = {
+  claude: {
+    id: "claude-sonnet-4-20250514",
+    name: "Claude Sonnet 4",
+    maxTokens: 8192,
+  },
+  gemini: {
+    id: "gemini-2.5-flash",
+    name: "Gemini 2.5 Flash",
+    maxTokens: 8192,
+  },
+} as const;
+
+export type LLMProvider = keyof typeof MODELS;
+
+// ==================== INTERFACES ====================
+
+export interface GenerateRendererRequest {
+  domainName: string;
+  states: any[]; // RenderedState[] - sample states
+  provider: LLMProvider;
+}
+
+export interface GenerateRendererResponse {
+  success: boolean;
+  code?: string;
+  savedFile?: string;
+  provider: string;
+  model: string;
+  error?: string;
+}
+
+export interface CachedRenderer {
+  filename: string;
+  domain: string;
+  provider: string;
+  timestamp: string;
+  size: number;
+}
+
+// ==================== SKILL LOADER ====================
+
+let cachedSkillPrompt: string | null = null;
+
+async function loadSkillPrompt(): Promise<string> {
+  if (cachedSkillPrompt) return cachedSkillPrompt;
+
+  try {
+    cachedSkillPrompt = await readFile(SKILL_PROMPT_PATH, "utf-8");
+    console.log("[LLM Renderer] Skill prompt loaded, length:", cachedSkillPrompt.length);
+    return cachedSkillPrompt;
+  } catch (error) {
+    console.error("[LLM Renderer] Failed to load skill prompt:", error);
+    throw new Error("Skill prompt file not found. Ensure backend/api/prompts/renderer-skill.txt exists.");
+  }
+}
+
+// ==================== CODE EXTRACTION ====================
+
+/**
+ * Extract TypeScript code from LLM response.
+ * Handles responses that may or may not be wrapped in markdown code blocks.
+ */
+function extractCode(response: string): string {
+  // Try to extract from markdown code blocks first
+  const codeBlockMatch = response.match(/```(?:typescript|ts|javascript|js)?\s*\n([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    return codeBlockMatch[1].trim();
+  }
+
+  // If no code block, check if the response starts with typical code patterns
+  const trimmed = response.trim();
+  if (
+    trimmed.startsWith("export ") ||
+    trimmed.startsWith("interface ") ||
+    trimmed.startsWith("function ") ||
+    trimmed.startsWith("//") ||
+    trimmed.startsWith("const ")
+  ) {
+    return trimmed;
+  }
+
+  // Last resort: return the whole response trimmed
+  console.warn("[LLM Renderer] Could not identify code block, using full response");
+  return trimmed;
+}
+
+/**
+ * Basic validation that the generated code contains the expected function signatures.
+ */
+function validateCode(code: string, domainName: string): { valid: boolean; issues: string[] } {
+  const issues: string[] = [];
+
+  // Convert domain name to CamelCase for function name matching
+  // e.g., "blocks-world" -> "BlocksWorld", "hanoi" -> "Hanoi"
+  const camelCase = domainName
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+
+  // Check for main render function
+  const mainFnPattern = new RegExp(`function\\s+render${camelCase}\\s*\\(`);
+  if (!mainFnPattern.test(code)) {
+    // Also check for a generic "render" function name
+    if (!/function\s+render\w*\s*\(/.test(code)) {
+      issues.push(`Missing main render function (expected render${camelCase})`);
+    }
+  }
+
+  // Check for background function (can be undefined export)
+  const bgPattern = new RegExp(`render${camelCase}Background`);
+  if (!bgPattern.test(code) && !/renderBackground|Background\s*=\s*undefined/.test(code)) {
+    issues.push(`Missing background function or export (expected render${camelCase}Background)`);
+  }
+
+  // Check for legend function/export (can be undefined)
+  const legendPattern = new RegExp(`render${camelCase}Legend`);
+  if (!legendPattern.test(code) && !/renderLegend|Legend\s*=\s*undefined/.test(code)) {
+    issues.push(`Missing legend function or export (expected render${camelCase}Legend)`);
+  }
+
+  // Check for forbidden patterns
+  if (/import\s+/.test(code) && !/import\s+type/.test(code)) {
+    issues.push("Code contains import statements (not allowed in runtime-evaluated code)");
+  }
+  if (/new\s+Image\s*\(/.test(code)) {
+    issues.push("Code uses new Image() (external assets not allowed)");
+  }
+  if (/require\s*\(/.test(code)) {
+    issues.push("Code uses require() (not allowed)");
+  }
+
+  return { valid: issues.length === 0, issues };
+}
+
+// ==================== LLM PROVIDERS ====================
+
+/**
+ * Generate renderer code using Anthropic Claude.
+ */
+async function generateWithClaude(
+  skillPrompt: string,
+  userMessage: string
+): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY environment variable is not set.");
+  }
+
+  const client = new Anthropic({ apiKey });
+  const model = MODELS.claude;
+
+  console.log(`[LLM Renderer] Calling Claude (${model.id})...`);
+
+  const response = await client.messages.create({
+    model: model.id,
+    max_tokens: model.maxTokens,
+    system: skillPrompt,
+    messages: [{ role: "user", content: userMessage }],
+  });
+
+  // Extract text from response
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Claude returned no text content.");
+  }
+
+  console.log(`[LLM Renderer] Claude response received, length: ${textBlock.text.length}`);
+  return textBlock.text;
+}
+
+/**
+ * Generate renderer code using Google Gemini.
+ */
+async function generateWithGemini(
+  skillPrompt: string,
+  userMessage: string
+): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY environment variable is not set.");
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const modelConfig = MODELS.gemini;
+
+  console.log(`[LLM Renderer] Calling Gemini (${modelConfig.id})...`);
+
+  const model = genAI.getGenerativeModel({
+    model: modelConfig.id,
+    systemInstruction: skillPrompt,
+  });
+
+  const result = await model.generateContent(userMessage);
+  const response = result.response;
+  const text = response.text();
+
+  if (!text) {
+    throw new Error("Gemini returned no text content.");
+  }
+
+  console.log(`[LLM Renderer] Gemini response received, length: ${text.length}`);
+  return text;
+}
+
+// ==================== CACHING ====================
+
+/**
+ * Save generated renderer code to disk cache.
+ */
+async function saveToCache(
+  code: string,
+  domainName: string,
+  provider: LLMProvider
+): Promise<string> {
+  await mkdir(CACHE_DIR, { recursive: true });
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `${domainName}_${provider}_${timestamp}.ts`;
+  const filepath = path.join(CACHE_DIR, filename);
+
+  await writeFile(filepath, code, "utf-8");
+  console.log(`[LLM Renderer] Cached renderer saved: ${filename}`);
+
+  return filename;
+}
+
+/**
+ * List all cached renderers, optionally filtered by domain.
+ */
+export async function listCachedRenderers(domain?: string): Promise<CachedRenderer[]> {
+  try {
+    await mkdir(CACHE_DIR, { recursive: true });
+    const files = await readdir(CACHE_DIR);
+
+    const renderers: CachedRenderer[] = [];
+
+    for (const file of files) {
+      if (!file.endsWith(".ts") || file === ".gitkeep") continue;
+
+      // Parse filename: {domain}_{provider}_{timestamp}.ts
+      const match = file.match(/^(.+?)_(claude|gemini)_(.+)\.ts$/);
+      if (!match) continue;
+
+      const [, fileDomain, fileProvider, fileTimestamp] = match;
+
+      if (domain && fileDomain !== domain) continue;
+
+      const filepath = path.join(CACHE_DIR, file);
+      const content = await readFile(filepath, "utf-8");
+
+      renderers.push({
+        filename: file,
+        domain: fileDomain,
+        provider: fileProvider,
+        timestamp: fileTimestamp.replace(/-/g, ":").replace("T", " "),
+        size: content.length,
+      });
+    }
+
+    // Sort by timestamp descending (newest first)
+    renderers.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+    return renderers;
+  } catch (error) {
+    console.error("[LLM Renderer] Error listing cache:", error);
+    return [];
+  }
+}
+
+/**
+ * Load a cached renderer by filename.
+ */
+export async function loadCachedRenderer(filename: string): Promise<string | null> {
+  try {
+    const filepath = path.join(CACHE_DIR, filename);
+    const code = await readFile(filepath, "utf-8");
+    console.log(`[LLM Renderer] Loaded cached renderer: ${filename}`);
+    return code;
+  } catch (error) {
+    console.error(`[LLM Renderer] Cache file not found: ${filename}`);
+    return null;
+  }
+}
+
+/**
+ * Delete a cached renderer by filename.
+ */
+export async function deleteCachedRenderer(filename: string): Promise<boolean> {
+  try {
+    const filepath = path.join(CACHE_DIR, filename);
+    await unlink(filepath);
+    console.log(`[LLM Renderer] Deleted cached renderer: ${filename}`);
+    return true;
+  } catch (error) {
+    console.error(`[LLM Renderer] Failed to delete: ${filename}`);
+    return false;
+  }
+}
+
+/**
+ * Clear all cached renderers for a domain (or all domains).
+ */
+export async function clearCache(domain?: string): Promise<number> {
+  try {
+    await mkdir(CACHE_DIR, { recursive: true });
+    const files = await readdir(CACHE_DIR);
+    let deleted = 0;
+
+    for (const file of files) {
+      if (!file.endsWith(".ts") || file === ".gitkeep") continue;
+      if (domain && !file.startsWith(`${domain}_`)) continue;
+
+      await unlink(path.join(CACHE_DIR, file));
+      deleted++;
+    }
+
+    console.log(`[LLM Renderer] Cleared ${deleted} cached renderers`);
+    return deleted;
+  } catch (error) {
+    console.error("[LLM Renderer] Error clearing cache:", error);
+    return 0;
+  }
+}
+
+// ==================== MAIN GENERATION FUNCTION ====================
+
+/**
+ * Generate a domain-specific Canvas renderer using an LLM.
+ * 
+ * 1. Loads the skill prompt
+ * 2. Builds the user message with domain name + sample states
+ * 3. Calls the selected LLM provider
+ * 4. Extracts and validates the generated code
+ * 5. Caches the result to disk
+ * 6. Returns the code
+ */
+export async function generateRenderer(
+  request: GenerateRendererRequest
+): Promise<GenerateRendererResponse> {
+  const { domainName, states, provider } = request;
+  const model = MODELS[provider];
+
+  console.log(`[LLM Renderer] Starting generation for domain: ${domainName}`);
+  console.log(`[LLM Renderer] Provider: ${provider} (${model.name})`);
+  console.log(`[LLM Renderer] Sample states: ${states.length}`);
+
+  try {
+    // 1. Load skill prompt
+    const skillPrompt = await loadSkillPrompt();
+
+    // 2. Build user message
+    // Send only first 2-3 states to keep token count reasonable
+    const sampleStates = states.slice(0, 3);
+    const userMessage = `Generate a complete Canvas renderer for the "${domainName}" domain.
+
+Here are ${sampleStates.length} sample states showing the data structure you need to visualize:
+
+${JSON.stringify(sampleStates, null, 2)}
+
+Analyze the objects, their types, positions, properties, and the relations between them.
+Then generate the three TypeScript functions as specified in the instructions.`;
+
+    // 3. Call LLM
+    let rawResponse: string;
+    if (provider === "claude") {
+      rawResponse = await generateWithClaude(skillPrompt, userMessage);
+    } else if (provider === "gemini") {
+      rawResponse = await generateWithGemini(skillPrompt, userMessage);
+    } else {
+      throw new Error(`Unknown provider: ${provider}`);
+    }
+
+    // 4. Extract code
+    const code = extractCode(rawResponse);
+
+    // 5. Validate
+    const validation = validateCode(code, domainName);
+    if (!validation.valid) {
+      console.warn("[LLM Renderer] Validation issues:", validation.issues);
+      // Still return the code but log warnings - the frontend will handle execution errors
+    }
+
+    // 6. Cache
+    const savedFile = await saveToCache(code, domainName, provider);
+
+    return {
+      success: true,
+      code,
+      savedFile,
+      provider: model.name,
+      model: model.id,
+    };
+  } catch (error) {
+    console.error("[LLM Renderer] Generation failed:", error);
+
+    let errorMessage = "Unknown error during LLM generation";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    return {
+      success: false,
+      provider: model.name,
+      model: model.id,
+      error: errorMessage,
+    };
+  }
+}

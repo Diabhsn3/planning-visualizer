@@ -1,6 +1,13 @@
 import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
+import {
+  generateRenderer,
+  listCachedRenderers,
+  loadCachedRenderer,
+  deleteCachedRenderer,
+  type LLMProvider,
+} from "./llm-renderer";
 import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
@@ -451,5 +458,83 @@ export const visualizerRouter = router({
         console.error(`[getDomainDefinition] Error reading domain file:`, error);
         throw new Error(`Failed to read domain file for ${input.domainName}`);
       }
+    }),
+
+  // ==================== LLM RENDERER ENDPOINTS ====================
+
+  /**
+   * Generate a Canvas renderer using an LLM (Claude or Gemini).
+   * Accepts domain name, sample states, and the LLM provider to use.
+   * Returns the generated TypeScript code.
+   */
+  llmGenerateRenderer: publicProcedure
+    .input(
+      z.object({
+        domainName: z.string(),
+        states: z.array(z.any()),
+        provider: z.enum(["claude", "gemini"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      console.log("[llmGenerateRenderer] Starting for domain:", input.domainName);
+      console.log("[llmGenerateRenderer] Provider:", input.provider);
+      console.log("[llmGenerateRenderer] States count:", input.states.length);
+
+      const result = await generateRenderer({
+        domainName: input.domainName,
+        states: input.states,
+        provider: input.provider as LLMProvider,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "LLM generation failed");
+      }
+
+      return result;
+    }),
+
+  /**
+   * List cached LLM-generated renderers, optionally filtered by domain.
+   */
+  llmListCachedRenderers: publicProcedure
+    .input(
+      z.object({
+        domain: z.string().optional(),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const renderers = await listCachedRenderers(input?.domain);
+      return renderers;
+    }),
+
+  /**
+   * Load a specific cached renderer by filename.
+   */
+  llmLoadCachedRenderer: publicProcedure
+    .input(
+      z.object({
+        filename: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const code = await loadCachedRenderer(input.filename);
+      if (!code) {
+        throw new Error(`Cached renderer not found: ${input.filename}`);
+      }
+      return { filename: input.filename, code };
+    }),
+
+  /**
+   * Delete a specific cached renderer by filename.
+   */
+  llmDeleteCachedRenderer: publicProcedure
+    .input(
+      z.object({
+        filename: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const success = await deleteCachedRenderer(input.filename);
+      return { success, filename: input.filename };
     }),
 });
