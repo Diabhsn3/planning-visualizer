@@ -6,7 +6,7 @@ import {
   Play, Pause, SkipForward, SkipBack, Upload, FileText, 
   AlertTriangle, Clock, Zap, Settings, 
   Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown,
-  Wand2, RefreshCw, Brain
+  Wand2, RefreshCw, Brain, Trash2, History, ChevronUp
 } from "lucide-react";
 
 // Search strategy type
@@ -51,6 +51,8 @@ export default function Visualizer() {
   const [isLlmGenerating, setIsLlmGenerating] = useState(false);
   const [llmError, setLlmError] = useState<string | null>(null);
   const [llmModelInfo, setLlmModelInfo] = useState<string | null>(null);
+  const [showCachedRenderers, setShowCachedRenderers] = useState(false);
+  const [selectedCachedFile, setSelectedCachedFile] = useState<string | null>(null);
   
   // Error modal state
   const [errorModal, setErrorModal] = useState<{
@@ -405,11 +407,27 @@ export default function Visualizer() {
         setLlmRendererCode(data.code);
         setLlmError(null);
         setLlmModelInfo(`${data.provider} (${data.model})`);
+        setSelectedCachedFile(data.savedFile || null);
+        // Refetch cached renderers list so the new one appears
+        cachedRenderersQuery.refetch();
       }
     },
     onError: (error: any) => {
       setIsLlmGenerating(false);
       setLlmError(error.message || "Failed to generate LLM renderer");
+    },
+  });
+
+  // Cached renderers query - fetches list filtered by current domain
+  const cachedRenderersQuery = trpc.visualizer.llmListCachedRenderers.useQuery(
+    { domain: selectedDomain },
+    { enabled: renderMode === "llm" }
+  );
+
+  // Delete cached renderer mutation
+  const deleteCachedMutation = trpc.visualizer.llmDeleteCachedRenderer.useMutation({
+    onSuccess: () => {
+      cachedRenderersQuery.refetch();
     },
   });
 
@@ -422,6 +440,7 @@ export default function Visualizer() {
     setIsLlmGenerating(true);
     setLlmError(null);
     setLlmRendererCode(null);
+    setSelectedCachedFile(null);
     llmGenerateMutation.mutate({
       domainName: selectedDomain,
       states: renderedStates.slice(0, 3), // Send first 3 states as samples
@@ -429,12 +448,55 @@ export default function Visualizer() {
     });
   };
 
+  // Handle loading a cached renderer
+  const handleLoadCachedRenderer = async (filename: string) => {
+    try {
+      setLlmError(null);
+      const response = await fetch(
+        `/api/trpc/visualizer.llmLoadCachedRenderer?input=${encodeURIComponent(JSON.stringify({ filename }))}`
+      );
+      const json = await response.json();
+      const data = json?.result?.data;
+      if (data?.code) {
+        setLlmRendererCode(data.code);
+        setSelectedCachedFile(filename);
+        // Extract provider info from filename (e.g., "blocks-world_claude_2026-...")
+        const parts = filename.replace('.ts', '').split('_');
+        const provider = parts.length >= 2 ? parts[parts.length - 2] : 'unknown';
+        setLlmModelInfo(`Cached (${provider})`);
+      } else {
+        setLlmError("Failed to load cached renderer");
+      }
+    } catch (error: any) {
+      setLlmError(error.message || "Failed to load cached renderer");
+    }
+  };
+
+  // Handle deleting a cached renderer
+  const handleDeleteCachedRenderer = (filename: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't trigger the load handler
+    if (selectedCachedFile === filename) {
+      setLlmRendererCode(null);
+      setSelectedCachedFile(null);
+      setLlmModelInfo(null);
+    }
+    deleteCachedMutation.mutate({ filename });
+  };
+
   // Clear LLM renderer when domain changes
   useEffect(() => {
     setLlmRendererCode(null);
     setLlmError(null);
     setLlmModelInfo(null);
+    setSelectedCachedFile(null);
   }, [selectedDomain]);
+
+  // Refetch cached renderers when switching to LLM mode
+  useEffect(() => {
+    if (renderMode === "llm") {
+      cachedRenderersQuery.refetch();
+    }
+  }, [renderMode, selectedDomain]);
 
   const handleGenerate = () => {
     setIsProcessing(true);
@@ -1081,6 +1143,84 @@ export default function Visualizer() {
                             {llmError}
                           </div>
                         )}
+
+                        {/* Cached Renderers Browser */}
+                        <div className="border border-slate-200 rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => setShowCachedRenderers(!showCachedRenderers)}
+                            className="w-full flex items-center justify-between px-3 py-2 bg-slate-50 hover:bg-slate-100 transition-colors"
+                          >
+                            <div className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                              <History className="w-3.5 h-3.5" />
+                              Cached Renderers
+                              {cachedRenderersQuery.data && cachedRenderersQuery.data.length > 0 && (
+                                <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full text-[10px]">
+                                  {cachedRenderersQuery.data.length}
+                                </span>
+                              )}
+                            </div>
+                            {showCachedRenderers ? (
+                              <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                            )}
+                          </button>
+
+                          {showCachedRenderers && (
+                            <div className="max-h-48 overflow-y-auto">
+                              {cachedRenderersQuery.isLoading ? (
+                                <div className="px-3 py-4 text-center text-xs text-slate-400">
+                                  Loading cached renderers...
+                                </div>
+                              ) : !cachedRenderersQuery.data || cachedRenderersQuery.data.length === 0 ? (
+                                <div className="px-3 py-4 text-center text-xs text-slate-400">
+                                  No cached renderers for this domain.
+                                  <br />
+                                  Generate one to see it here.
+                                </div>
+                              ) : (
+                                <div className="divide-y divide-slate-100">
+                                  {cachedRenderersQuery.data.map((renderer: any) => (
+                                    <div
+                                      key={renderer.filename}
+                                      onClick={() => handleLoadCachedRenderer(renderer.filename)}
+                                      className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
+                                        selectedCachedFile === renderer.filename
+                                          ? "bg-indigo-50 border-l-2 border-indigo-500"
+                                          : "hover:bg-slate-50 border-l-2 border-transparent"
+                                      }`}
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                            renderer.provider === 'claude'
+                                              ? 'bg-orange-100 text-orange-700'
+                                              : 'bg-blue-100 text-blue-700'
+                                          }`}>
+                                            {renderer.provider}
+                                          </span>
+                                          <span className="text-[10px] text-slate-400">
+                                            {new Date(renderer.timestamp).toLocaleString(undefined, {
+                                              month: 'short', day: 'numeric',
+                                              hour: '2-digit', minute: '2-digit'
+                                            })}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <button
+                                        onClick={(e) => handleDeleteCachedRenderer(renderer.filename, e)}
+                                        className="p-1 rounded hover:bg-red-100 text-slate-300 hover:text-red-500 transition-colors ml-2 flex-shrink-0"
+                                        title="Delete cached renderer"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

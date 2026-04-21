@@ -87,15 +87,262 @@ var systemRouter = router({
 
 // visualizer.ts
 import { z as z2 } from "zod";
-import { readFile, writeFile, mkdir, unlink } from "fs/promises";
+import { readFile as readFile2, writeFile as writeFile2, mkdir as mkdir2, unlink as unlink2 } from "fs/promises";
+
+// llm-renderer.ts
+import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import ts from "typescript";
+import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+var __filename = fileURLToPath(import.meta.url);
+var __dirname = path.dirname(__filename);
+var SKILL_PROMPT_PATH = path.join(__dirname, "prompts", "renderer-skill.txt");
+var CACHE_DIR = path.join(__dirname, "llm_renderers");
+var MODELS = {
+  claude: {
+    id: "claude-sonnet-4-20250514",
+    name: "Claude Sonnet 4",
+    maxTokens: 8192
+  },
+  gemini: {
+    id: "gemini-2.5-pro",
+    name: "Gemini 2.5 Pro",
+    maxTokens: 8192
+  }
+};
+var cachedSkillPrompt = null;
+async function loadSkillPrompt() {
+  if (cachedSkillPrompt) return cachedSkillPrompt;
+  try {
+    cachedSkillPrompt = await readFile(SKILL_PROMPT_PATH, "utf-8");
+    console.log("[LLM Renderer] Skill prompt loaded, length:", cachedSkillPrompt.length);
+    return cachedSkillPrompt;
+  } catch (error) {
+    console.error("[LLM Renderer] Failed to load skill prompt:", error);
+    throw new Error("Skill prompt file not found. Ensure backend/api/prompts/renderer-skill.txt exists.");
+  }
+}
+function extractCode(response) {
+  const codeBlockMatch = response.match(/```(?:typescript|ts|javascript|js)?\s*\n([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    return codeBlockMatch[1].trim();
+  }
+  const trimmed = response.trim();
+  if (trimmed.startsWith("export ") || trimmed.startsWith("interface ") || trimmed.startsWith("function ") || trimmed.startsWith("//") || trimmed.startsWith("const ")) {
+    return trimmed;
+  }
+  console.warn("[LLM Renderer] Could not identify code block, using full response");
+  return trimmed;
+}
+function validateCode(code, domainName) {
+  const issues = [];
+  if (!/function\s+render\w*\s*\(/.test(code)) {
+    issues.push("Missing main render function (expected a function named render<Something>)");
+  }
+  if (!/(?:function\s+\w*[Bb]ackground|\w*[Bb]ackground\s*=\s*(?:function|\())/i.test(code)) {
+    console.log(`[LLM Renderer] Note: No background function found for ${domainName} (optional)`);
+  }
+  if (!/(?:function\s+\w*[Ll]egend|\w*[Ll]egend\s*=\s*(?:function|\())/i.test(code)) {
+    console.log(`[LLM Renderer] Note: No legend function found for ${domainName} (optional)`);
+  }
+  if (/import\s+/.test(code) && !/import\s+type/.test(code)) {
+    issues.push("Code contains import statements (not allowed in runtime-evaluated code)");
+  }
+  if (/new\s+Image\s*\(/.test(code)) {
+    issues.push("Code uses new Image() (external assets not allowed)");
+  }
+  if (/require\s*\(/.test(code)) {
+    issues.push("Code uses require() (not allowed)");
+  }
+  return { valid: issues.length === 0, issues };
+}
+function transpileToJS(tsCode) {
+  let cleaned = tsCode.replace(/^(\s*)export\s+/gm, "$1");
+  const result = ts.transpileModule(cleaned, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2020,
+      module: ts.ModuleKind.None,
+      removeComments: false,
+      strict: false
+    }
+  });
+  if (result.diagnostics && result.diagnostics.length > 0) {
+    const errors = result.diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+    console.warn("[LLM Renderer] Transpilation warnings:", errors);
+  }
+  let output = result.outputText;
+  output = output.replace(/"use strict";\s*\n?/g, "");
+  output = output.replace(/Object\.defineProperty\(exports,\s*"__esModule",\s*\{[^}]*\}\);\s*\n?/g, "");
+  output = output.replace(/^exports\.\w+\s*=\s*\w+;\s*\n?/gm, "");
+  return output;
+}
+async function generateWithClaude(skillPrompt, userMessage) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error("ANTHROPIC_API_KEY environment variable is not set.");
+  }
+  const client = new Anthropic({ apiKey });
+  const model = MODELS.claude;
+  console.log(`[LLM Renderer] Calling Claude (${model.id})...`);
+  const response = await client.messages.create({
+    model: model.id,
+    max_tokens: model.maxTokens,
+    system: skillPrompt,
+    messages: [{ role: "user", content: userMessage }]
+  });
+  const textBlock = response.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Claude returned no text content.");
+  }
+  console.log(`[LLM Renderer] Claude response received, length: ${textBlock.text.length}`);
+  return textBlock.text;
+}
+async function generateWithGemini(skillPrompt, userMessage) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY environment variable is not set.");
+  }
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const modelConfig = MODELS.gemini;
+  console.log(`[LLM Renderer] Calling Gemini (${modelConfig.id})...`);
+  const model = genAI.getGenerativeModel({
+    model: modelConfig.id,
+    systemInstruction: skillPrompt
+  });
+  const result = await model.generateContent(userMessage);
+  const response = result.response;
+  const text = response.text();
+  if (!text) {
+    throw new Error("Gemini returned no text content.");
+  }
+  console.log(`[LLM Renderer] Gemini response received, length: ${text.length}`);
+  return text;
+}
+async function saveToCache(code, domainName, provider) {
+  await mkdir(CACHE_DIR, { recursive: true });
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+  const filename = `${domainName}_${provider}_${timestamp}.ts`;
+  const filepath = path.join(CACHE_DIR, filename);
+  await writeFile(filepath, code, "utf-8");
+  console.log(`[LLM Renderer] Cached renderer saved: ${filename}`);
+  return filename;
+}
+async function listCachedRenderers(domain) {
+  try {
+    await mkdir(CACHE_DIR, { recursive: true });
+    const files = await readdir(CACHE_DIR);
+    const renderers = [];
+    for (const file of files) {
+      if (!file.endsWith(".ts") || file === ".gitkeep") continue;
+      const match = file.match(/^(.+?)_(claude|gemini)_(.+)\.ts$/);
+      if (!match) continue;
+      const [, fileDomain, fileProvider, fileTimestamp] = match;
+      if (domain && fileDomain !== domain) continue;
+      const filepath = path.join(CACHE_DIR, file);
+      const content = await readFile(filepath, "utf-8");
+      renderers.push({
+        filename: file,
+        domain: fileDomain,
+        provider: fileProvider,
+        timestamp: fileTimestamp.replace(/-/g, ":").replace("T", " "),
+        size: content.length
+      });
+    }
+    renderers.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    return renderers;
+  } catch (error) {
+    console.error("[LLM Renderer] Error listing cache:", error);
+    return [];
+  }
+}
+async function loadCachedRenderer(filename) {
+  try {
+    const filepath = path.join(CACHE_DIR, filename);
+    const code = await readFile(filepath, "utf-8");
+    console.log(`[LLM Renderer] Loaded cached renderer: ${filename}`);
+    return code;
+  } catch (error) {
+    console.error(`[LLM Renderer] Cache file not found: ${filename}`);
+    return null;
+  }
+}
+async function deleteCachedRenderer(filename) {
+  try {
+    const filepath = path.join(CACHE_DIR, filename);
+    await unlink(filepath);
+    console.log(`[LLM Renderer] Deleted cached renderer: ${filename}`);
+    return true;
+  } catch (error) {
+    console.error(`[LLM Renderer] Failed to delete: ${filename}`);
+    return false;
+  }
+}
+async function generateRenderer(request) {
+  const { domainName, states, provider } = request;
+  const model = MODELS[provider];
+  console.log(`[LLM Renderer] Starting generation for domain: ${domainName}`);
+  console.log(`[LLM Renderer] Provider: ${provider} (${model.name})`);
+  console.log(`[LLM Renderer] Sample states: ${states.length}`);
+  try {
+    const skillPrompt = await loadSkillPrompt();
+    const sampleStates = states.slice(0, 3);
+    const userMessage = `Generate a complete Canvas renderer for the "${domainName}" domain.
+
+Here are ${sampleStates.length} sample states showing the data structure you need to visualize:
+
+${JSON.stringify(sampleStates, null, 2)}
+
+Analyze the objects, their types, positions, properties, and the relations between them.
+Then generate the three TypeScript functions as specified in the instructions.`;
+    let rawResponse;
+    if (provider === "claude") {
+      rawResponse = await generateWithClaude(skillPrompt, userMessage);
+    } else if (provider === "gemini") {
+      rawResponse = await generateWithGemini(skillPrompt, userMessage);
+    } else {
+      throw new Error(`Unknown provider: ${provider}`);
+    }
+    const tsCode = extractCode(rawResponse);
+    const validation = validateCode(tsCode, domainName);
+    if (!validation.valid) {
+      console.warn("[LLM Renderer] Validation issues:", validation.issues);
+    }
+    const transpiled = transpileToJS(tsCode);
+    console.log(`[LLM Renderer] Transpiled TS (${tsCode.length} chars) -> JS (${transpiled.length} chars)`);
+    const savedFile = await saveToCache(transpiled, domainName, provider);
+    return {
+      success: true,
+      code: transpiled,
+      savedFile,
+      provider: model.name,
+      model: model.id
+    };
+  } catch (error) {
+    console.error("[LLM Renderer] Generation failed:", error);
+    let errorMessage = "Unknown error during LLM generation";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    return {
+      success: false,
+      provider: model.name,
+      model: model.id,
+      error: errorMessage
+    };
+  }
+}
+
+// visualizer.ts
+import path2 from "path";
+import { fileURLToPath as fileURLToPath2 } from "url";
 import { exec } from "child_process";
 import { promisify } from "util";
 var execAsync = promisify(exec);
-var __filename = fileURLToPath(import.meta.url);
-var __dirname = path.dirname(__filename);
-var DATA_DIR = path.join(__dirname, "data");
+var __filename2 = fileURLToPath2(import.meta.url);
+var __dirname2 = path2.dirname(__filename2);
+var DATA_DIR = path2.join(__dirname2, "data");
 function getPythonCommand() {
   if (process.env.PYTHON_CMD) {
     console.log("[Python Detection] Using PYTHON_CMD from environment:", process.env.PYTHON_CMD);
@@ -130,49 +377,54 @@ function getPythonCommand() {
 var PYTHON_CMD = getPythonCommand();
 console.log("[Python Detection] Using Python command:", PYTHON_CMD);
 function resolvePlannerDir() {
-  if (__dirname.endsWith("/dist") || __dirname.endsWith("\\dist")) {
-    return path.join(__dirname, "../../planner");
+  if (__dirname2.endsWith("/dist") || __dirname2.endsWith("\\dist")) {
+    return path2.join(__dirname2, "../../planner");
   } else {
-    return path.join(__dirname, "../planner");
+    return path2.join(__dirname2, "../planner");
   }
 }
 function resolvePlanningToolsDir() {
-  if (__dirname.endsWith("/dist") || __dirname.endsWith("\\dist")) {
-    return path.join(__dirname, "../../../planning-tools");
+  if (__dirname2.endsWith("/dist") || __dirname2.endsWith("\\dist")) {
+    return path2.join(__dirname2, "../../../planning-tools");
   } else {
-    return path.join(__dirname, "../../planning-tools");
+    return path2.join(__dirname2, "../../planning-tools");
   }
 }
 var PLANNER_DIR = resolvePlannerDir();
 var PLANNING_TOOLS_DIR = resolvePlanningToolsDir();
-console.log("[Path Resolution] __dirname:", __dirname);
+console.log("[Path Resolution] __dirname:", __dirname2);
 console.log("[Path Resolution] PLANNER_DIR:", PLANNER_DIR);
 console.log("[Path Resolution] PLANNING_TOOLS_DIR:", PLANNING_TOOLS_DIR);
 var DOMAIN_CONFIGS = {
   "blocks-world": {
     name: "Blocks World",
     description: "Classic block stacking problem",
-    domainFile: path.join(PLANNER_DIR, "domains/blocks_world/domain.pddl")
+    domainFile: path2.join(PLANNER_DIR, "domains/blocks_world/domain.pddl")
   },
   "gripper": {
     name: "Gripper",
     description: "Robot with grippers moving balls between rooms",
-    domainFile: path.join(PLANNER_DIR, "domains/gripper/domain.pddl")
+    domainFile: path2.join(PLANNER_DIR, "domains/gripper/domain.pddl")
   },
   "depot": {
     name: "Depot",
     description: "Trucks deliver packages between depots and distributors",
-    domainFile: path.join(PLANNER_DIR, "domains/depot/domain.pddl")
+    domainFile: path2.join(PLANNER_DIR, "domains/depot/domain.pddl")
   },
   "hanoi": {
     name: "Hanoi",
     description: "Moving disks between pegs (Tower of Hanoi)",
-    domainFile: path.join(PLANNER_DIR, "domains/hanoi/domain.pddl")
+    domainFile: path2.join(PLANNER_DIR, "domains/hanoi/domain.pddl")
   },
   "rovers": {
     name: "Rovers",
     description: "Planetary rovers navigating between waypoints and collecting images",
-    domainFile: path.join(PLANNER_DIR, "domains/rovers/domain.pddl")
+    domainFile: path2.join(PLANNER_DIR, "domains/rovers/domain.pddl")
+  },
+  "satellite": {
+    name: "Satellite",
+    description: "Satellites calibrate instruments, take images, and transmit them",
+    domainFile: path2.join(PLANNER_DIR, "domains/satellite/domain.pddl")
   }
 };
 var VALID_STRATEGY_IDS = [
@@ -193,15 +445,15 @@ var visualizerRouter = router({
    */
   generateStates: publicProcedure.input(
     z2.object({
-      domain: z2.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"])
+      domain: z2.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"])
     })
   ).mutation(async ({ input }) => {
     try {
-      const dataFile = path.join(
+      const dataFile = path2.join(
         DATA_DIR,
         `${input.domain.replace("-", "_")}_rendered.json`
       );
-      const data = JSON.parse(await readFile(dataFile, "utf-8"));
+      const data = JSON.parse(await readFile2(dataFile, "utf-8"));
       const plan = [];
       for (let i = 1; i < data.states.length; i++) {
         const action = data.states[i].metadata?.action;
@@ -231,7 +483,7 @@ var visualizerRouter = router({
     z2.object({
       domainContent: z2.string(),
       problemContent: z2.string(),
-      domainName: z2.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"]),
+      domainName: z2.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"]),
       searchStrategy: z2.enum(VALID_STRATEGY_IDS).optional().default("lazy-greedy-ff")
     })
   ).mutation(async ({ input }) => {
@@ -241,8 +493,8 @@ var visualizerRouter = router({
     let domainPath = "";
     let problemPath = "";
     try {
-      const uploadsDir = path.join(__dirname, "uploads");
-      await mkdir(uploadsDir, { recursive: true });
+      const uploadsDir = path2.join(__dirname2, "uploads");
+      await mkdir2(uploadsDir, { recursive: true });
       const timestamp = Date.now();
       if (!input.domainContent || input.domainContent.trim() === "") {
         const domainConfig = DOMAIN_CONFIGS[input.domainName];
@@ -251,12 +503,12 @@ var visualizerRouter = router({
         }
         domainPath = domainConfig.domainFile;
       } else {
-        domainPath = path.join(uploadsDir, `domain_${timestamp}.pddl`);
-        await writeFile(domainPath, input.domainContent, "utf-8");
+        domainPath = path2.join(uploadsDir, `domain_${timestamp}.pddl`);
+        await writeFile2(domainPath, input.domainContent, "utf-8");
       }
-      problemPath = path.join(uploadsDir, `problem_${timestamp}.pddl`);
-      await writeFile(problemPath, input.problemContent, "utf-8");
-      const pythonScript = path.join(PLANNER_DIR, "visualizer_api.py");
+      problemPath = path2.join(uploadsDir, `problem_${timestamp}.pddl`);
+      await writeFile2(problemPath, input.problemContent, "utf-8");
+      const pythonScript = path2.join(PLANNER_DIR, "visualizer_api.py");
       console.log("[uploadAndGenerate] Running Python script...");
       console.log("[uploadAndGenerate] Using Python command:", PYTHON_CMD);
       const { stdout, stderr } = await execAsync(
@@ -289,10 +541,10 @@ var visualizerRouter = router({
       }
       try {
         console.log("[uploadAndGenerate] Cleaning up uploaded files...");
-        await unlink(problemPath);
+        await unlink2(problemPath);
         console.log("[uploadAndGenerate] Deleted problem file:", problemPath);
         if (input.domainContent && input.domainContent.trim() !== "") {
-          await unlink(domainPath);
+          await unlink2(domainPath);
           console.log("[uploadAndGenerate] Deleted domain file:", domainPath);
         }
       } catch (cleanupError) {
@@ -312,11 +564,11 @@ var visualizerRouter = router({
     } catch (error) {
       try {
         if (problemPath) {
-          await unlink(problemPath).catch(() => {
+          await unlink2(problemPath).catch(() => {
           });
         }
         if (domainPath && input.domainContent && input.domainContent.trim() !== "") {
-          await unlink(domainPath).catch(() => {
+          await unlink2(domainPath).catch(() => {
           });
         }
       } catch {
@@ -343,7 +595,7 @@ var visualizerRouter = router({
    */
   listStrategies: publicProcedure.query(async () => {
     try {
-      const pythonScript = path.join(PLANNER_DIR, "visualizer_api.py");
+      const pythonScript = path2.join(PLANNER_DIR, "visualizer_api.py");
       const { stdout } = await execAsync(
         `"${PYTHON_CMD}" "${pythonScript}" list-strategies`,
         {
@@ -409,7 +661,7 @@ var visualizerRouter = router({
       status.python.available = false;
     }
     try {
-      const fdPath = path.join(PLANNING_TOOLS_DIR, "downward/fast-downward.py");
+      const fdPath = path2.join(PLANNING_TOOLS_DIR, "downward/fast-downward.py");
       const { stdout } = await execAsync(`"${PYTHON_CMD}" "${fdPath}" --help`, { timeout: 5e3 });
       if (stdout.includes("Fast Downward")) {
         status.fastDownward.available = true;
@@ -417,7 +669,7 @@ var visualizerRouter = router({
       }
     } catch (error) {
       try {
-        const altFdPath = path.join(__dirname, "../../planning-tools/downward/fast-downward.py");
+        const altFdPath = path2.join(__dirname2, "../../planning-tools/downward/fast-downward.py");
         const { stdout } = await execAsync(`"${PYTHON_CMD}" "${altFdPath}" --help`, { timeout: 5e3 });
         if (stdout.includes("Fast Downward")) {
           status.fastDownward.available = true;
@@ -433,14 +685,14 @@ var visualizerRouter = router({
    * Get domain definition text for a specific domain
    */
   getDomainDefinition: publicProcedure.input(z2.object({
-    domainName: z2.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers"])
+    domainName: z2.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"])
   })).query(async ({ input }) => {
     const domainConfig = DOMAIN_CONFIGS[input.domainName];
     if (!domainConfig) {
       throw new Error(`Domain ${input.domainName} not found`);
     }
     try {
-      const domainContent = await readFile(domainConfig.domainFile, "utf-8");
+      const domainContent = await readFile2(domainConfig.domainFile, "utf-8");
       return {
         domainName: input.domainName,
         content: domainContent
@@ -449,6 +701,68 @@ var visualizerRouter = router({
       console.error(`[getDomainDefinition] Error reading domain file:`, error);
       throw new Error(`Failed to read domain file for ${input.domainName}`);
     }
+  }),
+  // ==================== LLM RENDERER ENDPOINTS ====================
+  /**
+   * Generate a Canvas renderer using an LLM (Claude or Gemini).
+   * Accepts domain name, sample states, and the LLM provider to use.
+   * Returns the generated TypeScript code.
+   */
+  llmGenerateRenderer: publicProcedure.input(
+    z2.object({
+      domainName: z2.string(),
+      states: z2.array(z2.any()),
+      provider: z2.enum(["claude", "gemini"])
+    })
+  ).mutation(async ({ input }) => {
+    console.log("[llmGenerateRenderer] Starting for domain:", input.domainName);
+    console.log("[llmGenerateRenderer] Provider:", input.provider);
+    console.log("[llmGenerateRenderer] States count:", input.states.length);
+    const result = await generateRenderer({
+      domainName: input.domainName,
+      states: input.states,
+      provider: input.provider
+    });
+    if (!result.success) {
+      throw new Error(result.error || "LLM generation failed");
+    }
+    return result;
+  }),
+  /**
+   * List cached LLM-generated renderers, optionally filtered by domain.
+   */
+  llmListCachedRenderers: publicProcedure.input(
+    z2.object({
+      domain: z2.string().optional()
+    }).optional()
+  ).query(async ({ input }) => {
+    const renderers = await listCachedRenderers(input?.domain);
+    return renderers;
+  }),
+  /**
+   * Load a specific cached renderer by filename.
+   */
+  llmLoadCachedRenderer: publicProcedure.input(
+    z2.object({
+      filename: z2.string()
+    })
+  ).query(async ({ input }) => {
+    const code = await loadCachedRenderer(input.filename);
+    if (!code) {
+      throw new Error(`Cached renderer not found: ${input.filename}`);
+    }
+    return { filename: input.filename, code };
+  }),
+  /**
+   * Delete a specific cached renderer by filename.
+   */
+  llmDeleteCachedRenderer: publicProcedure.input(
+    z2.object({
+      filename: z2.string()
+    })
+  ).mutation(async ({ input }) => {
+    const success = await deleteCachedRenderer(input.filename);
+    return { success, filename: input.filename };
   })
 });
 

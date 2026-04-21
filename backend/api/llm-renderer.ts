@@ -164,10 +164,17 @@ function validateCode(code: string, domainName: string): { valid: boolean; issue
  * callback types, union types, etc. — unlike fragile regex-based stripping.
  */
 function transpileToJS(tsCode: string): string {
-  const result = ts.transpileModule(tsCode, {
+  // Step 1: Strip 'export' keywords before transpilation.
+  // If the LLM generates `export function renderX(...)`, the TS compiler
+  // converts it to CommonJS `exports.renderX = renderX;` which breaks
+  // when executed via `new Function()` (no `exports` object in that scope).
+  // Removing `export` first makes the compiler emit plain function declarations.
+  let cleaned = tsCode.replace(/^(\s*)export\s+/gm, '$1');
+
+  const result = ts.transpileModule(cleaned, {
     compilerOptions: {
       target: ts.ScriptTarget.ES2020,
-      module: ts.ModuleKind.None, // No module wrapping — we need raw functions
+      module: ts.ModuleKind.None,
       removeComments: false,
       strict: false,
     },
@@ -178,7 +185,14 @@ function transpileToJS(tsCode: string): string {
     console.warn("[LLM Renderer] Transpilation warnings:", errors);
   }
 
-  return result.outputText;
+  // Step 2: Remove any remaining CommonJS artifacts that the compiler may add.
+  // Even with ModuleKind.None, some TS versions add "use strict" and Object.defineProperty.
+  let output = result.outputText;
+  output = output.replace(/"use strict";\s*\n?/g, '');
+  output = output.replace(/Object\.defineProperty\(exports,\s*"__esModule",\s*\{[^}]*\}\);\s*\n?/g, '');
+  output = output.replace(/^exports\.\w+\s*=\s*\w+;\s*\n?/gm, '');
+
+  return output;
 }
 
 // ==================== LLM PROVIDERS ====================
