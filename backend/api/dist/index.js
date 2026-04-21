@@ -310,17 +310,30 @@ async function generateWithClaude(userMessage) {
       ]
     });
   }
-  let fullText = "";
+  const textBlocks = [];
   for (const block of finalResponse.content) {
     if (block.type === "text") {
-      fullText += block.text;
+      textBlocks.push(block.text);
     }
   }
-  if (!fullText) {
+  console.log(`[LLM Renderer] Claude response has ${finalResponse.content.length} content blocks, ${textBlocks.length} text blocks`);
+  if (textBlocks.length === 0) {
     throw new Error("Claude returned no text content.");
   }
-  console.log(`[LLM Renderer] Claude response received, length: ${fullText.length}`);
-  return fullText;
+  let bestCodeBlock = null;
+  for (let i = textBlocks.length - 1; i >= 0; i--) {
+    const block = textBlocks[i];
+    if (/function\s+render\w*\s*\(/.test(block)) {
+      bestCodeBlock = block;
+      break;
+    }
+  }
+  if (!bestCodeBlock) {
+    console.warn("[LLM Renderer] No text block contains a render function, using full response");
+    bestCodeBlock = textBlocks.join("\n");
+  }
+  console.log(`[LLM Renderer] Claude response received, code length: ${bestCodeBlock.length}`);
+  return bestCodeBlock;
 }
 async function generateWithGemini(userMessage) {
   const apiKey = process.env.GEMINI_API_KEY;

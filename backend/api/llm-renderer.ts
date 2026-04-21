@@ -376,21 +376,46 @@ async function generateWithClaude(userMessage: string): Promise<string> {
     });
   }
 
-  // Extract text from response content blocks
-  // The response may contain text blocks and code execution result blocks
-  let fullText = "";
+  // Extract code from response content blocks.
+  // Claude Skills API returns a mix of:
+  //   - text blocks (narration like "I'll read the skill files...")
+  //   - code_execution_tool_use blocks (Claude running code in sandbox)
+  //   - code_execution_tool_result blocks (sandbox output)
+  // We need to find the actual generated code, not the narration.
+  
+  // Strategy: collect all text blocks, then find the one that contains actual code.
+  // The last text block that contains 'function render' is usually the final code output.
+  const textBlocks: string[] = [];
   for (const block of finalResponse.content) {
     if (block.type === "text") {
-      fullText += block.text;
+      textBlocks.push(block.text);
     }
   }
 
-  if (!fullText) {
+  console.log(`[LLM Renderer] Claude response has ${finalResponse.content.length} content blocks, ${textBlocks.length} text blocks`);
+
+  if (textBlocks.length === 0) {
     throw new Error("Claude returned no text content.");
   }
 
-  console.log(`[LLM Renderer] Claude response received, length: ${fullText.length}`);
-  return fullText;
+  // Find the best text block: the last one that looks like actual code
+  let bestCodeBlock: string | null = null;
+  for (let i = textBlocks.length - 1; i >= 0; i--) {
+    const block = textBlocks[i];
+    if (/function\s+render\w*\s*\(/.test(block)) {
+      bestCodeBlock = block;
+      break;
+    }
+  }
+
+  // If no block contains a render function, try concatenating all and extracting
+  if (!bestCodeBlock) {
+    console.warn("[LLM Renderer] No text block contains a render function, using full response");
+    bestCodeBlock = textBlocks.join("\n");
+  }
+
+  console.log(`[LLM Renderer] Claude response received, code length: ${bestCodeBlock.length}`);
+  return bestCodeBlock;
 }
 
 /**
