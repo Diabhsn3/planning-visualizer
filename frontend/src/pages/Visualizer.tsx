@@ -5,7 +5,8 @@ import { StateCanvas } from "@/components/StateCanvas";
 import { 
   Play, Pause, SkipForward, SkipBack, Upload, FileText, 
   AlertTriangle, Clock, Zap, Settings, 
-  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown
+  Cpu, CheckCircle2, XCircle, Sparkles, ChevronDown,
+  Wand2, RefreshCw, Brain
 } from "lucide-react";
 
 // Search strategy type
@@ -42,6 +43,14 @@ export default function Visualizer() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef = useRef<HTMLDivElement>(null);
+
+  // LLM Renderer state
+  const [renderMode, setRenderMode] = useState<"basic" | "llm">("basic");
+  const [llmProvider, setLlmProvider] = useState<"claude" | "gemini">("claude");
+  const [llmRendererCode, setLlmRendererCode] = useState<string | null>(null);
+  const [isLlmGenerating, setIsLlmGenerating] = useState(false);
+  const [llmError, setLlmError] = useState<string | null>(null);
+  const [llmModelInfo, setLlmModelInfo] = useState<string | null>(null);
   
   // Error modal state
   const [errorModal, setErrorModal] = useState<{
@@ -387,6 +396,45 @@ export default function Visualizer() {
       });
     },
   });
+
+  // LLM Renderer mutation
+  const llmGenerateMutation = trpc.visualizer.llmGenerateRenderer.useMutation({
+    onSuccess: (data) => {
+      setIsLlmGenerating(false);
+      if (data.code) {
+        setLlmRendererCode(data.code);
+        setLlmError(null);
+        setLlmModelInfo(`${data.provider} (${data.model})`);
+      }
+    },
+    onError: (error: any) => {
+      setIsLlmGenerating(false);
+      setLlmError(error.message || "Failed to generate LLM renderer");
+    },
+  });
+
+  // Handle LLM renderer generation
+  const handleLlmGenerate = () => {
+    if (renderedStates.length === 0) {
+      setLlmError("Generate states first using the basic visualizer, then switch to LLM mode.");
+      return;
+    }
+    setIsLlmGenerating(true);
+    setLlmError(null);
+    setLlmRendererCode(null);
+    llmGenerateMutation.mutate({
+      domainName: selectedDomain,
+      states: renderedStates.slice(0, 3), // Send first 3 states as samples
+      provider: llmProvider,
+    });
+  };
+
+  // Clear LLM renderer when domain changes
+  useEffect(() => {
+    setLlmRendererCode(null);
+    setLlmError(null);
+    setLlmModelInfo(null);
+  }, [selectedDomain]);
 
   const handleGenerate = () => {
     setIsProcessing(true);
@@ -929,6 +977,113 @@ export default function Visualizer() {
                       {getSpeedBadge(plannerInfo.strategy.speed)}
                     </div>
                   )}
+
+                  {/* Render Mode Toggle */}
+                  <div className="mt-4 p-3 bg-white rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Brain className="w-4 h-4 text-indigo-500" />
+                        <span className="text-sm font-medium text-slate-700">Render Mode</span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+                        <button
+                          onClick={() => setRenderMode("basic")}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            renderMode === "basic"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-700"
+                          }`}
+                        >
+                          Basic
+                        </button>
+                        <button
+                          onClick={() => setRenderMode("llm")}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            renderMode === "llm"
+                              ? "bg-white text-indigo-700 shadow-sm"
+                              : "text-slate-500 hover:text-slate-700"
+                          }`}
+                        >
+                          LLM
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* LLM Options - shown when LLM mode is selected */}
+                    {renderMode === "llm" && (
+                      <div className="mt-3 space-y-3">
+                        {/* Model Selector */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-slate-500 min-w-[50px]">Model:</span>
+                          <div className="flex items-center gap-1 flex-1">
+                            <button
+                              onClick={() => setLlmProvider("claude")}
+                              className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                                llmProvider === "claude"
+                                  ? "bg-orange-50 border-orange-300 text-orange-700"
+                                  : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
+                              }`}
+                            >
+                              Claude
+                            </button>
+                            <button
+                              onClick={() => setLlmProvider("gemini")}
+                              className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                                llmProvider === "gemini"
+                                  ? "bg-blue-50 border-blue-300 text-blue-700"
+                                  : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
+                              }`}
+                            >
+                              Gemini
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Generate / Regenerate Button */}
+                        <button
+                          onClick={handleLlmGenerate}
+                          disabled={isLlmGenerating}
+                          className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                            isLlmGenerating
+                              ? "bg-indigo-100 text-indigo-400 cursor-wait"
+                              : "bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 shadow-md shadow-indigo-500/20"
+                          }`}
+                        >
+                          {isLlmGenerating ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
+                              Generating renderer...
+                            </>
+                          ) : llmRendererCode ? (
+                            <>
+                              <RefreshCw className="w-4 h-4" />
+                              Regenerate
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="w-4 h-4" />
+                              Generate LLM Renderer
+                            </>
+                          )}
+                        </button>
+
+                        {/* LLM Status */}
+                        {llmRendererCode && (
+                          <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            LLM renderer active{llmModelInfo && ` — ${llmModelInfo}`}
+                          </div>
+                        )}
+
+                        {llmError && (
+                          <div className="flex items-start gap-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                            {llmError}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Canvas */}
@@ -937,6 +1092,8 @@ export default function Visualizer() {
                     state={renderedStates[currentStateIndex]} 
                     isFirst={currentStateIndex === 0} 
                     isLast={currentStateIndex === renderedStates.length - 1}
+                    llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
+                    onLlmError={(err) => setLlmError(err)}
                   />
                 </div>
 

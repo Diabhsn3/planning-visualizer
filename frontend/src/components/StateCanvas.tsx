@@ -95,10 +95,116 @@ interface StateCanvasProps {
   height?: number;
   isFirst?: boolean;
   isLast?: boolean;
+  /** LLM-generated TypeScript code to use instead of hardcoded renderers */
+  llmRendererCode?: string;
+  /** Callback when LLM renderer execution fails */
+  onLlmError?: (error: string) => void;
 }
 
 
-export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false }: StateCanvasProps) {
+// ============================================
+// LLM RENDERER EXECUTION ENGINE
+// ============================================
+// Parses LLM-generated TypeScript code and extracts the three renderer functions.
+// Uses new Function() to safely evaluate the code in a sandboxed scope.
+// Caches compiled functions to avoid re-parsing on every render.
+
+interface CompiledLlmRenderer {
+  render: ((ctx: CanvasRenderingContext2D, state: RenderedState) => void) | null;
+  background: ((ctx: CanvasRenderingContext2D, width: number, height: number) => void) | null;
+  legend: ((ctx: CanvasRenderingContext2D, x: number, y: number) => void) | null;
+}
+
+const llmRendererCache = new Map<string, CompiledLlmRenderer>();
+
+function compileLlmRenderer(code: string): CompiledLlmRenderer {
+  // Check cache first (keyed by code hash)
+  const cacheKey = code.length + "_" + code.slice(0, 100) + code.slice(-100);
+  const cached = llmRendererCache.get(cacheKey);
+  if (cached) return cached;
+
+  const result: CompiledLlmRenderer = { render: null, background: null, legend: null };
+
+  try {
+    // Strip TypeScript type annotations for runtime execution:
+    // - Remove export keywords
+    // - Remove type annotations from parameters (: Type)
+    // - Remove interface/type declarations
+    // - Remove 'as Type' casts
+    let jsCode = code
+      // Remove full interface/type blocks
+      .replace(/(?:export\s+)?interface\s+\w+\s*\{[^}]*\}/g, "")
+      .replace(/(?:export\s+)?type\s+\w+\s*=\s*[^;]+;/g, "")
+      // Remove export keywords
+      .replace(/export\s+/g, "")
+      // Remove TypeScript generic type parameters like <string, string>
+      .replace(/new\s+Map<[^>]+>/g, "new Map")
+      .replace(/new\s+Set<[^>]+>/g, "new Set")
+      // Remove 'as Type' casts
+      .replace(/\s+as\s+\w+[\[\]<>,\s\w]*/g, "")
+      // Remove type annotations from function parameters and variables
+      // This handles: (param: Type), (param: Type[]), (param: Record<x,y>), etc.
+      .replace(/:\s*(?:CanvasRenderingContext2D|RenderedState|VisualObject|VisualRelation|Record<[^>]+>|Map<[^>]+>|Set<[^>]+>|string|number|boolean|void|any|null|undefined)(?:\[\])?/g, "")
+      // Clean up remaining simple type annotations like ': number' in variable declarations
+      .replace(/(?<=(?:let|const|var)\s+\w+)\s*:\s*\w+(?:\[\])?/g, "")
+      // Remove type annotations from arrow function params
+      .replace(/\(([^)]*?):\s*\w+(?:\[\])?\s*\)/g, "($1)")
+      ;
+
+    // Wrap in a function that returns the renderer functions
+    const wrappedCode = `
+      ${jsCode}
+      
+      // Collect all functions defined in the code
+      const __exports = {};
+      try {
+        // Find render functions by scanning variable names
+        ${jsCode.match(/(?:function|const|let|var)\s+(render\w+)/g)?.map(m => {
+          const name = m.match(/(?:function|const|let|var)\s+(render\w+)/)?.[1];
+          return name ? `if (typeof ${name} !== 'undefined') __exports['${name}'] = ${name};` : '';
+        }).join('\n') || ''}
+      } catch(e) {}
+      return __exports;
+    `;
+
+    const factory = new Function(wrappedCode);
+    const exports = factory();
+
+    // Find the three functions by name pattern
+    const keys = Object.keys(exports);
+    
+    // Main render function: the one that's NOT background and NOT legend
+    for (const key of keys) {
+      if (typeof exports[key] !== 'function') continue;
+      
+      if (key.toLowerCase().includes('background')) {
+        result.background = exports[key];
+      } else if (key.toLowerCase().includes('legend')) {
+        result.legend = exports[key];
+      } else if (key.startsWith('render')) {
+        result.render = exports[key];
+      }
+    }
+
+    // Handle legend = undefined exports (const renderXLegend = undefined)
+    for (const key of keys) {
+      if (key.toLowerCase().includes('legend') && exports[key] === undefined) {
+        result.legend = null;
+      }
+    }
+
+    // Cache the result
+    llmRendererCache.set(cacheKey, result);
+
+  } catch (error) {
+    console.error("[LLM Renderer] Compilation failed:", error);
+    // Return empty result - will fall back to default renderer
+  }
+
+  return result;
+}
+
+export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmRendererCode, onLlmError }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -177,17 +283,38 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
 
-    // Get domain-specific renderer configuration
+    // ============================================
+    // DETERMINE RENDERER: LLM or hardcoded
+    // ============================================
+    let useLlm = false;
+    let llmRenderer: CompiledLlmRenderer | null = null;
+
+    if (llmRendererCode) {
+      llmRenderer = compileLlmRenderer(llmRendererCode);
+      if (llmRenderer.render) {
+        useLlm = true;
+      } else {
+        console.warn("[LLM Renderer] No main render function found, falling back to hardcoded");
+        onLlmError?.("LLM code did not contain a valid render function. Falling back to basic renderer.");
+      }
+    }
+
+    // Get domain-specific renderer configuration (hardcoded fallback)
     const domainConfig = domainRenderers[state.domain];
 
     // ============================================
     // 1. DRAW BACKGROUND (BEFORE zoom/pan transform)
     // ============================================
-    if (domainConfig?.background) {
-      // Use domain-specific background
+    if (useLlm && llmRenderer?.background) {
+      try {
+        llmRenderer.background(ctx, width, height);
+      } catch (err) {
+        console.error("[LLM Renderer] Background error:", err);
+        drawDefaultBackground(ctx, width, height);
+      }
+    } else if (domainConfig?.background) {
       domainConfig.background(ctx, width, height);
     } else {
-      // Default background with grid
       drawDefaultBackground(ctx, width, height);
     }
 
@@ -201,7 +328,16 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     // ============================================
     // 3. DRAW MAIN VISUALIZATION
     // ============================================
-    if (domainConfig) {
+    if (useLlm && llmRenderer?.render) {
+      try {
+        llmRenderer.render(ctx, state);
+      } catch (err) {
+        console.error("[LLM Renderer] Render error:", err);
+        onLlmError?.("LLM renderer crashed: " + (err instanceof Error ? err.message : String(err)));
+        // Fall back to default renderer on error
+        renderDefault(ctx, state);
+      }
+    } else if (domainConfig) {
       domainConfig.render(ctx, state);
     } else if (state.domain === "blocks-world") {
       renderBlocksWorld(ctx, state);
@@ -217,11 +353,16 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     // ============================================
     // 4. DRAW LEGEND (AFTER restoring transform - fixed position)
     // ============================================
-    if (domainConfig?.legend) {
-      // Draw legend at fixed position (top-left, below zoom controls)
+    if (useLlm && llmRenderer?.legend) {
+      try {
+        llmRenderer.legend(ctx, 20, 70);
+      } catch (err) {
+        console.error("[LLM Renderer] Legend error:", err);
+      }
+    } else if (!useLlm && domainConfig?.legend) {
       domainConfig.legend(ctx, 20, 70);
     }
-  }, [state, width, height, scale, offset, isFirst, isLast]);
+  }, [state, width, height, scale, offset, isFirst, isLast, llmRendererCode]);
 
   // Default background with grid pattern
   function drawDefaultBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
