@@ -16,6 +16,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import ts from "typescript";
 import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -153,6 +154,31 @@ function validateCode(code: string, domainName: string): { valid: boolean; issue
   }
 
   return { valid: issues.length === 0, issues };
+}
+
+// ==================== TYPESCRIPT TRANSPILATION ====================
+
+/**
+ * Transpile TypeScript code to JavaScript using the TypeScript compiler API.
+ * This handles all TS syntax correctly: interfaces, type annotations, generics,
+ * callback types, union types, etc. — unlike fragile regex-based stripping.
+ */
+function transpileToJS(tsCode: string): string {
+  const result = ts.transpileModule(tsCode, {
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2020,
+      module: ts.ModuleKind.None, // No module wrapping — we need raw functions
+      removeComments: false,
+      strict: false,
+    },
+  });
+
+  if (result.diagnostics && result.diagnostics.length > 0) {
+    const errors = result.diagnostics.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"));
+    console.warn("[LLM Renderer] Transpilation warnings:", errors);
+  }
+
+  return result.outputText;
 }
 
 // ==================== LLM PROVIDERS ====================
@@ -394,21 +420,27 @@ Then generate the three TypeScript functions as specified in the instructions.`;
     }
 
     // 4. Extract code
-    const code = extractCode(rawResponse);
+    const tsCode = extractCode(rawResponse);
 
-    // 5. Validate
-    const validation = validateCode(code, domainName);
+    // 5. Validate (on the TypeScript source)
+    const validation = validateCode(tsCode, domainName);
     if (!validation.valid) {
       console.warn("[LLM Renderer] Validation issues:", validation.issues);
       // Still return the code but log warnings - the frontend will handle execution errors
     }
 
-    // 6. Cache
-    const savedFile = await saveToCache(code, domainName, provider);
+    // 6. Transpile TypeScript to JavaScript
+    // Using the TypeScript compiler API ensures all type annotations, interfaces,
+    // generics, callback types, etc. are correctly removed — no fragile regex needed.
+    const transpiled = transpileToJS(tsCode);
+    console.log(`[LLM Renderer] Transpiled TS (${tsCode.length} chars) -> JS (${transpiled.length} chars)`);
+
+    // 7. Cache (save the transpiled JS so cached renderers are ready to use)
+    const savedFile = await saveToCache(transpiled, domainName, provider);
 
     return {
       success: true,
-      code,
+      code: transpiled,
       savedFile,
       provider: model.name,
       model: model.id,

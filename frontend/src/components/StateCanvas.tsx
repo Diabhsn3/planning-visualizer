@@ -117,105 +117,6 @@ interface CompiledLlmRenderer {
 
 const llmRendererCache = new Map<string, CompiledLlmRenderer>();
 
-function stripTypeScript(code: string): string {
-  // Robust TypeScript-to-JavaScript transpilation.
-  // Uses a two-pass approach:
-  //   Pass 1: Join the full code and handle multi-line constructs (interfaces, multi-line params)
-  //   Pass 2: Line-by-line cleanup for remaining annotations
-  //
-  // This avoids the pitfalls of naive regex stripping:
-  //   - Union types in params: `holding: string | null` -> `holding | null` (broken)
-  //   - Ternary expressions: `x ? y : undefined` -> `x ? y ;` (broken)
-  //   - Multi-line params: each param on its own line not matched by single-line regex
-
-  let src = code;
-
-  // === Pass 1: Remove multi-line constructs from the full source ===
-
-  // Remove interface blocks (possibly multi-line with nested braces)
-  src = src.replace(/(?:export\s+)?interface\s+\w+[^{]*\{[\s\S]*?\n\}/g, '');
-
-  // Remove standalone type aliases
-  src = src.replace(/(?:export\s+)?type\s+\w+\s*=[^;]+;/g, '');
-
-  // Remove 'export' keywords
-  src = src.replace(/^(\s*)export\s+/gm, '$1');
-
-  // Remove generic type parameters on constructors: new Map<string, X> -> new Map
-  src = src.replace(/new\s+(Map|Set|Array)<[^>]+>/g, 'new $1');
-
-  // Remove 'as Type' casts (e.g., `as string`, `as VisualObject[]`, `as Record<...>`)
-  src = src.replace(/\s+as\s+\w+(?:<[^>]*>)?(?:\[\])?/g, '');
-
-  // Handle function parameter type annotations (including multi-line).
-  // Strategy: find balanced parentheses after function/arrow keywords,
-  // then strip types within the captured parameter block.
-  src = src.replace(
-    /((?:function\s+\w+|const\s+\w+\s*=\s*|let\s+\w+\s*=\s*|var\s+\w+\s*=\s*)?\s*)\(([\s\S]*?)\)/g,
-    (match, prefix, params) => {
-      // Only process if it looks like it has type annotations
-      if (!params.includes(':')) return match;
-      // Don't process object literals or ternary expressions
-      // (object literals have `key: value` patterns without commas between key and colon)
-      // Heuristic: if it contains '=>' inside, it might be a callback type - skip
-      if (params.includes('=>') && !prefix.trim()) return match;
-
-      const cleaned = params.split(',').map((p: string) => {
-        // Each param might be: `  paramName: TypeExpression  ` or `  paramName: Type = default  `
-        const colonIdx = p.indexOf(':');
-        if (colonIdx === -1) return p;
-
-        // Check if this colon is inside a string literal or after ?. (ternary/optional chaining)
-        const beforeColon = p.slice(0, colonIdx).trim();
-        // If beforeColon doesn't look like a simple identifier (with optional ?), skip
-        if (!/^\??\s*\w+$/.test(beforeColon) && !/^\s*\w+$/.test(beforeColon)) return p;
-
-        const name = beforeColon;
-        const afterType = p.slice(colonIdx + 1);
-
-        // Check for default value: find '=' that's not inside < >
-        const eqMatch = afterType.match(/(?<![<>=!])=(?!=)/);
-        if (eqMatch && eqMatch.index !== undefined) {
-          const defaultVal = afterType.slice(eqMatch.index);
-          return ` ${name} ${defaultVal}`;
-        }
-        return ` ${name}`;
-      }).join(',');
-      return `${prefix}(${cleaned})`;
-    }
-  );
-
-  // Remove function return type annotations: ): void { -> ) {
-  src = src.replace(/\)\s*:\s*[\w\[\]|<>, ]+\s*\{/g, ') {');
-  src = src.replace(/\)\s*:\s*[\w\[\]|<>, ]+\s*=>/g, ') =>');
-
-  // === Pass 2: Line-by-line cleanup ===
-  const lines = src.split('\n');
-  const result: string[] = [];
-
-  for (const line of lines) {
-    let l = line;
-
-    // Remove type annotations from variable declarations:
-    // const x: Type = ...  ->  const x = ...
-    // Must have '=' after the type to distinguish from ternary/object property
-    l = l.replace(/((?:const|let|var)\s+\w+)\s*:\s*[A-Z][\w\[\]|<>, ]*\s*=/g, '$1 =');
-    l = l.replace(/((?:const|let|var)\s+\w+)\s*:\s*(?:string|number|boolean|any|void|null|undefined)(?:\[\])?\s*=/g, '$1 =');
-
-    // Remove remaining standalone parameter type annotations on their own line:
-    // e.g., `  ctx: CanvasRenderingContext2D,`  ->  `  ctx,`
-    // Only match lines that look like a parameter (indented, ends with comma or nothing)
-    const paramLineMatch = l.match(/^(\s+)(\w+)\s*:\s*[\w\[\]|<>, .]+\s*(,?)\s*$/);
-    if (paramLineMatch) {
-      l = `${paramLineMatch[1]}${paramLineMatch[2]}${paramLineMatch[3]}`;
-    }
-
-    result.push(l);
-  }
-
-  return result.join('\n');
-}
-
 function compileLlmRenderer(code: string): CompiledLlmRenderer {
   // Check cache first (keyed by code hash)
   const cacheKey = code.length + "_" + code.slice(0, 100) + code.slice(-100);
@@ -225,10 +126,11 @@ function compileLlmRenderer(code: string): CompiledLlmRenderer {
   const result: CompiledLlmRenderer = { render: null, background: null, legend: null };
 
   try {
-    // Convert TypeScript to JavaScript
-    const jsCode = stripTypeScript(code);
+    // The backend already transpiles TypeScript to JavaScript using the TS compiler API,
+    // so the code we receive here should be valid JavaScript.
+    const jsCode = code;
 
-    console.log("[LLM Renderer] Stripped code preview (first 200 chars):", jsCode.slice(0, 200));
+    console.log("[LLM Renderer] Code preview (first 200 chars):", jsCode.slice(0, 200));
 
     // Find all function names that start with 'render' (or any top-level function)
     const functionNames: string[] = [];
