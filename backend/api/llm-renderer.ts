@@ -7,7 +7,7 @@
  * 
  * Supports:
  * - Anthropic Claude (claude-sonnet-4-20250514)
- * - Google Gemini (gemini-2.5-flash)
+ * - Google Gemini (gemini-2.5-pro)
  * 
  * Features:
  * - Disk-based caching of generated renderers per domain
@@ -36,8 +36,8 @@ const MODELS = {
     maxTokens: 8192,
   },
   gemini: {
-    id: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
+    id: "gemini-2.5-pro",
+    name: "Gemini 2.5 Pro",
     maxTokens: 8192,
   },
 } as const;
@@ -122,32 +122,23 @@ function extractCode(response: string): string {
 function validateCode(code: string, domainName: string): { valid: boolean; issues: string[] } {
   const issues: string[] = [];
 
-  // Convert domain name to CamelCase for function name matching
-  // e.g., "blocks-world" -> "BlocksWorld", "hanoi" -> "Hanoi"
-  const camelCase = domainName
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
-
-  // Check for main render function
-  const mainFnPattern = new RegExp(`function\\s+render${camelCase}\\s*\\(`);
-  if (!mainFnPattern.test(code)) {
-    // Also check for a generic "render" function name
-    if (!/function\s+render\w*\s*\(/.test(code)) {
-      issues.push(`Missing main render function (expected render${camelCase})`);
-    }
+  // Check for at least one render function (any name starting with 'render')
+  // The frontend discovers functions by name pattern, so exact domain-name matching
+  // is not required. The LLM may use any naming convention.
+  if (!/function\s+render\w*\s*\(/.test(code)) {
+    issues.push("Missing main render function (expected a function named render<Something>)");
   }
 
-  // Check for background function (can be undefined export)
-  const bgPattern = new RegExp(`render${camelCase}Background`);
-  if (!bgPattern.test(code) && !/renderBackground|Background\s*=\s*undefined/.test(code)) {
-    issues.push(`Missing background function or export (expected render${camelCase}Background)`);
+  // Check for a background function (any function with 'background' in the name)
+  if (!/(?:function\s+\w*[Bb]ackground|\w*[Bb]ackground\s*=\s*(?:function|\())/i.test(code)) {
+    // Not a hard failure - the frontend handles missing background gracefully
+    console.log(`[LLM Renderer] Note: No background function found for ${domainName} (optional)`);
   }
 
-  // Check for legend function/export (can be undefined)
-  const legendPattern = new RegExp(`render${camelCase}Legend`);
-  if (!legendPattern.test(code) && !/renderLegend|Legend\s*=\s*undefined/.test(code)) {
-    issues.push(`Missing legend function or export (expected render${camelCase}Legend)`);
+  // Check for a legend function (any function with 'legend' in the name)
+  if (!/(?:function\s+\w*[Ll]egend|\w*[Ll]egend\s*=\s*(?:function|\())/i.test(code)) {
+    // Not a hard failure - the frontend handles missing legend gracefully
+    console.log(`[LLM Renderer] Note: No legend function found for ${domainName} (optional)`);
   }
 
   // Check for forbidden patterns
