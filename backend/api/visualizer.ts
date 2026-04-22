@@ -2,6 +2,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { generateRenderer, listCachedRenderers, loadCachedRenderer, deleteCachedRenderer, transpileCachedCode, type LLMProvider } from "./llm-renderer";
+import { generateTransformer, listCachedTransformers, loadCachedTransformer, deleteCachedTransformer, transpileCachedTransformer } from "./llm-domain-interpreter";
 import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
@@ -531,6 +532,89 @@ export const visualizerRouter = router({
     )
     .mutation(async ({ input }) => {
       const success = await deleteCachedRenderer(input.filename);
+      return { success, filename: input.filename };
+    }),
+
+  // ==================== PDDL DOMAIN INTERPRETER ====================
+
+  /**
+   * Generate a TypeScript state transformer for a custom PDDL domain.
+   * Accepts the domain name, full PDDL domain text, sample raw states,
+   * and the LLM provider to use.
+   * Returns the generated and transpiled JavaScript transformer code.
+   */
+  llmGenerateTransformer: publicProcedure
+    .input(
+      z.object({
+        domainName: z.string(),
+        domainPddl: z.string(),
+        sampleStates: z.array(z.any()),
+        provider: z.enum(["claude", "gemini"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      console.log("[llmGenerateTransformer] Starting for domain:", input.domainName);
+      console.log("[llmGenerateTransformer] Provider:", input.provider);
+      console.log("[llmGenerateTransformer] Sample states:", input.sampleStates.length);
+      console.log("[llmGenerateTransformer] PDDL length:", input.domainPddl.length);
+
+      const result = await generateTransformer({
+        domainName: input.domainName,
+        domainPddl: input.domainPddl,
+        sampleStates: input.sampleStates,
+        provider: input.provider as LLMProvider,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || "LLM transformer generation failed");
+      }
+      return result;
+    }),
+
+  /**
+   * List cached LLM-generated state transformers, optionally filtered by domain.
+   */
+  llmListCachedTransformers: publicProcedure
+    .input(
+      z.object({
+        domain: z.string().optional(),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const transformers = await listCachedTransformers(input?.domain);
+      return transformers;
+    }),
+
+  /**
+   * Load a specific cached transformer by filename.
+   */
+  llmLoadCachedTransformer: publicProcedure
+    .input(
+      z.object({
+        filename: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const code = await loadCachedTransformer(input.filename);
+      if (!code) {
+        throw new Error(`Cached transformer not found: ${input.filename}`);
+      }
+      // Transpile the cached code to clean JS
+      const cleanCode = transpileCachedTransformer(code);
+      return { filename: input.filename, code: cleanCode };
+    }),
+
+  /**
+   * Delete a specific cached transformer by filename.
+   */
+  llmDeleteCachedTransformer: publicProcedure
+    .input(
+      z.object({
+        filename: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const success = await deleteCachedTransformer(input.filename);
       return { success, filename: input.filename };
     }),
 });
