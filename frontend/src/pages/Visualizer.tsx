@@ -1,30 +1,26 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useMotionValueEvent, animate as motionAnimate } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
 import {
-  Play, Pause, SkipForward, SkipBack, Upload, FileText,
-  AlertTriangle, Clock, Zap, Settings,
-  Cpu, CheckCircle2, XCircle, ChevronDown,
-  Wand2, RefreshCw, Brain, Trash2, History,
-  Layers, Hand, Package, BarChart3, Compass, Globe,
-  Menu, X, Terminal,
-} from "lucide-react";
+  PlayIcon, PauseIcon, SkipForwardIcon, SkipBackIcon,
+  UploadIcon, FileCodeIcon, AlertIcon, ClockIcon, ZapIcon,
+  SettingsIcon, CpuIcon, CheckCircleIcon, XCircleIcon,
+  ChevronDownIcon, WandIcon, RefreshIcon, BrainIcon,
+  TrashIcon, HistoryIcon, MenuIcon, CloseIcon, TerminalIcon,
+  BlocksWorldIcon, GripperIcon, DepotIcon, HanoiIcon, RoverIcon, SatelliteIcon,
+} from "@/components/Icons";
 
 interface SearchStrategy {
-  id: string;
-  name: string;
-  description: string;
-  isOptimal: boolean;
-  speed: "fast" | "medium" | "slow";
-  whenToUse: string;
-  warning: string | null;
+  id: string; name: string; description: string;
+  isOptimal: boolean; speed: "fast" | "medium" | "slow";
+  whenToUse: string; warning: string | null;
 }
 
-// Easing + animation constants
+// ─── Animation tokens ────────────────────────────────────────────────────────
 const easeOut: [number, number, number, number] = [0.23, 1, 0.32, 1];
-const springConfig = { type: "spring", stiffness: 380, damping: 34 } as const;
+const spring = { type: "spring", stiffness: 380, damping: 34 } as const;
 
 const fadeInUp = {
   initial: { opacity: 0, y: 8 },
@@ -32,7 +28,7 @@ const fadeInUp = {
   exit:    { opacity: 0, y: -4 },
 };
 
-const modalContent = {
+const modalVariants = {
   initial: { opacity: 0, scale: 0.96, y: 8 },
   animate: { opacity: 1, scale: 1,    y: 0 },
   exit:    { opacity: 0, scale: 0.96, y: 4 },
@@ -44,9 +40,191 @@ const listStagger = {
 
 const listItem = {
   initial: { opacity: 0, x: -8 },
-  animate: { opacity: 1, x: 0 },
+  animate: { opacity: 1, x: 0  },
 };
 
+// ─── Ambient background orbs ─────────────────────────────────────────────────
+const AmbientOrbs = () => (
+  <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
+    <div className="orb-a absolute rounded-full"
+      style={{ width: 700, height: 700, top: -200, left: -180,
+        background: "radial-gradient(circle, rgba(34,197,94,0.065) 0%, transparent 65%)" }} />
+    <div className="orb-b absolute rounded-full"
+      style={{ width: 600, height: 600, bottom: -150, right: -120,
+        background: "radial-gradient(circle, rgba(99,102,241,0.05) 0%, transparent 65%)" }} />
+    <div className="orb-c absolute rounded-full"
+      style={{ width: 400, height: 400, top: "40%", right: "18%",
+        background: "radial-gradient(circle, rgba(6,182,212,0.04) 0%, transparent 65%)" }} />
+  </div>
+);
+
+// ─── Animated counter ────────────────────────────────────────────────────────
+const AnimatedNumber = ({ value }: { value: number }) => {
+  const mv = useMotionValue(value);
+  const [display, setDisplay] = useState(value);
+  useMotionValueEvent(mv, "change", (v) => setDisplay(Math.round(v)));
+  useEffect(() => {
+    const ctrl = motionAnimate(mv, value, { duration: 0.4, ease: easeOut });
+    return () => ctrl.stop();
+  }, [value, mv]);
+  return <span className="tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{display}</span>;
+};
+
+// ─── Blinking cursor ─────────────────────────────────────────────────────────
+const BlinkingCursor = () => (
+  <span className="inline-block w-[7px] h-[13px] bg-green-500 ml-0.5 animate-blink"
+    style={{ verticalAlign: "middle", borderRadius: "1px" }} />
+);
+
+// ─── Planning search-tree (empty state) ─────────────────────────────────────
+const PlanningGraph = () => {
+  type NodeType = "start" | "state" | "goal" | "dead";
+  const nodes: { id: number; x: number; y: number; label: string; type: NodeType }[] = [
+    { id: 0, x: 160, y: 28,  label: "S₀", type: "start" },
+    { id: 1, x: 80,  y: 100, label: "S₁", type: "state" },
+    { id: 2, x: 160, y: 100, label: "S₂", type: "state" },
+    { id: 3, x: 240, y: 100, label: "S₃", type: "state" },
+    { id: 4, x: 50,  y: 172, label: "S₄", type: "dead"  },
+    { id: 5, x: 110, y: 172, label: "S₅", type: "state" },
+    { id: 6, x: 160, y: 172, label: "G",  type: "goal"  },
+    { id: 7, x: 250, y: 172, label: "S₇", type: "dead"  },
+    { id: 8, x: 300, y: 172, label: "S₈", type: "state" },
+  ];
+  const edges = [
+    [0,1],[0,2],[0,3],[1,4],[1,5],[2,6],[3,7],[3,8],
+  ];
+  const goalPath = new Set([0, 2, 6]);
+  const goalEdgeSet = new Set(["0-2","2-6"]);
+
+  return (
+    <svg viewBox="0 0 320 200" className="w-full max-w-xs opacity-80"
+      style={{ filter: "drop-shadow(0 0 24px rgba(34,197,94,0.08))" }}>
+      {edges.map(([f, t], i) => {
+        const fn = nodes[f], tn = nodes[t];
+        const isGoalEdge = goalEdgeSet.has(`${f}-${t}`);
+        return (
+          <motion.line key={i}
+            x1={fn.x} y1={fn.y + 13} x2={tn.x} y2={tn.y - 13}
+            stroke={isGoalEdge ? "#22C55E" : "rgba(255,255,255,0.1)"}
+            strokeWidth={isGoalEdge ? "1.5" : "0.8"}
+            initial={{ opacity: 0, pathLength: 0 }}
+            animate={{ opacity: 1, pathLength: 1 }}
+            transition={{ duration: 0.45, delay: 0.25 + i * 0.09, ease: easeOut }}
+          />
+        );
+      })}
+      {nodes.map((n, i) => {
+        const isGoal  = n.type === "goal";
+        const isStart = n.type === "start";
+        const isDead  = n.type === "dead";
+        const isOnPath = goalPath.has(n.id);
+        const r = isGoal ? 13 : isStart ? 12 : 10;
+        return (
+          <motion.g key={n.id}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: "spring", delay: 0.08 + i * 0.07, stiffness: 340, damping: 22 }}
+            style={{ transformOrigin: `${n.x}px ${n.y}px` }}
+          >
+            {/* Goal pulsing ring */}
+            {isGoal && (
+              <motion.circle cx={n.x} cy={n.y} r={18}
+                stroke="#22C55E" strokeWidth="0.8" fill="none"
+                animate={{ r: [18, 25, 18], opacity: [0.25, 0, 0.25] }}
+                transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+              />
+            )}
+            {/* Start pulsing ring */}
+            {isStart && (
+              <motion.circle cx={n.x} cy={n.y} r={16}
+                stroke="#6366F1" strokeWidth="0.7" fill="none"
+                animate={{ r: [16, 22, 16], opacity: [0.2, 0, 0.2] }}
+                transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+              />
+            )}
+            <circle cx={n.x} cy={n.y} r={r}
+              fill={isGoal ? "rgba(34,197,94,0.15)" : isStart ? "rgba(99,102,241,0.15)" : isDead ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)"}
+              stroke={isGoal ? "#22C55E" : isStart ? "#6366F1" : isOnPath ? "#22C55E" : isDead ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.15)"}
+              strokeWidth={isGoal || isStart ? "1.5" : "1"}
+            />
+            <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="7.5"
+              fill={isGoal ? "#22C55E" : isStart ? "#A5B4FC" : isOnPath ? "#86EFAC" : isDead ? "#374151" : "#475569"}
+              fontFamily="JetBrains Mono, monospace"
+              fontWeight={isGoal || isStart ? "600" : "400"}
+            >
+              {n.label}
+            </text>
+          </motion.g>
+        );
+      })}
+    </svg>
+  );
+};
+
+// ─── Processing scan beam ────────────────────────────────────────────────────
+const ScanBeam = () => (
+  <motion.div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ borderRadius: "inherit", zIndex: 2 }}>
+    <motion.div className="absolute left-0 right-0 h-px"
+      style={{ background: "linear-gradient(90deg, transparent 0%, rgba(34,197,94,0.5) 30%, rgba(34,197,94,0.9) 50%, rgba(34,197,94,0.5) 70%, transparent 100%)" }}
+      animate={{ top: ["0%", "100%"] }}
+      transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+    />
+    <motion.div className="absolute left-0 right-0 h-8"
+      style={{ background: "linear-gradient(180deg, rgba(34,197,94,0.04) 0%, transparent 100%)" }}
+      animate={{ top: ["-32px", "calc(100% + 32px)"] }}
+      transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+    />
+  </motion.div>
+);
+
+// ─── Collapsible wrapper ─────────────────────────────────────────────────────
+const CollapseSection = ({ open, children }: { open: boolean; children: React.ReactNode }) => (
+  <AnimatePresence>
+    {open && (
+      <motion.div
+        initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+        exit={{ height: 0, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 400, damping: 36 }}
+        style={{ overflow: "hidden" }}
+      >
+        {children}
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
+// ─── Pill toggle ─────────────────────────────────────────────────────────────
+const PillToggle = ({
+  options, value, onChange,
+}: { options: { id: string; label: React.ReactNode }[]; value: string; onChange: (v: string) => void }) => (
+  <div className="flex bg-white/[0.05] rounded-lg p-0.5 border border-white/[0.06]">
+    {options.map(o => (
+      <button key={o.id} onClick={() => onChange(o.id)}
+        className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-150 ${
+          value === o.id ? "bg-white/[0.08] text-slate-100 shadow-sm" : "text-slate-500 hover:text-slate-300"
+        }`}>
+        {o.label}
+      </button>
+    ))}
+  </div>
+);
+
+// ─── Modal backdrop ───────────────────────────────────────────────────────────
+const ModalBackdrop = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
+  <motion.div
+    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+    transition={{ duration: 0.18 }}
+    onClick={onClose}
+    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+  >
+    <motion.div {...modalVariants} transition={{ type: "spring", stiffness: 350, damping: 28 }}
+      onClick={e => e.stopPropagation()}>
+      {children}
+    </motion.div>
+  </motion.div>
+);
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function Visualizer() {
   const [selectedDomain, setSelectedDomain]     = useState("blocks-world");
   const [selectedStrategy, setSelectedStrategy] = useState("astar-lmcut");
@@ -59,7 +237,7 @@ export default function Visualizer() {
   const [currentStateIndex, setCurrentStateIndex] = useState(0);
   const [isPlaying, setIsPlaying]               = useState(false);
   const [playbackSpeed, setPlaybackSpeed]       = useState(1000);
-  const [plannerInfo, setPlannerInfo]           = useState<{used_planner: boolean; info: string; strategy?: any} | null>(null);
+  const [plannerInfo, setPlannerInfo]           = useState<{ used_planner: boolean; info: string; strategy?: any } | null>(null);
   const [showStatus, setShowStatus]             = useState(false);
   const [elapsedTime, setElapsedTime]           = useState(0);
   const [isProcessing, setIsProcessing]         = useState(false);
@@ -68,6 +246,8 @@ export default function Visualizer() {
   const [showExampleProblem, setShowExampleProblem]     = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed]     = useState(false);
+  const [showSuccessFlash, setShowSuccessFlash]         = useState(false);
+
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef        = useRef<HTMLDivElement>(null);
 
@@ -86,20 +266,19 @@ export default function Visualizer() {
     errorType?: string; suggestedDomain?: string; suggestedDomainName?: string;
   }>({ show: false, title: "", message: "" });
 
-  const strategiesQuery = trpc.visualizer.listStrategies.useQuery();
-  const statusQuery = trpc.visualizer.checkStatus.useQuery(undefined, { enabled: showStatus });
+  const strategiesQuery      = trpc.visualizer.listStrategies.useQuery();
+  const statusQuery          = trpc.visualizer.checkStatus.useQuery(undefined, { enabled: showStatus });
   const domainDefinitionQuery = trpc.visualizer.getDomainDefinition.useQuery(
-    { domainName: selectedDomain as any },
-    { enabled: showDomainDefinition }
+    { domainName: selectedDomain as any }, { enabled: showDomainDefinition }
   );
 
   const domains = [
-    { id: "blocks-world", name: "Blocks World",  description: "Classic block stacking problem",              Icon: Layers   },
-    { id: "gripper",      name: "Gripper",        description: "Robot gripper moving balls between rooms",    Icon: Hand     },
-    { id: "depot",        name: "Depot",          description: "Transporting packages via trucks and depots", Icon: Package  },
-    { id: "hanoi",        name: "Hanoi",          description: "Moving disks between pegs (Tower of Hanoi)",  Icon: BarChart3},
-    { id: "rovers",       name: "Rovers",         description: "Planetary exploration with rovers",           Icon: Compass  },
-    { id: "satellite",    name: "Satellite",      description: "Satellite imaging and data transmission",     Icon: Globe    },
+    { id: "blocks-world", name: "Blocks World",  description: "Classic block stacking",              Icon: BlocksWorldIcon },
+    { id: "gripper",      name: "Gripper",        description: "Robot gripper moving balls",          Icon: GripperIcon     },
+    { id: "depot",        name: "Depot",          description: "Truck & crane depot logistics",       Icon: DepotIcon       },
+    { id: "hanoi",        name: "Hanoi",          description: "Tower of Hanoi disk puzzle",          Icon: HanoiIcon       },
+    { id: "rovers",       name: "Rovers",         description: "Planetary exploration mission",       Icon: RoverIcon       },
+    { id: "satellite",    name: "Satellite",      description: "Orbital imaging & transmission",      Icon: SatelliteIcon   },
   ];
 
   useEffect(() => {
@@ -116,10 +295,7 @@ export default function Visualizer() {
   }, []);
 
   useEffect(() => {
-    setProblemType("example");
-    setProblemFile(null);
-    setProblemText("");
-    setInputMode("file");
+    setProblemType("example"); setProblemFile(null); setProblemText(""); setInputMode("file");
   }, [selectedDomain]);
 
   useEffect(() => {
@@ -127,11 +303,9 @@ export default function Visualizer() {
       const container = planStepsRef.current;
       const el = container.children[currentStateIndex - 1] as HTMLElement;
       if (el) {
-        const elRect  = el.getBoundingClientRect();
-        const cRect   = container.getBoundingClientRect();
-        if (elRect.top < cRect.top || elRect.bottom > cRect.bottom) {
+        const elRect = el.getBoundingClientRect(), cRect = container.getBoundingClientRect();
+        if (elRect.top < cRect.top || elRect.bottom > cRect.bottom)
           container.scrollTop = el.offsetTop - container.offsetTop;
-        }
       }
     }
   }, [currentStateIndex, plan.length]);
@@ -139,62 +313,12 @@ export default function Visualizer() {
   const currentStrategy = strategiesQuery.data?.find((s: SearchStrategy) => s.id === selectedStrategy) as SearchStrategy | undefined;
 
   const getDefaultProblem = (domain: string): string => {
-    if (domain === "blocks-world") return `(define (problem bw-default)
-  (:domain blocks-world)
-  (:objects a b c - block)
-  (:init
-    (ontable a) (ontable b) (ontable c)
-    (clear a) (clear b) (clear c)
-    (handempty)
-  )
-  (:goal (and (on c b) (on b a)))
-)`;
-    if (domain === "gripper") return `(define (problem gripper-default)
-  (:domain gripper)
-  (:objects rooma roomb - room  ball1 ball2 - ball  left right - gripper)
-  (:init
-    (at-robby rooma) (free left) (free right)
-    (at ball1 rooma) (at ball2 rooma)
-  )
-  (:goal (and (at ball1 roomb) (at ball2 roomb)))
-)`;
-    if (domain === "depot") return `(define (problem depot-simple)
-  (:domain depot)
-  (:objects d1 d2 - depot  t1 - truck  c1 c2 - crane  pile1 pile2 - pile  p1 p2 - package)
-  (:init
-    (at-truck t1 d1) (at-crane c1 d1) (empty-crane c1) (at-crane c2 d2) (empty-crane c2)
-    (at-pile pile1 d1) (at-pile pile2 d2) (on-pile p2 pile1) (on p1 p2)
-    (at p1 d1) (at p2 d1) (clear p1) (clear pile2)
-  )
-  (:goal (on-pile p2 pile2))
-)`;
-    if (domain === "hanoi") return `(define (problem hanoi-2-disks)
-  (:domain hanoi)
-  (:objects d1 d2 - disk  a b c - peg)
-  (:init
-    (is-disk d1) (is-disk d2) (is-peg a) (is-peg b) (is-peg c)
-    (smaller d1 d2) (on d2 a) (on d1 d2)
-    (clear d1) (clear b) (clear c)
-  )
-  (:goal (and (on d2 c) (on d1 d2)))
-)`;
-    if (domain === "rovers") return `(define (problem rovers-default)
-  (:domain rovers)
-  (:objects r1 - rover  w1 w2 - waypoint  t1 - target)
-  (:init
-    (at-rover r1 w1) (connected w1 w2) (connected w2 w1) (at-target t1 w2)
-  )
-  (:goal (and (communicated t1)))
-)`;
-    if (domain === "satellite") return `(define (problem satellite-default)
-  (:domain satellite)
-  (:objects s1 - satellite  i1 - instrument  t1 - target  dcal d1 - direction  g1 - groundstation)
-  (:init
-    (onboard i1 s1) (supports i1 t1) (calibration-target i1 t1) (target-dir t1 d1)
-    (pointing s1 dcal) (power-avail s1) (storage-avail s1) (visible s1 g1)
-  )
-  (:goal (and (have-image t1)))
-)`;
+    if (domain === "blocks-world") return `(define (problem bw-default)\n  (:domain blocks-world)\n  (:objects a b c - block)\n  (:init\n    (ontable a) (ontable b) (ontable c)\n    (clear a) (clear b) (clear c)\n    (handempty)\n  )\n  (:goal (and (on c b) (on b a)))\n)`;
+    if (domain === "gripper") return `(define (problem gripper-default)\n  (:domain gripper)\n  (:objects rooma roomb - room  ball1 ball2 - ball  left right - gripper)\n  (:init\n    (at-robby rooma) (free left) (free right)\n    (at ball1 rooma) (at ball2 rooma)\n  )\n  (:goal (and (at ball1 roomb) (at ball2 roomb)))\n)`;
+    if (domain === "depot") return `(define (problem depot-simple)\n  (:domain depot)\n  (:objects d1 d2 - depot  t1 - truck  c1 c2 - crane  pile1 pile2 - pile  p1 p2 - package)\n  (:init\n    (at-truck t1 d1) (at-crane c1 d1) (empty-crane c1) (at-crane c2 d2) (empty-crane c2)\n    (at-pile pile1 d1) (at-pile pile2 d2) (on-pile p2 pile1) (on p1 p2)\n    (at p1 d1) (at p2 d1) (clear p1) (clear pile2)\n  )\n  (:goal (on-pile p2 pile2))\n)`;
+    if (domain === "hanoi") return `(define (problem hanoi-2-disks)\n  (:domain hanoi)\n  (:objects d1 d2 - disk  a b c - peg)\n  (:init\n    (is-disk d1) (is-disk d2) (is-peg a) (is-peg b) (is-peg c)\n    (smaller d1 d2) (on d2 a) (on d1 d2)\n    (clear d1) (clear b) (clear c)\n  )\n  (:goal (and (on d2 c) (on d1 d2)))\n)`;
+    if (domain === "rovers") return `(define (problem rovers-default)\n  (:domain rovers)\n  (:objects r1 - rover  w1 w2 - waypoint  t1 - target)\n  (:init\n    (at-rover r1 w1) (connected w1 w2) (connected w2 w1) (at-target t1 w2)\n  )\n  (:goal (and (communicated t1)))\n)`;
+    if (domain === "satellite") return `(define (problem satellite-default)\n  (:domain satellite)\n  (:objects s1 - satellite  i1 - instrument  t1 - target  dcal d1 - direction  g1 - groundstation)\n  (:init\n    (onboard i1 s1) (supports i1 t1) (calibration-target i1 t1) (target-dir t1 d1)\n    (pointing s1 dcal) (power-avail s1) (storage-avail s1) (visible s1 g1)\n  )\n  (:goal (and (have-image t1)))\n)`;
     return "";
   };
 
@@ -205,6 +329,9 @@ export default function Visualizer() {
       setPlan(data.plan);
       setCurrentStateIndex(0);
       setPlannerInfo({ used_planner: data.used_planner || false, info: data.planner_info || "Unknown", strategy: data.search_strategy });
+      // Success flash
+      setShowSuccessFlash(true);
+      setTimeout(() => setShowSuccessFlash(false), 900);
     },
     onError: (error: any) => {
       setIsProcessing(false);
@@ -260,12 +387,12 @@ export default function Visualizer() {
   const handleLoadCachedRenderer = async (filename: string) => {
     try {
       setLlmError(null);
-      const res = await fetch(`/api/trpc/visualizer.llmLoadCachedRenderer?input=${encodeURIComponent(JSON.stringify({ json: { filename } }))}`);
+      const res  = await fetch(`/api/trpc/visualizer.llmLoadCachedRenderer?input=${encodeURIComponent(JSON.stringify({ json: { filename } }))}`);
       const json = await res.json();
       const data = json?.result?.data?.json;
       if (data?.code) {
         setLlmRendererCode(data.code); setSelectedCachedFile(filename);
-        const parts = filename.replace('.ts', '').split('_');
+        const parts = filename.replace('.ts','').split('_');
         setLlmModelInfo(`Cached (${parts.length >= 2 ? parts[parts.length - 2] : 'unknown'})`);
       } else setLlmError("Failed to load cached renderer");
     } catch (e: any) { setLlmError(e.message || "Failed to load cached renderer"); }
@@ -286,7 +413,8 @@ export default function Visualizer() {
       if (inputMode === "file" && !problemFile) { setIsProcessing(false); alert("Please select a problem file"); return; }
       if (inputMode === "text" && !problemText.trim()) { setIsProcessing(false); alert("Please paste PDDL content"); return; }
       const reader = new FileReader();
-      const process = (content: string) => uploadMutation.mutate({ domainContent: "", problemContent: content, domainName: selectedDomain as any, searchStrategy: selectedStrategy as any });
+      const process = (content: string) =>
+        uploadMutation.mutate({ domainContent: "", problemContent: content, domainName: selectedDomain as any, searchStrategy: selectedStrategy as any });
       if (inputMode === "file" && problemFile) { reader.onload = (e) => process(e.target?.result as string); reader.readAsText(problemFile); }
       else if (inputMode === "text") process(problemText);
     } else {
@@ -319,11 +447,11 @@ export default function Visualizer() {
 
   const getSpeedBadge = (speed: string) => {
     const map = {
-      fast:   { icon: Zap,           bg: "bg-green-500/15",  text: "text-green-400",  label: "Fast"   },
-      medium: { icon: Clock,         bg: "bg-amber-500/15",  text: "text-amber-400",  label: "Medium" },
-      slow:   { icon: AlertTriangle, bg: "bg-red-500/15",    text: "text-red-400",    label: "Slow"   },
-    }[speed] || { icon: Clock, bg: "bg-white/8", text: "text-slate-400", label: speed };
-    const Icon = map.icon;
+      fast:   { Icon: ZapIcon,   bg: "bg-green-500/15",  text: "text-green-400",  label: "Fast"   },
+      medium: { Icon: ClockIcon, bg: "bg-amber-500/15",  text: "text-amber-400",  label: "Medium" },
+      slow:   { Icon: AlertIcon, bg: "bg-red-500/15",    text: "text-red-400",    label: "Slow"   },
+    }[speed] ?? { Icon: ClockIcon, bg: "bg-white/8", text: "text-slate-400", label: speed };
+    const { Icon } = map;
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${map.bg} ${map.text}`}>
         <Icon className="w-2.5 h-2.5" />{map.label}
@@ -331,83 +459,46 @@ export default function Visualizer() {
     );
   };
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60), s = seconds % 60;
-    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60); const sec = s % 60;
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
   };
 
   const currentDomain = domains.find(d => d.id === selectedDomain);
 
-  // ─── Shared modal wrapper ──────────────────────────────────────────────────
-  const ModalBackdrop = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      transition={{ duration: 0.18 }}
-      onClick={onClose}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-    >
-      <motion.div
-        {...modalContent}
-        transition={{ type: "spring", stiffness: 350, damping: 28 }}
-        onClick={e => e.stopPropagation()}
-      >
-        {children}
-      </motion.div>
-    </motion.div>
-  );
-
-  // ─── Collapsible section wrapper ─────────────────────────────────────────
-  const CollapseSection = ({ open, children }: { open: boolean; children: React.ReactNode }) => (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-          exit={{ height: 0, opacity: 0 }}
-          transition={{ type: "spring", stiffness: 400, damping: 36 }}
-          style={{ overflow: "hidden" }}
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-
-  // ─── Pill toggle ────────────────────────────────────────────────────────
-  const PillToggle = ({
-    options, value, onChange
-  }: { options: { id: string; label: React.ReactNode }[]; value: string; onChange: (v: string) => void }) => (
-    <div className="flex bg-white/[0.05] rounded-lg p-0.5 border border-white/[0.06]">
-      {options.map(o => (
-        <button
-          key={o.id} onClick={() => onChange(o.id)}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-150 ${
-            value === o.id ? "bg-white/[0.08] text-slate-100 shadow-sm" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-
+  // ──────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#0B1524] bg-grid">
+    <div className="min-h-screen bg-[#0B1524] bg-grid relative" style={{ isolation: "isolate" }}>
+      {/* Scanline overlay */}
+      <div className="scanlines" />
+
+      {/* Ambient background orbs */}
+      <AmbientOrbs />
 
       {/* ── Header ── */}
-      <header className="border-b border-white/[0.06] bg-[#0B1524]/90 backdrop-blur-md sticky top-0 z-50">
+      <header className="border-b border-white/[0.06] bg-[#0B1524]/90 backdrop-blur-md sticky top-0"
+        style={{ zIndex: 40 }}>
         <div className="container max-w-7xl py-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/30 flex-shrink-0">
+              {/* Logo mark */}
+              <motion.div
+                className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center flex-shrink-0"
+                style={{ boxShadow: "0 0 0 1px rgba(34,197,94,0.5), 0 4px 16px rgba(34,197,94,0.3)" }}
+                animate={{ boxShadow: [
+                  "0 0 0 1px rgba(34,197,94,0.5), 0 4px 16px rgba(34,197,94,0.3)",
+                  "0 0 0 3px rgba(34,197,94,0.15), 0 4px 24px rgba(34,197,94,0.45)",
+                  "0 0 0 1px rgba(34,197,94,0.5), 0 4px 16px rgba(34,197,94,0.3)",
+                ]}}
+                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+              >
                 <svg viewBox="0 0 16 16" fill="none" className="w-4 h-4">
                   <path d="M2 4h12M2 8h8M2 12h10" stroke="#0B1524" strokeWidth="1.75" strokeLinecap="round" />
                 </svg>
-              </div>
+              </motion.div>
               <div>
-                <h1
-                  className="text-[15px] font-semibold text-white leading-none tracking-tight"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
+                <h1 className="text-[15px] font-semibold text-white leading-none tracking-tight"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                   Planning Visualizer
                 </h1>
                 <p className="text-[10px] text-slate-500 font-medium tracking-[0.18em] uppercase mt-0.5">
@@ -425,23 +516,24 @@ export default function Visualizer() {
                   : "bg-white/[0.04] text-slate-400 border-white/[0.08] hover:text-slate-200 hover:border-white/[0.14]"
               }`}
             >
-              <Settings className="w-3.5 h-3.5" />
+              <SettingsIcon className="w-3.5 h-3.5" />
               System Status
             </motion.button>
           </div>
         </div>
       </header>
 
-      <main className="container max-w-7xl py-8">
+      <main className="container max-w-7xl py-8" style={{ position: "relative", zIndex: 1 }}>
 
         {/* ── System Status Panel ── */}
         <AnimatePresence>
           {showStatus && (
             <motion.div {...fadeInUp} transition={{ duration: 0.22, ease: easeOut }} className="mb-6">
-              <div className="rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden" style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
+              <div className="rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
+                style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
                 <div className="px-6 py-4 border-b border-white/[0.05] bg-white/[0.02]">
                   <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                    <Cpu className="w-4 h-4 text-green-500" />
+                    <CpuIcon className="w-4 h-4 text-green-500" />
                     System Status
                   </h2>
                 </div>
@@ -458,11 +550,15 @@ export default function Visualizer() {
                         { label: "Fast Downward", ok: statusQuery.data.fastDownward.available, detail: statusQuery.data.fastDownward.available ? "Planner available" : "./build.py", isCode: !statusQuery.data.fastDownward.available },
                       ].map(({ label, ok, detail, isCode }) => (
                         <div key={label} className={`p-4 rounded-xl border flex items-start gap-3 ${ok ? "bg-green-500/8 border-green-500/20" : "bg-red-500/8 border-red-500/20"}`}>
-                          {ok ? <CheckCircle2 className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" /> : <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />}
+                          {ok
+                            ? <CheckCircleIcon className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            : <XCircleIcon    className="w-4 h-4 text-red-400  mt-0.5 flex-shrink-0" />}
                           <div>
                             <div className="text-sm font-semibold text-slate-200">{label} {ok ? "Ready" : "Not Found"}</div>
                             <div className={`text-xs mt-0.5 ${ok ? "text-slate-500" : "text-red-400"}`}>
-                              {isCode ? <code className="bg-red-500/15 px-1.5 py-0.5 rounded font-mono">{detail}</code> : detail}
+                              {isCode
+                                ? <code className="bg-red-500/15 px-1.5 py-0.5 rounded font-mono">{detail}</code>
+                                : detail}
                             </div>
                           </div>
                         </div>
@@ -488,27 +584,33 @@ export default function Visualizer() {
                 initial={{ opacity: 0, x: -16 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -16 }}
-                transition={springConfig}
+                transition={spring}
                 className="w-full lg:w-[300px] lg:flex-shrink-0 space-y-3"
               >
 
                 {/* Domain Card */}
-                <div
+                <motion.div
                   className="rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
                   style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}
+                  whileHover={{ boxShadow: "0 0 0 1px rgba(34,197,94,0.08), 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.2)" }}
+                  transition={{ duration: 0.2 }}
                 >
-                  <button
-                    onClick={() => setIsDomainOpen(!isDomainOpen)}
-                    className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-white/[0.03] transition-colors"
-                  >
+                  <button onClick={() => setIsDomainOpen(!isDomainOpen)}
+                    className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-white/[0.03] transition-colors">
                     <div className="flex items-center gap-2.5">
-                      <span className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                        Domain
-                      </span>
-                      <span className="text-xs text-green-400 font-medium">{currentDomain?.name}</span>
+                      <span className="text-sm font-semibold text-slate-200"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>Domain</span>
+                      <motion.span
+                        key={selectedDomain}
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-xs text-green-400 font-medium"
+                      >
+                        {currentDomain?.name}
+                      </motion.span>
                     </div>
                     <motion.div animate={{ rotate: isDomainOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }}>
-                      <ChevronDown className="w-4 h-4 text-slate-600" />
+                      <ChevronDownIcon className="w-4 h-4 text-slate-600" />
                     </motion.div>
                   </button>
 
@@ -525,6 +627,7 @@ export default function Visualizer() {
                               transition={{ duration: 0.18, ease: easeOut }}
                               onClick={() => setSelectedDomain(domain.id)}
                               whileTap={{ scale: 0.98 }}
+                              whileHover={!sel ? { x: 2 } : undefined}
                               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
                                 sel
                                   ? "bg-green-500/10 border border-green-500/[0.22]"
@@ -535,10 +638,8 @@ export default function Visualizer() {
                                 <DomainIcon className={`w-3.5 h-3.5 transition-colors ${sel ? "text-green-400" : "text-slate-500"}`} />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div
-                                  className={`text-sm font-medium leading-none ${sel ? "text-green-300" : "text-slate-300"}`}
-                                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                                >
+                                <div className={`text-sm font-medium leading-none ${sel ? "text-green-300" : "text-slate-300"}`}
+                                  style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                                   {domain.name}
                                 </div>
                                 <div className="text-[11px] text-slate-600 truncate mt-0.5">{domain.description}</div>
@@ -547,7 +648,7 @@ export default function Visualizer() {
                                 <motion.div
                                   layoutId="domain-sel-dot"
                                   className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0"
-                                  style={{ boxShadow: "0 0 6px rgba(34,197,94,0.7)" }}
+                                  style={{ boxShadow: "0 0 6px rgba(34,197,94,0.8)" }}
                                 />
                               )}
                             </motion.button>
@@ -556,17 +657,21 @@ export default function Visualizer() {
                       </motion.div>
                       <button
                         onClick={() => setShowDomainDefinition(true)}
-                        className="w-full mt-2 px-3 py-2 text-[11px] font-medium text-slate-600 hover:text-slate-400 rounded-lg hover:bg-white/[0.04] transition-colors flex items-center justify-center gap-1.5"
-                      >
-                        <FileText className="w-3 h-3" />
+                        className="w-full mt-2 px-3 py-2 text-[11px] font-medium text-slate-600 hover:text-slate-400 rounded-lg hover:bg-white/[0.04] transition-colors flex items-center justify-center gap-1.5">
+                        <FileCodeIcon className="w-3 h-3" />
                         View Domain Definition
                       </button>
                     </div>
                   </CollapseSection>
-                </div>
+                </motion.div>
 
                 {/* Problem Card */}
-                <div className="rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden" style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
+                <motion.div
+                  className="rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
+                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}
+                  whileHover={{ boxShadow: "0 0 0 1px rgba(34,197,94,0.08), 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.2)" }}
+                  transition={{ duration: 0.2 }}
+                >
                   <div className="px-5 py-3.5 border-b border-white/[0.05]">
                     <h2 className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Problem</h2>
                   </div>
@@ -585,11 +690,9 @@ export default function Visualizer() {
                               Using default problem for <strong className="text-green-300">{currentDomain?.name}</strong>
                             </p>
                           </div>
-                          <button
-                            onClick={() => setShowExampleProblem(true)}
-                            className="w-full px-3 py-2 text-[11px] font-medium text-slate-600 hover:text-slate-400 rounded-lg hover:bg-white/[0.04] transition-colors flex items-center justify-center gap-1.5"
-                          >
-                            <FileText className="w-3 h-3" />
+                          <button onClick={() => setShowExampleProblem(true)}
+                            className="w-full px-3 py-2 text-[11px] font-medium text-slate-600 hover:text-slate-400 rounded-lg hover:bg-white/[0.04] transition-colors flex items-center justify-center gap-1.5">
+                            <FileCodeIcon className="w-3 h-3" />
                             View Example Problem
                           </button>
                         </motion.div>
@@ -597,29 +700,27 @@ export default function Visualizer() {
                         <motion.div key="cu" {...fadeInUp} transition={{ duration: 0.16, ease: easeOut }} className="space-y-3">
                           <PillToggle
                             options={[
-                              { id: "file", label: <><Upload className="w-3 h-3" />Upload</> },
-                              { id: "text", label: <><FileText className="w-3 h-3" />Paste</> },
+                              { id: "file", label: <><UploadIcon className="w-3 h-3" />Upload</> },
+                              { id: "text", label: <><FileCodeIcon className="w-3 h-3" />Paste</> },
                             ]}
                             value={inputMode}
                             onChange={v => { setInputMode(v as any); if (v === "file") setProblemText(""); else setProblemFile(null); }}
                           />
                           {inputMode === "file" ? (
                             <div className="relative">
-                              <input
-                                type="file" accept=".pddl"
+                              <input type="file" accept=".pddl"
                                 onChange={e => setProblemFile(e.target.files?.[0] || null)}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                              />
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                               <div className={`border-2 border-dashed rounded-xl p-5 text-center transition-all ${
                                 problemFile
                                   ? "border-green-500/40 bg-green-500/[0.06]"
                                   : "border-white/[0.08] hover:border-green-500/30 hover:bg-green-500/[0.04]"
                               }`}>
                                 {problemFile ? (
-                                  <><CheckCircle2 className="w-6 h-6 text-green-500 mx-auto mb-1.5" />
+                                  <><CheckCircleIcon className="w-6 h-6 text-green-500 mx-auto mb-1.5" />
                                   <p className="text-xs text-green-400 font-medium truncate px-2">{problemFile.name}</p></>
                                 ) : (
-                                  <><Upload className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
+                                  <><UploadIcon className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
                                   <p className="text-xs text-slate-600">Drop .pddl file or click to browse</p></>
                                 )}
                               </div>
@@ -629,7 +730,7 @@ export default function Visualizer() {
                               <Textarea
                                 value={problemText}
                                 onChange={e => setProblemText(e.target.value)}
-                                placeholder="(define (problem ...)&#10;  (:domain ...)&#10;  ...&#10;)"
+                                placeholder={"(define (problem ...)\n  (:domain ...)\n  ...\n)"}
                                 className="font-mono text-xs min-h-[260px] bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder:text-slate-700 focus:border-green-500/40 rounded-xl resize-none"
                               />
                               {problemText && <p className="text-[10px] text-slate-600 mt-1.5">{problemText.split("\n").length} lines</p>}
@@ -639,20 +740,24 @@ export default function Visualizer() {
                       )}
                     </AnimatePresence>
                   </div>
-                </div>
+                </motion.div>
 
                 {/* Strategy Card */}
-                <div className="rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden" style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
-                  <button
-                    onClick={() => setIsStrategyOpen(!isStrategyOpen)}
-                    className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-white/[0.03] transition-colors"
-                  >
+                <motion.div
+                  className="rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
+                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}
+                  whileHover={{ boxShadow: "0 0 0 1px rgba(34,197,94,0.08), 0 1px 0 rgba(255,255,255,0.04) inset, 0 8px 24px rgba(0,0,0,0.2)" }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <button onClick={() => setIsStrategyOpen(!isStrategyOpen)}
+                    className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-white/[0.03] transition-colors">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-sm font-semibold text-slate-200 flex-shrink-0" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Strategy</span>
+                      <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>Strategy</span>
                       <span className="text-xs text-slate-500 truncate">{currentStrategy?.name}</span>
                     </div>
                     <motion.div animate={{ rotate: isStrategyOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }} className="flex-shrink-0 ml-2">
-                      <ChevronDown className="w-4 h-4 text-slate-600" />
+                      <ChevronDownIcon className="w-4 h-4 text-slate-600" />
                     </motion.div>
                   </button>
 
@@ -668,6 +773,7 @@ export default function Visualizer() {
                               transition={{ duration: 0.18, ease: easeOut }}
                               onClick={() => setSelectedStrategy(strategy.id)}
                               whileTap={{ scale: 0.98 }}
+                              whileHover={!sel ? { x: 2 } : undefined}
                               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
                                 sel ? "bg-green-500/10 border border-green-500/[0.22]" : "border border-transparent hover:bg-white/[0.04]"
                               }`}
@@ -686,20 +792,21 @@ export default function Visualizer() {
                                 </div>
                                 <div className="text-[11px] text-slate-600 truncate mt-0.5">{strategy.description}</div>
                               </div>
-                              {sel && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" style={{ boxShadow: "0 0 6px rgba(34,197,94,0.7)" }} />}
+                              {sel && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0"
+                                style={{ boxShadow: "0 0 6px rgba(34,197,94,0.8)" }} />}
                             </motion.button>
                           );
                         })}
                       </motion.div>
                       {currentStrategy?.warning && (
                         <div className="mt-2 p-3 bg-amber-500/[0.08] border border-amber-500/20 rounded-xl flex items-start gap-2">
-                          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                          <AlertIcon className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
                           <p className="text-[11px] text-amber-300/70 leading-relaxed">{currentStrategy.warning}</p>
                         </div>
                       )}
                     </div>
                   </CollapseSection>
-                </div>
+                </motion.div>
 
                 {/* Generate Button */}
                 <motion.button
@@ -722,12 +829,12 @@ export default function Visualizer() {
                     </span>
                   ) : problemType === "custom" ? (
                     <span className="flex items-center justify-center gap-2">
-                      <Wand2 className="w-4 h-4" />
+                      <WandIcon className="w-4 h-4" />
                       Solve Problem
                     </span>
                   ) : (
                     <span className="flex items-center justify-center gap-2">
-                      <Play className="w-4 h-4" />
+                      <PlayIcon className="w-4 h-4" />
                       Generate States
                     </span>
                   )}
@@ -736,8 +843,7 @@ export default function Visualizer() {
                 <AnimatePresence>
                   {isProcessing && currentStrategy?.isOptimal && elapsedTime > 30 && (
                     <motion.p {...fadeInUp} transition={{ duration: 0.2, ease: easeOut }}
-                      className="text-[11px] text-amber-400/70 text-center leading-relaxed"
-                    >
+                      className="text-[11px] text-amber-400/70 text-center leading-relaxed">
                       Optimal search can take a while. Consider a satisficing strategy for faster results.
                     </motion.p>
                   )}
@@ -747,7 +853,7 @@ export default function Visualizer() {
           </AnimatePresence>
 
           {/* ── Visualization Column ── */}
-          <motion.div layout transition={springConfig} className="flex-1 min-w-0 w-full">
+          <motion.div layout transition={spring} className="flex-1 min-w-0 w-full">
 
             {/* Sidebar toggle */}
             <div className="mb-4">
@@ -756,7 +862,7 @@ export default function Visualizer() {
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-slate-500 hover:text-slate-300 hover:border-white/[0.14] text-xs font-medium transition-colors"
               >
-                <Menu className="w-3.5 h-3.5" />
+                <MenuIcon className="w-3.5 h-3.5" />
                 {isSidebarCollapsed ? "Show Options" : "Hide Options"}
               </motion.button>
             </div>
@@ -769,16 +875,33 @@ export default function Visualizer() {
               >
 
                 {/* Viz card */}
-                <div
-                  className={`rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden ${isSidebarCollapsed ? "flex-1" : ""}`}
-                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}
-                >
+                <div className={`relative rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden ${isSidebarCollapsed ? "flex-1" : ""}`}
+                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
+
+                  {/* Processing scan beam */}
+                  <AnimatePresence>
+                    {isProcessing && <ScanBeam />}
+                  </AnimatePresence>
+
+                  {/* Success flash */}
+                  <AnimatePresence>
+                    {showSuccessFlash && (
+                      <motion.div
+                        className="absolute inset-0 pointer-events-none rounded-2xl"
+                        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(34,197,94,0.18) 0%, transparent 65%)", zIndex: 3 }}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 1, 0] }}
+                        transition={{ duration: 0.9, times: [0, 0.2, 1] }}
+                      />
+                    )}
+                  </AnimatePresence>
 
                   {/* Card Header */}
                   <div className="px-6 py-4 border-b border-white/[0.05]">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h2 className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                        <h2 className="text-sm font-semibold text-slate-200"
+                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                           Visualization
                         </h2>
                         <p className="text-[11px] text-slate-600 mt-0.5">
@@ -791,7 +914,9 @@ export default function Visualizer() {
                             ? "bg-green-500/10 text-green-400 border-green-500/25"
                             : "bg-amber-500/10 text-amber-400 border-amber-500/25"
                         }`}>
-                          {plannerInfo.used_planner ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                          {plannerInfo.used_planner
+                            ? <CheckCircleIcon className="w-3 h-3" />
+                            : <AlertIcon       className="w-3 h-3" />}
                           {plannerInfo.info}
                         </div>
                       )}
@@ -811,28 +936,28 @@ export default function Visualizer() {
                     <div className="mt-4 p-3 bg-white/[0.03] rounded-xl border border-white/[0.05]">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Brain className="w-3.5 h-3.5 text-green-500" />
+                          <BrainIcon className="w-3.5 h-3.5 text-green-500" />
                           <span className="text-xs font-medium text-slate-400">Render Mode</span>
                         </div>
                         <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06]">
-                          <button
-                            onClick={() => setRenderMode("basic")}
-                            className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-150 ${
-                              renderMode === "basic" ? "bg-white/[0.08] text-slate-200 shadow-sm" : "text-slate-600 hover:text-slate-400"
-                            }`}
-                          >Basic</button>
-                          <button
-                            onClick={() => setRenderMode("llm")}
-                            className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-150 ${
-                              renderMode === "llm" ? "bg-green-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-400"
-                            }`}
-                          >LLM</button>
+                          {[
+                            { id: "basic", label: "Basic" },
+                            { id: "llm",   label: "LLM",   active: true },
+                          ].map(m => (
+                            <button key={m.id} onClick={() => setRenderMode(m.id as any)}
+                              className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-150 ${
+                                renderMode === m.id
+                                  ? m.active ? "bg-green-600 text-white shadow-sm" : "bg-white/[0.08] text-slate-200 shadow-sm"
+                                  : "text-slate-600 hover:text-slate-400"
+                              }`}>
+                              {m.label}
+                            </button>
+                          ))}
                         </div>
                       </div>
 
                       <CollapseSection open={renderMode === "llm"}>
                         <div className="mt-3 space-y-3">
-                          {/* Model selector */}
                           <div className="flex items-center gap-3">
                             <span className="text-[11px] text-slate-600 flex-shrink-0">Model</span>
                             <div className="flex items-center gap-1 flex-1">
@@ -840,56 +965,48 @@ export default function Visualizer() {
                                 { id: "claude", label: "Claude", active: "bg-orange-500/15 border-orange-500/30 text-orange-400" },
                                 { id: "gemini", label: "Gemini", active: "bg-blue-500/15 border-blue-500/30 text-blue-400" },
                               ].map(m => (
-                                <button
-                                  key={m.id} onClick={() => setLlmProvider(m.id as any)}
+                                <button key={m.id} onClick={() => setLlmProvider(m.id as any)}
                                   className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
                                     llmProvider === m.id ? m.active : "bg-white/[0.03] border-white/[0.07] text-slate-600 hover:text-slate-400 hover:border-white/[0.12]"
-                                  }`}
-                                >{m.label}</button>
+                                  }`}>
+                                  {m.label}
+                                </button>
                               ))}
                             </div>
                           </div>
 
-                          {/* Generate */}
-                          <button
-                            onClick={handleLlmGenerate}
-                            disabled={isLlmGenerating}
+                          <button onClick={handleLlmGenerate} disabled={isLlmGenerating}
                             className={`w-full py-2 px-4 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${
-                              isLlmGenerating
-                                ? "bg-green-500/10 text-green-400/50 cursor-wait"
-                                : "btn-primary-green text-[#0B1524]"
-                            }`}
-                          >
+                              isLlmGenerating ? "bg-green-500/10 text-green-400/50 cursor-wait" : "btn-primary-green text-[#0B1524]"
+                            }`}>
                             {isLlmGenerating ? (
                               <><div className="w-3.5 h-3.5 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />Generating renderer...</>
                             ) : llmRendererCode ? (
-                              <><RefreshCw className="w-3 h-3" />Regenerate</>
+                              <><RefreshIcon className="w-3 h-3" />Regenerate</>
                             ) : (
-                              <><Wand2 className="w-3 h-3" />Generate LLM Renderer</>
+                              <><WandIcon className="w-3 h-3" />Generate LLM Renderer</>
                             )}
                           </button>
 
                           {llmRendererCode && (
                             <div className="flex items-center gap-1.5 text-[11px] text-green-400 bg-green-500/8 px-3 py-2 rounded-lg border border-green-500/20">
-                              <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+                              <CheckCircleIcon className="w-3 h-3 flex-shrink-0" />
                               LLM renderer active{llmModelInfo && ` — ${llmModelInfo}`}
                             </div>
                           )}
                           {llmError && (
                             <div className="flex items-start gap-1.5 text-[11px] text-red-400 bg-red-500/8 px-3 py-2 rounded-lg border border-red-500/20">
-                              <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                              <AlertIcon className="w-3 h-3 mt-0.5 flex-shrink-0" />
                               <span className="leading-relaxed">{llmError}</span>
                             </div>
                           )}
 
                           {/* Cached Renderers */}
                           <div className="border border-white/[0.06] rounded-lg overflow-hidden">
-                            <button
-                              onClick={() => setShowCachedRenderers(!showCachedRenderers)}
-                              className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
-                            >
+                            <button onClick={() => setShowCachedRenderers(!showCachedRenderers)}
+                              className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
                               <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
-                                <History className="w-3 h-3" />
+                                <HistoryIcon className="w-3 h-3" />
                                 Cached Renderers
                                 {(cachedRenderersQuery.data?.length ?? 0) > 0 && (
                                   <span className="bg-white/[0.08] text-slate-400 px-1.5 py-0.5 rounded-full text-[10px]">
@@ -898,7 +1015,7 @@ export default function Visualizer() {
                                 )}
                               </div>
                               <motion.div animate={{ rotate: showCachedRenderers ? 0 : -90 }} transition={{ duration: 0.16 }}>
-                                <ChevronDown className="w-3 h-3 text-slate-600" />
+                                <ChevronDownIcon className="w-3 h-3 text-slate-600" />
                               </motion.div>
                             </button>
                             <CollapseSection open={showCachedRenderers}>
@@ -910,15 +1027,12 @@ export default function Visualizer() {
                                 ) : (
                                   <div className="divide-y divide-white/[0.04]">
                                     {cachedRenderersQuery.data.map((r: any) => (
-                                      <div
-                                        key={r.filename}
-                                        onClick={() => handleLoadCachedRenderer(r.filename)}
+                                      <div key={r.filename} onClick={() => handleLoadCachedRenderer(r.filename)}
                                         className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
                                           selectedCachedFile === r.filename
                                             ? "bg-green-500/8 border-l-2 border-green-500"
                                             : "hover:bg-white/[0.03] border-l-2 border-transparent"
-                                        }`}
-                                      >
+                                        }`}>
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-1.5">
                                             <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${r.provider === 'claude' ? 'bg-orange-500/15 text-orange-400' : 'bg-blue-500/15 text-blue-400'}`}>
@@ -929,11 +1043,9 @@ export default function Visualizer() {
                                             </span>
                                           </div>
                                         </div>
-                                        <button
-                                          onClick={e => handleDeleteCachedRenderer(r.filename, e)}
-                                          className="p-1 rounded hover:bg-red-500/15 text-slate-700 hover:text-red-400 transition-colors ml-2 flex-shrink-0"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
+                                        <button onClick={e => handleDeleteCachedRenderer(r.filename, e)}
+                                          className="p-1 rounded hover:bg-red-500/15 text-slate-700 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
+                                          <TrashIcon className="w-3 h-3" />
                                         </button>
                                       </div>
                                     ))}
@@ -962,132 +1074,129 @@ export default function Visualizer() {
                   <div className="px-6 py-4 border-t border-white/[0.05] bg-black/[0.15] space-y-4">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-xl border border-white/[0.06] p-1">
-                        <button onClick={handlePrevious} disabled={currentStateIndex === 0}
+                        <motion.button onClick={handlePrevious} disabled={currentStateIndex === 0}
+                          whileTap={{ scale: 0.92 }}
                           className="p-2 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-colors">
-                          <SkipBack className="w-3.5 h-3.5 text-slate-400" />
-                        </button>
+                          <SkipBackIcon className="w-3.5 h-3.5 text-slate-400" />
+                        </motion.button>
                         {isPlaying ? (
-                          <button onClick={handlePause} className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors">
-                            <Pause className="w-3.5 h-3.5" />
-                          </button>
+                          <motion.button onClick={handlePause} whileTap={{ scale: 0.92 }}
+                            className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors">
+                            <PauseIcon className="w-3.5 h-3.5" />
+                          </motion.button>
                         ) : (
-                          <button onClick={handlePlay} disabled={currentStateIndex >= renderedStates.length - 1}
+                          <motion.button onClick={handlePlay} disabled={currentStateIndex >= renderedStates.length - 1}
+                            whileTap={{ scale: 0.92 }}
                             className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-25 transition-colors">
-                            <Play className="w-3.5 h-3.5" />
-                          </button>
+                            <PlayIcon className="w-3.5 h-3.5" />
+                          </motion.button>
                         )}
-                        <button onClick={handleNext} disabled={currentStateIndex >= renderedStates.length - 1}
+                        <motion.button onClick={handleNext} disabled={currentStateIndex >= renderedStates.length - 1}
+                          whileTap={{ scale: 0.92 }}
                           className="p-2 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-colors">
-                          <SkipForward className="w-3.5 h-3.5 text-slate-400" />
-                        </button>
+                          <SkipForwardIcon className="w-3.5 h-3.5 text-slate-400" />
+                        </motion.button>
                       </div>
 
                       <div className="flex-1 px-1">
-                        <input
-                          type="range" min="0" max={renderedStates.length - 1} value={currentStateIndex}
+                        <input type="range" min="0" max={renderedStates.length - 1} value={currentStateIndex}
                           onChange={e => setCurrentStateIndex(Number(e.target.value))}
-                          className="w-full"
-                        />
+                          className="w-full" />
                       </div>
 
-                      <div className="text-xs font-medium text-slate-500 bg-white/[0.04] px-2.5 py-1.5 rounded-lg border border-white/[0.06] tabular-nums"
+                      <div className="text-xs font-medium text-slate-500 bg-white/[0.04] px-2.5 py-1.5 rounded-lg border border-white/[0.06]"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                        {currentStateIndex + 1} / {renderedStates.length}
+                        <AnimatedNumber value={currentStateIndex + 1} />
+                        <span className="text-slate-700"> / {renderedStates.length}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4">
                       <span className="text-[11px] text-slate-600">Speed</span>
-                      <input
-                        type="range" min="200" max="2000" step="200"
+                      <input type="range" min="200" max="2000" step="200"
                         value={2200 - playbackSpeed}
                         onChange={e => setPlaybackSpeed(2200 - Number(e.target.value))}
-                        className="w-28"
-                      />
+                        className="w-28" />
                       <span className="text-[11px] text-slate-600 font-medium tabular-nums"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>{playbackSpeed}ms</span>
                     </div>
                   </div>
 
-                  {/* Plan Steps — inside card */}
+                  {/* Plan Steps — inside card (normal mode) */}
                   {plan.length > 0 && !isSidebarCollapsed && (
                     <div className="px-6 py-4 border-t border-white/[0.05]">
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-xs font-semibold text-slate-400 flex items-center gap-1.5"
                           style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                          <Terminal className="w-3 h-3 text-green-500" />
+                          <TerminalIcon className="w-3 h-3 text-green-500" />
                           Plan Steps
                         </h3>
                         <span className="text-[10px] text-slate-600 tabular-nums">{plan.length} actions</span>
                       </div>
-                      <div
-                        ref={planStepsRef}
+                      <div ref={planStepsRef}
                         className="space-y-0.5 max-h-64 overflow-y-auto overscroll-contain pr-1"
-                        style={{ scrollBehavior: 'smooth' }}
-                      >
+                        style={{ scrollBehavior: "smooth" }}>
                         {plan.map((action, idx) => (
-                          <div
-                            key={idx}
+                          <motion.div key={idx}
+                            initial={false}
+                            animate={idx === currentStateIndex - 1 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
+                            transition={{ duration: 0.2 }}
                             className={`text-[11px] px-3 py-1.5 rounded-lg transition-colors font-mono ${
                               idx === currentStateIndex - 1
-                                ? "bg-green-500/[0.1] text-green-300 font-medium border-l-[2px] border-green-500"
+                                ? "text-green-300 font-medium border-l-[2px] border-green-500"
                                 : idx < currentStateIndex - 1
                                 ? "text-slate-700"
                                 : "text-slate-500 hover:bg-white/[0.03]"
-                            }`}
-                          >
+                            }`}>
                             <span className={`mr-2 tabular-nums ${idx === currentStateIndex - 1 ? "text-green-600" : "text-slate-700"}`}>
-                              {String(idx + 1).padStart(2, '0')}.
+                              {String(idx + 1).padStart(2, "0")}.
                             </span>
                             {action}
-                          </div>
+                          </motion.div>
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Plan Steps — separate card when sidebar collapsed */}
+                {/* Plan Steps — separate card (sidebar-collapsed mode) */}
                 {plan.length > 0 && isSidebarCollapsed && (
-                  <div
-                    className="w-72 flex-shrink-0 rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
-                    style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}
-                  >
+                  <div className="w-72 flex-shrink-0 rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
+                    style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
                     <div className="px-4 py-3 border-b border-white/[0.05] bg-white/[0.02] flex items-center justify-between">
                       <h3 className="text-xs font-semibold text-slate-400 flex items-center gap-1.5"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                        <Terminal className="w-3 h-3 text-green-500" />
+                        <TerminalIcon className="w-3 h-3 text-green-500" />
                         Plan Steps
                       </h3>
                       <span className="text-[10px] text-slate-600 tabular-nums">{plan.length} actions</span>
                     </div>
-                    <div
-                      ref={planStepsRef}
+                    <div ref={planStepsRef}
                       className="p-3 space-y-0.5 max-h-[600px] overflow-y-auto overscroll-contain"
-                      style={{ scrollBehavior: 'smooth' }}
-                    >
+                      style={{ scrollBehavior: "smooth" }}>
                       {plan.map((action, idx) => (
-                        <div
-                          key={idx}
+                        <motion.div key={idx}
+                          initial={false}
+                          animate={idx === currentStateIndex - 1 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
+                          transition={{ duration: 0.2 }}
                           className={`text-[11px] px-3 py-1.5 rounded-lg transition-colors font-mono ${
                             idx === currentStateIndex - 1
-                              ? "bg-green-500/[0.1] text-green-300 font-medium border-l-[2px] border-green-500"
+                              ? "text-green-300 font-medium border-l-[2px] border-green-500"
                               : idx < currentStateIndex - 1
                               ? "text-slate-700"
                               : "text-slate-500 hover:bg-white/[0.03]"
-                          }`}
-                        >
+                          }`}>
                           <span className={`mr-2 tabular-nums ${idx === currentStateIndex - 1 ? "text-green-600" : "text-slate-700"}`}>
-                            {String(idx + 1).padStart(2, '0')}.
+                            {String(idx + 1).padStart(2, "0")}.
                           </span>
                           {action}
-                        </div>
+                        </motion.div>
                       ))}
                     </div>
                   </div>
                 )}
-
               </motion.div>
+
             ) : (
               /* ── Empty State ── */
               <motion.div
@@ -1096,42 +1205,41 @@ export default function Visualizer() {
                 className="rounded-2xl border border-white/[0.07] bg-[#111E30]"
                 style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}
               >
-                <div className="py-24 px-8 flex flex-col items-center text-center">
-                  <div className="relative mb-10">
-                    <motion.div
-                      className="absolute -inset-6 rounded-full border border-green-500/20"
-                      animate={{ scale: [1, 1.08, 1], opacity: [0.4, 0.1, 0.4] }}
-                      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                    <motion.div
-                      className="absolute -inset-11 rounded-full border border-green-500/10"
-                      animate={{ scale: [1, 1.12, 1], opacity: [0.25, 0.05, 0.25] }}
-                      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                    />
-                    <div className="relative w-20 h-20 rounded-2xl bg-green-500/[0.08] border border-green-500/[0.18] flex items-center justify-center"
-                      style={{ boxShadow: "0 0 30px rgba(34,197,94,0.08)" }}>
-                      <svg viewBox="0 0 24 24" fill="none" className="w-9 h-9 text-green-500">
-                        <path d="M3 6h18M3 12h12M3 18h15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                      </svg>
-                    </div>
+                <div className="py-20 px-8 flex flex-col items-center text-center">
+
+                  {/* Animated planning tree */}
+                  <div className="mb-8 w-full flex justify-center">
+                    <PlanningGraph />
                   </div>
 
-                  <h3
+                  <motion.h3
                     className="text-base font-semibold text-slate-200 mb-2"
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7, duration: 0.3, ease: easeOut }}
                   >
                     Ready to Visualize
-                  </h3>
-                  <p className="text-sm text-slate-600 max-w-xs leading-relaxed">
+                  </motion.h3>
+                  <motion.p
+                    className="text-sm text-slate-600 max-w-xs leading-relaxed"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    transition={{ delay: 0.85, duration: 0.3 }}
+                  >
                     {problemType === "custom"
                       ? "Upload a PDDL problem file or paste your problem definition, then click Solve Problem"
                       : "Select a domain and click Generate States to see the planning visualization"}
-                  </p>
+                  </motion.p>
 
-                  {/* Prompt hint */}
-                  <div className="mt-6 px-4 py-2.5 bg-white/[0.03] rounded-xl border border-white/[0.05] font-mono text-xs text-slate-600">
-                    <span className="text-green-600">$</span> planner --domain {selectedDomain} --run
-                  </div>
+                  {/* Terminal hint with blinking cursor */}
+                  <motion.div
+                    className="mt-6 px-4 py-2.5 bg-white/[0.03] rounded-xl border border-white/[0.05] font-mono text-xs text-slate-600"
+                    initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 1.0, duration: 0.3, ease: easeOut }}
+                  >
+                    <span className="text-green-600">$</span>
+                    {" "}planner --domain {selectedDomain} --run
+                    <BlinkingCursor />
+                  </motion.div>
                 </div>
               </motion.div>
             )}
@@ -1139,7 +1247,7 @@ export default function Visualizer() {
         </div>
       </main>
 
-      <footer className="border-t border-white/[0.05] bg-[#0B1524]/80 mt-16">
+      <footer className="border-t border-white/[0.05] bg-[#0B1524]/80 mt-16" style={{ position: "relative", zIndex: 1 }}>
         <div className="container max-w-7xl py-5">
           <p className="text-center text-[11px] text-slate-700 tracking-wide font-mono">
             Planning Visualizer &middot; Built for AI Planning Education
@@ -1151,12 +1259,10 @@ export default function Visualizer() {
       <AnimatePresence>
         {errorModal.show && (
           <ModalBackdrop onClose={() => setErrorModal({ show: false, title: "", message: "" })}>
-            <div
-              className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-md w-full overflow-hidden"
-              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}
-            >
+            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-md w-full overflow-hidden"
+              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
               <div className={`px-6 py-4 border-b ${
-                errorModal.errorType === "domain_mismatch" || errorModal.errorType === "possible_domain_mismatch"
+                errorModal.errorType?.includes("mismatch")
                   ? "border-amber-500/20 bg-amber-500/[0.06]"
                   : "border-red-500/20 bg-red-500/[0.06]"
               }`}>
@@ -1165,18 +1271,16 @@ export default function Visualizer() {
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
                       errorModal.errorType?.includes("mismatch") ? "bg-amber-500/15" : "bg-red-500/15"
                     }`}>
-                      <AlertTriangle className={`w-4 h-4 ${errorModal.errorType?.includes("mismatch") ? "text-amber-400" : "text-red-400"}`} />
+                      <AlertIcon className={`w-4 h-4 ${errorModal.errorType?.includes("mismatch") ? "text-amber-400" : "text-red-400"}`} />
                     </div>
                     <h3 className={`text-sm font-semibold ${errorModal.errorType?.includes("mismatch") ? "text-amber-300" : "text-red-300"}`}
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                       {errorModal.title}
                     </h3>
                   </div>
-                  <button
-                    onClick={() => setErrorModal({ show: false, title: "", message: "" })}
-                    className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]"
-                  >
-                    <X className="w-4 h-4" />
+                  <button onClick={() => setErrorModal({ show: false, title: "", message: "" })}
+                    className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]">
+                    <CloseIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -1187,16 +1291,15 @@ export default function Visualizer() {
                     <p className="text-xs text-green-300/70 font-medium mb-3">Would you like to switch to the suggested domain?</p>
                     <button
                       onClick={() => { setSelectedDomain(errorModal.suggestedDomain!); setErrorModal({ show: false, title: "", message: "" }); }}
-                      className="w-full px-4 py-2.5 btn-primary-green text-[#0B1524] rounded-xl text-sm font-semibold"
-                    >Switch to {errorModal.suggestedDomainName}</button>
+                      className="w-full px-4 py-2.5 btn-primary-green text-[#0B1524] rounded-xl text-sm font-semibold">
+                      Switch to {errorModal.suggestedDomainName}
+                    </button>
                   </div>
                 )}
               </div>
               <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-end">
-                <button
-                  onClick={() => setErrorModal({ show: false, title: "", message: "" })}
-                  className="px-4 py-2 text-sm text-slate-500 hover:text-slate-200 font-medium transition-colors rounded-lg hover:bg-white/[0.06]"
-                >
+                <button onClick={() => setErrorModal({ show: false, title: "", message: "" })}
+                  className="px-4 py-2 text-sm text-slate-500 hover:text-slate-200 font-medium transition-colors rounded-lg hover:bg-white/[0.06]">
                   Close
                 </button>
               </div>
@@ -1208,10 +1311,8 @@ export default function Visualizer() {
       <AnimatePresence>
         {showExampleProblem && (
           <ModalBackdrop onClose={() => setShowExampleProblem(false)}>
-            <div
-              className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
-              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}
-            >
+            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
               <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
@@ -1219,8 +1320,9 @@ export default function Visualizer() {
                   </h3>
                   <p className="text-[11px] text-slate-600 mt-0.5">{currentDomain?.name}</p>
                 </div>
-                <button onClick={() => setShowExampleProblem(false)} className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]">
-                  <X className="w-4 h-4" />
+                <button onClick={() => setShowExampleProblem(false)}
+                  className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]">
+                  <CloseIcon className="w-4 h-4" />
                 </button>
               </div>
               <div className="p-6 overflow-y-auto flex-1">
@@ -1242,10 +1344,8 @@ export default function Visualizer() {
       <AnimatePresence>
         {showDomainDefinition && (
           <ModalBackdrop onClose={() => setShowDomainDefinition(false)}>
-            <div
-              className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
-              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}
-            >
+            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
               <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
@@ -1253,8 +1353,9 @@ export default function Visualizer() {
                   </h3>
                   <p className="text-[11px] text-slate-600 mt-0.5">{currentDomain?.name}</p>
                 </div>
-                <button onClick={() => setShowDomainDefinition(false)} className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]">
-                  <X className="w-4 h-4" />
+                <button onClick={() => setShowDomainDefinition(false)}
+                  className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]">
+                  <CloseIcon className="w-4 h-4" />
                 </button>
               </div>
               <div className="p-6 overflow-y-auto flex-1">

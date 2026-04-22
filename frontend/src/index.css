@@ -285,6 +285,21 @@
   }
 }
 
+/* Scanlines overlay */
+.scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0, 0, 0, 0.018) 3px,
+    rgba(0, 0, 0, 0.018) 4px
+  );
+  z-index: 9999;
+}
+
 /* Animations */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -311,11 +326,41 @@
   50%       { opacity: 0.2; transform: scale(1.08); }
 }
 
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@keyframes orb-drift-a {
+  0%   { transform: translate(0px,   0px); }
+  33%  { transform: translate(60px,  30px); }
+  66%  { transform: translate(-20px, 50px); }
+  100% { transform: translate(0px,   0px); }
+}
+
+@keyframes orb-drift-b {
+  0%   { transform: translate(0px,   0px); }
+  33%  { transform: translate(-50px, -40px); }
+  66%  { transform: translate(30px,  20px); }
+  100% { transform: translate(0px,   0px); }
+}
+
+@keyframes orb-drift-c {
+  0%   { transform: translate(0px,   0px); }
+  50%  { transform: translate(40px,  -50px); }
+  100% { transform: translate(0px,   0px); }
+}
+
 .animate-fade-in   { animation: fade-in  0.25s cubic-bezier(0.23, 1, 0.32, 1); }
 .animate-slide-up  { animation: slide-up 0.3s  cubic-bezier(0.23, 1, 0.32, 1); }
 .animate-scale-in  { animation: scale-in 0.2s  cubic-bezier(0.23, 1, 0.32, 1); }
+.animate-blink     { animation: blink 1s steps(2) infinite; }
 .animate-shimmer {
   background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
+
+.orb-a { animation: orb-drift-a 24s ease-in-out infinite; }
+.orb-b { animation: orb-drift-b 30s ease-in-out infinite; animation-delay: -8s; }
+.orb-c { animation: orb-drift-c 20s ease-in-out infinite; animation-delay: -14s; }
