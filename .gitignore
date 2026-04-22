@@ -25,3 +25,5 @@ planning-tools/downward/plan.txt
 
 # Claude Skills API cache
 backend/api/.claude-skill-id
+/.claude
+/backend/api/llm_renderers
