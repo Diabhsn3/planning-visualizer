@@ -245,6 +245,7 @@ export default function Visualizer() {
   const [isProcessing, setIsProcessing]         = useState(false);
   const [isDomainOpen, setIsDomainOpen]         = useState(true);
   const [isStrategyOpen, setIsStrategyOpen]     = useState(false);
+  const [isRenderModeOpen, setIsRenderModeOpen] = useState(false);
   const [showExampleProblem, setShowExampleProblem]     = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed]     = useState(false);
@@ -307,6 +308,9 @@ export default function Visualizer() {
 
   useEffect(() => {
     setProblemType("example"); setProblemFile(null); setProblemText(""); setInputMode("file");
+    // Reset visualization state when switching domains
+    setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null);
+    setIsPlaying(false); if (playbackIntervalRef.current) { clearInterval(playbackIntervalRef.current); playbackIntervalRef.current = null; }
   }, [selectedDomain]);
 
   useEffect(() => {
@@ -649,6 +653,7 @@ export default function Visualizer() {
                         { c: domainColors[selectedDomain]?.dotColor ?? "#22c55e", key: "d" },
                         { c: "#0EA5E9", key: "p" },
                         { c: "#8B5CF6", key: "s" },
+                        { c: "#22C55E", key: "r" },
                       ].map(({ c, key }) => (
                         <div key={key} className="w-1.5 h-1.5 rounded-full transition-all duration-300"
                           style={{ background: c, opacity: 0.7 }} />
@@ -886,6 +891,155 @@ export default function Visualizer() {
                   </div>
                 </motion.div>
 
+                {/* ── Render Mode Panel ── */}
+                <motion.div
+                  className="rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden"
+                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(0,0,0,0.18)" }}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.32, ease: easeOut, delay: 0.05 }}
+                >
+                  <button onClick={() => setIsRenderModeOpen(!isRenderModeOpen)}
+                    className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.025] transition-colors">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}>
+                      <BrainIcon className="w-2.5 h-2.5 text-green-400" />
+                    </div>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
+                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>Render Mode</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        renderMode === "llm"
+                          ? "bg-green-500/15 text-green-400 border border-green-500/25"
+                          : "bg-white/[0.08] text-slate-400 border border-white/[0.08]"
+                      }`}>{renderMode === "llm" ? "LLM" : "Basic"}</span>
+                    </div>
+                    <motion.div animate={{ rotate: isRenderModeOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }}>
+                      <ChevronDownIcon className="w-4 h-4 text-slate-600" />
+                    </motion.div>
+                  </button>
+                  <CollapseSection open={isRenderModeOpen}>
+                    <div className="px-4 pb-4 pt-1 border-t border-white/[0.04] space-y-3">
+                      {/* Basic / LLM toggle */}
+                      <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06]">
+                        {[
+                          { id: "basic", label: "Basic" },
+                          { id: "llm",   label: "LLM" },
+                        ].map(m => (
+                          <button key={m.id} onClick={() => setRenderMode(m.id as any)}
+                            className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all duration-150 ${
+                              renderMode === m.id
+                                ? m.id === "llm" ? "bg-green-600 text-white shadow-sm" : "bg-white/[0.08] text-slate-200 shadow-sm"
+                                : "text-slate-600 hover:text-slate-400"
+                            }`}>
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                      {/* LLM options */}
+                      <CollapseSection open={renderMode === "llm"}>
+                        <div className="space-y-3">
+                          {/* Model selector */}
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-slate-600 flex-shrink-0">Model</span>
+                            <div className="flex items-center gap-1 flex-1">
+                              {[
+                                { id: "claude", label: "Claude", active: "bg-orange-500/15 border-orange-500/30 text-orange-400" },
+                                { id: "gemini", label: "Gemini", active: "bg-blue-500/15 border-blue-500/30 text-blue-400" },
+                              ].map(m => (
+                                <button key={m.id} onClick={() => setLlmProvider(m.id as any)}
+                                  className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
+                                    llmProvider === m.id ? m.active : "bg-white/[0.03] border-white/[0.07] text-slate-600 hover:text-slate-400 hover:border-white/[0.12]"
+                                  }`}>
+                                  {m.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Generate LLM renderer button */}
+                          <button onClick={handleLlmGenerate} disabled={isLlmGenerating}
+                            className={`w-full py-2 px-4 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${
+                              isLlmGenerating ? "bg-green-500/10 text-green-400/50 cursor-wait" : "btn-primary-green text-[#0B1524]"
+                            }`}>
+                            {isLlmGenerating ? (
+                              <><div className="w-3.5 h-3.5 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />Generating renderer...</>
+                            ) : llmRendererCode ? (
+                              <><RefreshIcon className="w-3 h-3" />Regenerate</>
+                            ) : (
+                              <><WandIcon className="w-3 h-3" />Generate LLM Renderer</>
+                            )}
+                          </button>
+                          {/* Status indicators */}
+                          {llmRendererCode && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-green-400 bg-green-500/8 px-3 py-2 rounded-lg border border-green-500/20">
+                              <CheckCircleIcon className="w-3 h-3 flex-shrink-0" />
+                              LLM renderer active{llmModelInfo && ` — ${llmModelInfo}`}
+                            </div>
+                          )}
+                          {llmError && (
+                            <div className="flex items-start gap-1.5 text-[11px] text-red-400 bg-red-500/8 px-3 py-2 rounded-lg border border-red-500/20">
+                              <AlertIcon className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                              <span className="leading-relaxed">{llmError}</span>
+                            </div>
+                          )}
+                          {/* Cached Renderers */}
+                          <div className="border border-white/[0.06] rounded-lg overflow-hidden">
+                            <button onClick={() => setShowCachedRenderers(!showCachedRenderers)}
+                              className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+                              <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                                <HistoryIcon className="w-3 h-3" />
+                                Cached Renderers
+                                {(cachedRenderersQuery.data?.length ?? 0) > 0 && (
+                                  <span className="bg-white/[0.08] text-slate-400 px-1.5 py-0.5 rounded-full text-[10px]">
+                                    {cachedRenderersQuery.data?.length}
+                                  </span>
+                                )}
+                              </div>
+                              <motion.div animate={{ rotate: showCachedRenderers ? 0 : -90 }} transition={{ duration: 0.16 }}>
+                                <ChevronDownIcon className="w-3 h-3 text-slate-600" />
+                              </motion.div>
+                            </button>
+                            <CollapseSection open={showCachedRenderers}>
+                              <div className="max-h-48 overflow-y-auto">
+                                {cachedRenderersQuery.isLoading ? (
+                                  <div className="px-3 py-4 text-center text-[11px] text-slate-600">Loading cached renderers...</div>
+                                ) : !cachedRenderersQuery.data?.length ? (
+                                  <div className="px-3 py-4 text-center text-[11px] text-slate-600 leading-relaxed">No cached renderers for this domain.</div>
+                                ) : (
+                                  <div className="divide-y divide-white/[0.04]">
+                                    {cachedRenderersQuery.data.map((r: any) => (
+                                      <div key={r.filename} onClick={() => handleLoadCachedRenderer(r.filename)}
+                                        className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
+                                          selectedCachedFile === r.filename
+                                            ? "bg-green-500/8 border-l-2 border-green-500"
+                                            : "hover:bg-white/[0.03] border-l-2 border-transparent"
+                                        }`}>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${r.provider === 'claude' ? 'bg-orange-500/15 text-orange-400' : 'bg-blue-500/15 text-blue-400'}`}>
+                                              {r.provider}
+                                            </span>
+                                            <span className="text-[10px] text-slate-600">
+                                              {new Date(r.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <button onClick={e => handleDeleteCachedRenderer(r.filename, e)}
+                                          className="p-1 rounded hover:bg-red-500/15 text-slate-700 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
+                                          <TrashIcon className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </CollapseSection>
+                          </div>
+                        </div>
+                      </CollapseSection>
+                    </div>
+                  </CollapseSection>
+                </motion.div>
                 {/* ── Step 4: Generate ── */}
                 <div>
                   <div className="flex items-center gap-2 mb-2 px-1">
@@ -959,11 +1113,11 @@ export default function Visualizer() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, ease: easeOut }}
-                className={isSidebarCollapsed ? "flex gap-5" : ""}
+                className="flex gap-5"
               >
 
                 {/* Viz card */}
-                <div className={`relative rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden card-accent-top ${isSidebarCollapsed ? "flex-1" : ""}`}
+                <div className="relative rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden card-accent-top flex-1 min-w-0"
                   style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
 
                   {/* Processing scan beam */}
@@ -1020,135 +1174,9 @@ export default function Visualizer() {
                       </div>
                     )}
 
-                    {/* Render Mode */}
-                    <div className="mt-4 p-3 bg-white/[0.03] rounded-xl border border-white/[0.05]">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <BrainIcon className="w-3.5 h-3.5 text-green-500" />
-                          <span className="text-xs font-medium text-slate-400">Render Mode</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06]">
-                          {[
-                            { id: "basic", label: "Basic" },
-                            { id: "llm",   label: "LLM",   active: true },
-                          ].map(m => (
-                            <button key={m.id} onClick={() => setRenderMode(m.id as any)}
-                              className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-150 ${
-                                renderMode === m.id
-                                  ? m.active ? "bg-green-600 text-white shadow-sm" : "bg-white/[0.08] text-slate-200 shadow-sm"
-                                  : "text-slate-600 hover:text-slate-400"
-                              }`}>
-                              {m.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <CollapseSection open={renderMode === "llm"}>
-                        <div className="mt-3 space-y-3">
-                          <div className="flex items-center gap-3">
-                            <span className="text-[11px] text-slate-600 flex-shrink-0">Model</span>
-                            <div className="flex items-center gap-1 flex-1">
-                              {[
-                                { id: "claude", label: "Claude", active: "bg-orange-500/15 border-orange-500/30 text-orange-400" },
-                                { id: "gemini", label: "Gemini", active: "bg-blue-500/15 border-blue-500/30 text-blue-400" },
-                              ].map(m => (
-                                <button key={m.id} onClick={() => setLlmProvider(m.id as any)}
-                                  className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
-                                    llmProvider === m.id ? m.active : "bg-white/[0.03] border-white/[0.07] text-slate-600 hover:text-slate-400 hover:border-white/[0.12]"
-                                  }`}>
-                                  {m.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <button onClick={handleLlmGenerate} disabled={isLlmGenerating}
-                            className={`w-full py-2 px-4 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${
-                              isLlmGenerating ? "bg-green-500/10 text-green-400/50 cursor-wait" : "btn-primary-green text-[#0B1524]"
-                            }`}>
-                            {isLlmGenerating ? (
-                              <><div className="w-3.5 h-3.5 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />Generating renderer...</>
-                            ) : llmRendererCode ? (
-                              <><RefreshIcon className="w-3 h-3" />Regenerate</>
-                            ) : (
-                              <><WandIcon className="w-3 h-3" />Generate LLM Renderer</>
-                            )}
-                          </button>
-
-                          {llmRendererCode && (
-                            <div className="flex items-center gap-1.5 text-[11px] text-green-400 bg-green-500/8 px-3 py-2 rounded-lg border border-green-500/20">
-                              <CheckCircleIcon className="w-3 h-3 flex-shrink-0" />
-                              LLM renderer active{llmModelInfo && ` — ${llmModelInfo}`}
-                            </div>
-                          )}
-                          {llmError && (
-                            <div className="flex items-start gap-1.5 text-[11px] text-red-400 bg-red-500/8 px-3 py-2 rounded-lg border border-red-500/20">
-                              <AlertIcon className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                              <span className="leading-relaxed">{llmError}</span>
-                            </div>
-                          )}
-
-                          {/* Cached Renderers */}
-                          <div className="border border-white/[0.06] rounded-lg overflow-hidden">
-                            <button onClick={() => setShowCachedRenderers(!showCachedRenderers)}
-                              className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
-                              <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
-                                <HistoryIcon className="w-3 h-3" />
-                                Cached Renderers
-                                {(cachedRenderersQuery.data?.length ?? 0) > 0 && (
-                                  <span className="bg-white/[0.08] text-slate-400 px-1.5 py-0.5 rounded-full text-[10px]">
-                                    {cachedRenderersQuery.data?.length}
-                                  </span>
-                                )}
-                              </div>
-                              <motion.div animate={{ rotate: showCachedRenderers ? 0 : -90 }} transition={{ duration: 0.16 }}>
-                                <ChevronDownIcon className="w-3 h-3 text-slate-600" />
-                              </motion.div>
-                            </button>
-                            <CollapseSection open={showCachedRenderers}>
-                              <div className="max-h-48 overflow-y-auto">
-                                {cachedRenderersQuery.isLoading ? (
-                                  <div className="px-3 py-4 text-center text-[11px] text-slate-600">Loading cached renderers...</div>
-                                ) : !cachedRenderersQuery.data?.length ? (
-                                  <div className="px-3 py-4 text-center text-[11px] text-slate-600 leading-relaxed">No cached renderers for this domain.</div>
-                                ) : (
-                                  <div className="divide-y divide-white/[0.04]">
-                                    {cachedRenderersQuery.data.map((r: any) => (
-                                      <div key={r.filename} onClick={() => handleLoadCachedRenderer(r.filename)}
-                                        className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
-                                          selectedCachedFile === r.filename
-                                            ? "bg-green-500/8 border-l-2 border-green-500"
-                                            : "hover:bg-white/[0.03] border-l-2 border-transparent"
-                                        }`}>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${r.provider === 'claude' ? 'bg-orange-500/15 text-orange-400' : 'bg-blue-500/15 text-blue-400'}`}>
-                                              {r.provider}
-                                            </span>
-                                            <span className="text-[10px] text-slate-600">
-                                              {new Date(r.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <button onClick={e => handleDeleteCachedRenderer(r.filename, e)}
-                                          className="p-1 rounded hover:bg-red-500/15 text-slate-700 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
-                                          <TrashIcon className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </CollapseSection>
-                          </div>
-                        </div>
-                      </CollapseSection>
-                    </div>
                   </div>
-
                   {/* Canvas */}
-                  <div className="p-6">
+                  <div className="p-4" style={{ maxHeight: "500px", overflow: "auto" }}>
                     <StateCanvas
                       state={renderedStates[currentStateIndex]}
                       isFirst={currentStateIndex === 0}
@@ -1210,45 +1238,10 @@ export default function Visualizer() {
                     </div>
                   </div>
 
-                  {/* Plan Steps — inside card (normal mode) */}
-                  {plan.length > 0 && !isSidebarCollapsed && (
-                    <div className="px-6 py-4 border-t border-white/[0.05]">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-xs font-semibold text-slate-400 flex items-center gap-1.5"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                          <TerminalIcon className="w-3 h-3 text-green-500" />
-                          Plan Steps
-                        </h3>
-                        <span className="text-[10px] text-slate-600 tabular-nums">{plan.length} actions</span>
-                      </div>
-                      <div ref={planStepsRef}
-                        className="space-y-0.5 max-h-64 overflow-y-auto overscroll-contain pr-1"
-                        style={{ scrollBehavior: "smooth" }}>
-                        {plan.map((action, idx) => (
-                          <motion.div key={idx}
-                            initial={false}
-                            animate={idx === currentStateIndex - 1 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
-                            transition={{ duration: 0.2 }}
-                            className={`text-[11px] px-3 py-1.5 rounded-lg transition-colors font-mono ${
-                              idx === currentStateIndex - 1
-                                ? "text-green-300 font-medium border-l-[2px] border-green-500 active-plan-step"
-                                : idx < currentStateIndex - 1
-                                ? "text-slate-700"
-                                : "text-slate-500 hover:bg-white/[0.03]"
-                            }`}>
-                            <span className={`mr-2 tabular-nums ${idx === currentStateIndex - 1 ? "text-green-600" : "text-slate-700"}`}>
-                              {String(idx + 1).padStart(2, "0")}.
-                            </span>
-                            {action}
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Plan Steps — separate card (sidebar-collapsed mode) */}
-                {plan.length > 0 && isSidebarCollapsed && (
+                {plan.length > 0 && (
                   <div className="w-72 flex-shrink-0 rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
                     style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
                     <div className="px-4 py-3 border-b border-white/[0.05] bg-white/[0.02] flex items-center justify-between">

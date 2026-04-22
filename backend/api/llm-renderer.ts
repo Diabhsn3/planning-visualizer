@@ -11,7 +11,7 @@
  * Gemini: Uses a system prompt approach with the skill loaded as text.
  * 
  * Supports:
- * - Anthropic Claude (claude-sonnet-4-20250514) via Skills API
+ * - Anthropic Claude (claude-sonnet-4-6) via Skills API
  * - Google Gemini (gemini-2.5-pro) via system prompt
  * 
  * Features:
@@ -62,8 +62,8 @@ const SKILL_ID_CACHE_PATH = __dirname.endsWith("dist")
 // Model configurations
 const MODELS = {
   claude: {
-    id: "claude-sonnet-4-20250514",
-    name: "Claude Sonnet 4",
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
     maxTokens: 16384,
   },
   gemini: {
