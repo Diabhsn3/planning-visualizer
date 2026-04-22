@@ -141,6 +141,9 @@
     font-family: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Slightly larger base font for readability */
+    font-size: 16px;
+    line-height: 1.5;
   }
 
   body {
@@ -160,12 +163,20 @@
     @apply cursor-pointer;
   }
 
+  /* Focus-visible ring for accessibility */
   :focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 
+  /* Smooth transitions on interactive elements */
   button, a, input, select, textarea {
     @apply transition-all duration-200;
+  }
+
+  /* Selection color */
+  ::selection {
+    background: rgba(34, 197, 94, 0.25);
+    color: #E2E8F0;
   }
 }
 
@@ -194,7 +205,14 @@
     .container {
       padding-left: 2rem;
       padding-right: 2rem;
-      max-width: 1280px;
+      max-width: 1440px;
+    }
+  }
+
+  @media (min-width: 1536px) {
+    .container {
+      padding-left: 2.5rem;
+      padding-right: 2.5rem;
     }
   }
 
@@ -245,10 +263,10 @@
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
 
-  /* Scrollbar for dark mode */
+  /* Scrollbar for dark mode — slightly wider for usability */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
   }
 
   ::-webkit-scrollbar-track {
@@ -257,34 +275,50 @@
 
   ::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 3px;
+    border-radius: 4px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.2);
   }
 
-  /* Slider styling */
+  /* Slider styling — larger thumb for better interaction */
   input[type="range"] {
-    @apply appearance-none h-1.5 rounded-full cursor-pointer;
+    @apply appearance-none h-2 rounded-full cursor-pointer;
     background: rgba(255, 255, 255, 0.1);
   }
 
   input[type="range"]::-webkit-slider-thumb {
-    @apply appearance-none w-3.5 h-3.5 rounded-full cursor-pointer;
+    @apply appearance-none w-4 h-4 rounded-full cursor-pointer;
     background: #22C55E;
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
-    transition: box-shadow 150ms ease;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+    transition: box-shadow 150ms ease, transform 150ms ease;
   }
 
   input[type="range"]::-webkit-slider-thumb:hover {
-    box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+    box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.2);
+    transform: scale(1.1);
+  }
+
+  input[type="range"]::-webkit-slider-thumb:active {
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.25);
+    transform: scale(1.05);
   }
 
   input[type="range"]::-moz-range-thumb {
-    @apply w-3.5 h-3.5 rounded-full cursor-pointer border-0;
+    @apply w-4 h-4 rounded-full cursor-pointer border-0;
     background: #22C55E;
-    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25);
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+  }
+
+  input[type="range"]::-moz-range-thumb:hover {
+    box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.2);
+  }
+
+  /* Textarea improvements */
+  textarea {
+    @apply rounded-xl;
+    resize: vertical;
   }
 }
 
@@ -303,7 +337,7 @@
   z-index: 9999;
 }
 
-/* Animations */
+/* Animations — all existing animations preserved */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -395,4 +429,41 @@ input, textarea {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(34,197,94,0.45), transparent);
   border-radius: 1px;
+}
+
+/* ── Reduced motion: respect user preference ── */
+@media (prefers-reduced-motion: reduce) {
+  .orb-a, .orb-b, .orb-c {
+    animation: none !important;
+  }
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-scale-in,
+  .animate-shimmer,
+  .animate-blink,
+  .active-plan-step,
+  .btn-primary-green {
+    animation: none !important;
+  }
+  .scanlines {
+    display: none;
+  }
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ── Smooth scroll for plan steps panel ── */
+.plan-steps-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+/* ── Improved disabled state for buttons ── */
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: auto;
 }

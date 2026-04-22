@@ -493,7 +493,7 @@ export default function Visualizer() {
       {/* ── Header ── */}
       <header className="border-b border-white/[0.06] bg-[#0B1524]/90 backdrop-blur-md sticky top-0"
         style={{ zIndex: 40 }}>
-        <div className="container max-w-7xl py-3.5">
+        <div className="container max-w-[1440px] py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* Logo mark — grid path */}
@@ -546,7 +546,7 @@ export default function Visualizer() {
                   style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                   Planning Visualizer
                 </h1>
-                <p className="text-[11px] text-slate-500 font-medium tracking-[0.18em] uppercase mt-1">
+                <p className="text-xs text-slate-500 font-medium tracking-[0.15em] uppercase mt-1">
                   Classical AI Planning
                 </p>
               </div>
@@ -568,7 +568,7 @@ export default function Visualizer() {
         </div>
       </header>
 
-      <main className="container max-w-7xl py-8" style={{ position: "relative", zIndex: 1 }}>
+      <main className="container max-w-[1440px] py-8" style={{ position: "relative", zIndex: 1 }}>
 
         {/* ── System Status Panel ── */}
         <AnimatePresence>
@@ -630,7 +630,7 @@ export default function Visualizer() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -16 }}
                 transition={spring}
-                className="w-full lg:w-[300px] lg:flex-shrink-0 flex flex-col gap-4"
+                className="w-full lg:w-[320px] lg:flex-shrink-0 flex flex-col gap-4"
               >
 
                 {/* ── Unified Configuration Panel ── */}
@@ -644,7 +644,7 @@ export default function Visualizer() {
                   {/* Panel header bar */}
                   <div className="px-4 py-3 flex items-center gap-2 border-b border-white/[0.06]"
                     style={{ background: "rgba(255,255,255,0.02)" }}>
-                    <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-slate-600"
+                    <span className="text-xs font-semibold tracking-[0.15em] uppercase text-slate-500"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}>Configure</span>
                     <div className="flex-1" />
                     {/* Step progress pips — live domain color for step 1 */}
@@ -664,11 +664,11 @@ export default function Visualizer() {
                   {/* ── Step 1: Domain ── */}
                   <div>
                     <button onClick={() => setIsDomainOpen(!isDomainOpen)}
-                      className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.025] transition-colors">
+                      className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-all duration-150">
                       {/* Colorized step badge */}
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
                         style={{ background: domainColors[selectedDomain]?.iconBg ?? "rgba(34,197,94,0.15)", border: `1px solid ${domainColors[selectedDomain]?.selBorder ?? "rgba(34,197,94,0.3)"}` }}>
-                        <span className="text-[9px] font-bold"
+                        <span className="text-[11px] font-bold"
                           style={{ fontFamily: "'JetBrains Mono', monospace", color: domainColors[selectedDomain]?.iconColor ?? "#4ade80" }}>1</span>
                       </div>
                       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -717,7 +717,7 @@ export default function Visualizer() {
                                     style={{ fontFamily: "'JetBrains Mono', monospace", color: sel ? domainColors[domain.id]?.nameColor : "#CBD5E1" }}>
                                     {domain.name}
                                   </div>
-                                  <div className="text-[11px] text-slate-600 truncate mt-0.5">{domain.description}</div>
+                                  <div className="text-xs text-slate-500 truncate mt-0.5">{domain.description}</div>
                                 </div>
                                 {sel && (
                                   <motion.div
@@ -732,7 +732,7 @@ export default function Visualizer() {
                         </motion.div>
                         <button
                           onClick={() => setShowDomainDefinition(true)}
-                          className="w-full mt-2 px-3 py-2 text-[11px] font-medium text-slate-600 hover:text-slate-400 rounded-lg hover:bg-white/[0.04] transition-colors flex items-center justify-center gap-1.5">
+                          className="w-full mt-2 px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/[0.04] transition-all duration-150 flex items-center justify-center gap-1.5">
                           <FileCodeIcon className="w-3 h-3" />
                           View Domain Definition
                         </button>
@@ -746,9 +746,9 @@ export default function Visualizer() {
                   {/* ── Step 2: Problem ── */}
                   <div>
                     <div className="px-4 py-3.5 flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{ background: "rgba(14,165,233,0.15)", border: "1px solid rgba(14,165,233,0.3)" }}>
-                        <span className="text-[9px] font-bold"
+                        <span className="text-[11px] font-bold"
                           style={{ fontFamily: "'JetBrains Mono', monospace", color: "#38BDF8" }}>2</span>
                       </div>
                       <span className="text-sm font-semibold text-slate-200"
@@ -770,7 +770,7 @@ export default function Visualizer() {
                               </p>
                             </div>
                             <button onClick={() => setShowExampleProblem(true)}
-                              className="w-full px-3 py-2 text-[11px] font-medium text-slate-600 hover:text-slate-400 rounded-lg hover:bg-white/[0.04] transition-colors flex items-center justify-center gap-1.5">
+                              className="w-full px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/[0.04] transition-all duration-150 flex items-center justify-center gap-1.5">
                               <FileCodeIcon className="w-3 h-3" />
                               View Example Problem
                             </button>
@@ -812,7 +812,7 @@ export default function Visualizer() {
                                   placeholder={"(define (problem ...)\n  (:domain ...)\n  ...\n)"}
                                   className="font-mono text-xs min-h-[260px] bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder:text-slate-700 focus:border-green-500/40 rounded-xl resize-none"
                                 />
-                                {problemText && <p className="text-[10px] text-slate-600 mt-1.5">{problemText.split("\n").length} lines</p>}
+                                {problemText && <p className="text-[11px] text-slate-500 mt-1.5">{problemText.split("\n").length} lines</p>}
                               </div>
                             )}
                           </motion.div>
@@ -827,10 +827,10 @@ export default function Visualizer() {
                   {/* ── Step 3: Strategy ── */}
                   <div>
                     <button onClick={() => setIsStrategyOpen(!isStrategyOpen)}
-                      className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.025] transition-colors">
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                      className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-all duration-150">
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)" }}>
-                        <span className="text-[9px] font-bold"
+                        <span className="text-[11px] font-bold"
                           style={{ fontFamily: "'JetBrains Mono', monospace", color: "#A78BFA" }}>3</span>
                       </div>
                       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -857,7 +857,7 @@ export default function Visualizer() {
                                 whileTap={{ scale: 0.98 }}
                                 whileHover={!sel ? { x: 2 } : undefined}
                                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
-                                  sel ? "bg-green-500/10 border border-green-500/[0.22]" : "border border-transparent hover:bg-white/[0.04]"
+                                  sel ? "bg-green-500/10 border border-green-500/[0.22] shadow-sm shadow-green-500/5" : "border border-transparent hover:bg-white/[0.04] hover:border-white/[0.06]"
                                 }`}
                               >
                                 <div className="flex-1 min-w-0">
@@ -872,7 +872,7 @@ export default function Visualizer() {
                                     </span>
                                     {getSpeedBadge(strategy.speed)}
                                   </div>
-                                  <div className="text-[11px] text-slate-600 truncate mt-0.5">{strategy.description}</div>
+                                  <div className="text-xs text-slate-600 truncate mt-0.5">{strategy.description}</div>
                                 </div>
                                 {sel && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0"
                                   style={{ boxShadow: "0 0 6px rgba(34,197,94,0.8)" }} />}
@@ -882,8 +882,8 @@ export default function Visualizer() {
                         </motion.div>
                         {currentStrategy?.warning && (
                           <div className="mt-2 p-3 bg-amber-500/[0.08] border border-amber-500/20 rounded-xl flex items-start gap-2">
-                            <AlertIcon className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
-                            <p className="text-[11px] text-amber-300/70 leading-relaxed">{currentStrategy.warning}</p>
+                            <AlertIcon className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-300/80 leading-relaxed">{currentStrategy.warning}</p>
                           </div>
                         )}
                       </div>
@@ -900,10 +900,10 @@ export default function Visualizer() {
                   transition={{ duration: 0.32, ease: easeOut, delay: 0.05 }}
                 >
                   <button onClick={() => setIsRenderModeOpen(!isRenderModeOpen)}
-                    className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.025] transition-colors">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                    className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-all duration-150">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
                       style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}>
-                      <BrainIcon className="w-2.5 h-2.5 text-green-400" />
+                      <BrainIcon className="w-3.5 h-3.5 text-green-400" />
                     </div>
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
@@ -941,14 +941,14 @@ export default function Visualizer() {
                         <div className="space-y-3">
                           {/* Model selector */}
                           <div className="flex items-center gap-3">
-                            <span className="text-[11px] text-slate-600 flex-shrink-0">Model</span>
+                            <span className="text-xs text-slate-500 flex-shrink-0">Model</span>
                             <div className="flex items-center gap-1 flex-1">
                               {[
                                 { id: "claude", label: "Claude", active: "bg-orange-500/15 border-orange-500/30 text-orange-400" },
                                 { id: "gemini", label: "Gemini", active: "bg-blue-500/15 border-blue-500/30 text-blue-400" },
                               ].map(m => (
                                 <button key={m.id} onClick={() => setLlmProvider(m.id as any)}
-                                  className={`flex-1 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors border ${
+                                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
                                     llmProvider === m.id ? m.active : "bg-white/[0.03] border-white/[0.07] text-slate-600 hover:text-slate-400 hover:border-white/[0.12]"
                                   }`}>
                                   {m.label}
@@ -971,14 +971,14 @@ export default function Visualizer() {
                           </button>
                           {/* Status indicators */}
                           {llmRendererCode && (
-                            <div className="flex items-center gap-1.5 text-[11px] text-green-400 bg-green-500/8 px-3 py-2 rounded-lg border border-green-500/20">
-                              <CheckCircleIcon className="w-3 h-3 flex-shrink-0" />
+                            <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/8 px-3 py-2 rounded-lg border border-green-500/20">
+                              <CheckCircleIcon className="w-3.5 h-3.5 flex-shrink-0" />
                               LLM renderer active{llmModelInfo && ` — ${llmModelInfo}`}
                             </div>
                           )}
                           {llmError && (
-                            <div className="flex items-start gap-1.5 text-[11px] text-red-400 bg-red-500/8 px-3 py-2 rounded-lg border border-red-500/20">
-                              <AlertIcon className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                            <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/8 px-3 py-2 rounded-lg border border-red-500/20">
+                              <AlertIcon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                               <span className="leading-relaxed">{llmError}</span>
                             </div>
                           )}
@@ -986,47 +986,47 @@ export default function Visualizer() {
                           <div className="border border-white/[0.06] rounded-lg overflow-hidden">
                             <button onClick={() => setShowCachedRenderers(!showCachedRenderers)}
                               className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
-                              <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
-                                <HistoryIcon className="w-3 h-3" />
+                              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                                <HistoryIcon className="w-3.5 h-3.5" />
                                 Cached Renderers
                                 {(cachedRenderersQuery.data?.length ?? 0) > 0 && (
-                                  <span className="bg-white/[0.08] text-slate-400 px-1.5 py-0.5 rounded-full text-[10px]">
+                                  <span className="bg-white/[0.08] text-slate-400 px-2 py-0.5 rounded-full text-[11px]">
                                     {cachedRenderersQuery.data?.length}
                                   </span>
                                 )}
                               </div>
                               <motion.div animate={{ rotate: showCachedRenderers ? 0 : -90 }} transition={{ duration: 0.16 }}>
-                                <ChevronDownIcon className="w-3 h-3 text-slate-600" />
+                                <ChevronDownIcon className="w-3.5 h-3.5 text-slate-600" />
                               </motion.div>
                             </button>
                             <CollapseSection open={showCachedRenderers}>
                               <div className="max-h-48 overflow-y-auto">
                                 {cachedRenderersQuery.isLoading ? (
-                                  <div className="px-3 py-4 text-center text-[11px] text-slate-600">Loading cached renderers...</div>
+                                  <div className="px-3 py-4 text-center text-xs text-slate-500">Loading cached renderers...</div>
                                 ) : !cachedRenderersQuery.data?.length ? (
-                                  <div className="px-3 py-4 text-center text-[11px] text-slate-600 leading-relaxed">No cached renderers for this domain.</div>
+                                  <div className="px-3 py-4 text-center text-xs text-slate-500 leading-relaxed">No cached renderers for this domain.</div>
                                 ) : (
                                   <div className="divide-y divide-white/[0.04]">
                                     {cachedRenderersQuery.data.map((r: any) => (
                                       <div key={r.filename} onClick={() => handleLoadCachedRenderer(r.filename)}
-                                        className={`flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
+                                        className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors ${
                                           selectedCachedFile === r.filename
                                             ? "bg-green-500/8 border-l-2 border-green-500"
                                             : "hover:bg-white/[0.03] border-l-2 border-transparent"
                                         }`}>
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-1.5">
-                                            <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${r.provider === 'claude' ? 'bg-orange-500/15 text-orange-400' : 'bg-blue-500/15 text-blue-400'}`}>
+                                            <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${r.provider === 'claude' ? 'bg-orange-500/15 text-orange-400' : 'bg-blue-500/15 text-blue-400'}`}>
                                               {r.provider}
                                             </span>
-                                            <span className="text-[10px] text-slate-600">
+                                            <span className="text-[11px] text-slate-500">
                                               {new Date(r.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                           </div>
                                         </div>
                                         <button onClick={e => handleDeleteCachedRenderer(r.filename, e)}
-                                          className="p-1 rounded hover:bg-red-500/15 text-slate-700 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
-                                          <TrashIcon className="w-3 h-3" />
+                                          className="p-1.5 rounded-md hover:bg-red-500/15 text-slate-600 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
+                                          <TrashIcon className="w-3.5 h-3.5" />
                                         </button>
                                       </div>
                                     ))}
@@ -1043,12 +1043,12 @@ export default function Visualizer() {
                 {/* ── Step 4: Generate ── */}
                 <div>
                   <div className="flex items-center gap-2 mb-2 px-1">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
                       style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}>
-                      <span className="text-[9px] font-bold text-green-400"
+                      <span className="text-[11px] font-bold text-green-400"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>4</span>
                     </div>
-                    <span className="text-[10px] text-slate-600 font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Run</span>
+                    <span className="text-xs text-slate-500 font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Run</span>
                   </div>
                   <motion.button
                     onClick={handleGenerate}
@@ -1056,7 +1056,7 @@ export default function Visualizer() {
                     whileTap={!isProcessing ? { scale: 0.98 } : undefined}
                     whileHover={!isProcessing ? { y: -1 } : undefined}
                     transition={{ duration: 0.15 }}
-                    className={`w-full py-4 px-6 rounded-2xl font-bold text-sm transition-all duration-200 ${
+                    className={`w-full py-4 px-6 rounded-2xl font-semibold text-sm tracking-wide transition-all duration-200 ${
                       isProcessing
                         ? "bg-green-600/40 text-green-200/60 cursor-wait"
                         : "btn-primary-green text-[#0B1524]"
@@ -1085,7 +1085,7 @@ export default function Visualizer() {
                 <AnimatePresence>
                   {isProcessing && currentStrategy?.isOptimal && elapsedTime > 30 && (
                     <motion.p {...fadeInUp} transition={{ duration: 0.2, ease: easeOut }}
-                      className="text-[11px] text-amber-400/70 text-center leading-relaxed px-2">
+                      className="text-xs text-amber-400/80 text-center leading-relaxed px-2">
                       Optimal search can take a while. Consider a satisficing strategy for faster results.
                     </motion.p>
                   )}
@@ -1102,9 +1102,9 @@ export default function Visualizer() {
               <motion.button
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-white/[0.08] bg-white/[0.03] text-slate-500 hover:text-slate-300 hover:border-white/[0.14] text-xs font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:border-white/[0.14] hover:bg-white/[0.05] text-xs font-medium transition-all duration-150"
               >
-                <MenuIcon className="w-3.5 h-3.5" />
+                <MenuIcon className="w-4 h-4" />
                 {isSidebarCollapsed ? "Show Options" : "Hide Options"}
               </motion.button>
             </div>
@@ -1117,7 +1117,7 @@ export default function Visualizer() {
               >
 
                 {/* Viz card */}
-                <div className="relative rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden card-accent-top flex-1 min-w-0"
+                <div className="relative rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden card-accent-top flex-1 min-w-0"
                   style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
 
                   {/* Processing scan beam */}
@@ -1146,7 +1146,7 @@ export default function Visualizer() {
                           style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                           Visualization
                         </h2>
-                        <p className="text-[11px] text-slate-600 mt-0.5">
+                        <p className="text-xs text-slate-500 mt-1">
                           {currentDomain?.name} &middot; {plan.length} {plan.length === 1 ? "action" : "actions"}
                         </p>
                       </div>
@@ -1166,8 +1166,8 @@ export default function Visualizer() {
 
                     {plannerInfo?.strategy && (
                       <div className="mt-2.5 flex items-center gap-2">
-                        <span className="text-[10px] text-slate-600">Strategy:</span>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                        <span className="text-xs text-slate-500">Strategy:</span>
+                        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
                           plannerInfo.strategy.isOptimal ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"
                         }`}>{plannerInfo.strategy.name}</span>
                         {getSpeedBadge(plannerInfo.strategy.speed)}
@@ -1189,28 +1189,28 @@ export default function Visualizer() {
                   {/* Controls */}
                   <div className="px-6 py-4 border-t border-white/[0.05] bg-black/[0.15] space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-xl border border-white/[0.06] p-1">
+                      <div className="flex items-center gap-1 bg-white/[0.04] rounded-xl border border-white/[0.06] p-1">
                         <motion.button onClick={handlePrevious} disabled={currentStateIndex === 0}
                           whileTap={{ scale: 0.92 }}
-                          className="p-2 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-colors">
-                          <SkipBackIcon className="w-3.5 h-3.5 text-slate-400" />
+                          className="p-2.5 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-all duration-150">
+                          <SkipBackIcon className="w-4 h-4 text-slate-400" />
                         </motion.button>
                         {isPlaying ? (
                           <motion.button onClick={handlePause} whileTap={{ scale: 0.92 }}
-                            className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors">
-                            <PauseIcon className="w-3.5 h-3.5" />
+                            className="p-2.5 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-all duration-150">
+                            <PauseIcon className="w-4 h-4" />
                           </motion.button>
                         ) : (
                           <motion.button onClick={handlePlay} disabled={currentStateIndex >= renderedStates.length - 1}
                             whileTap={{ scale: 0.92 }}
-                            className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-25 transition-colors">
-                            <PlayIcon className="w-3.5 h-3.5" />
+                            className="p-2.5 rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-25 transition-all duration-150">
+                            <PlayIcon className="w-4 h-4" />
                           </motion.button>
                         )}
                         <motion.button onClick={handleNext} disabled={currentStateIndex >= renderedStates.length - 1}
                           whileTap={{ scale: 0.92 }}
-                          className="p-2 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-colors">
-                          <SkipForwardIcon className="w-3.5 h-3.5 text-slate-400" />
+                          className="p-2.5 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-all duration-150">
+                          <SkipForwardIcon className="w-4 h-4 text-slate-400" />
                         </motion.button>
                       </div>
 
@@ -1227,13 +1227,13 @@ export default function Visualizer() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <span className="text-[11px] text-slate-600">Speed</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-slate-500 font-medium">Speed</span>
                       <input type="range" min="200" max="2000" step="200"
                         value={2200 - playbackSpeed}
                         onChange={e => setPlaybackSpeed(2200 - Number(e.target.value))}
                         className="w-28" />
-                      <span className="text-[11px] text-slate-600 font-medium tabular-nums"
+                      <span className="text-xs text-slate-500 font-medium tabular-nums"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>{playbackSpeed}ms</span>
                     </div>
                   </div>
@@ -1242,15 +1242,15 @@ export default function Visualizer() {
 
                 {/* Plan Steps — separate card (sidebar-collapsed mode) */}
                 {plan.length > 0 && (
-                  <div className="w-72 flex-shrink-0 rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
+                  <div className="w-80 flex-shrink-0 rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden"
                     style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
                     <div className="px-4 py-3 border-b border-white/[0.05] bg-white/[0.02] flex items-center justify-between">
-                      <h3 className="text-xs font-semibold text-slate-400 flex items-center gap-1.5"
+                      <h3 className="text-xs font-semibold text-slate-300 flex items-center gap-2"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                        <TerminalIcon className="w-3 h-3 text-green-500" />
+                        <TerminalIcon className="w-3.5 h-3.5 text-green-500" />
                         Plan Steps
                       </h3>
-                      <span className="text-[10px] text-slate-600 tabular-nums">{plan.length} actions</span>
+                      <span className="text-xs text-slate-500 tabular-nums">{plan.length} actions</span>
                     </div>
                     <div ref={planStepsRef}
                       className="p-3 space-y-0.5 max-h-[600px] overflow-y-auto overscroll-contain"
@@ -1260,7 +1260,7 @@ export default function Visualizer() {
                           initial={false}
                           animate={idx === currentStateIndex - 1 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
                           transition={{ duration: 0.2 }}
-                          className={`text-[11px] px-3 py-1.5 rounded-lg transition-colors font-mono ${
+                          className={`text-xs px-3 py-2 rounded-lg transition-colors font-mono ${
                             idx === currentStateIndex - 1
                               ? "text-green-300 font-medium border-l-[2px] border-green-500"
                               : idx < currentStateIndex - 1
@@ -1283,10 +1283,10 @@ export default function Visualizer() {
               <motion.div
                 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, ease: easeOut }}
-                className="rounded-2xl border border-white/[0.07] bg-[#111E30]"
+                className="rounded-2xl border border-white/[0.08] bg-[#111E30]"
                 style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}
               >
-                <div className="py-20 px-8 flex flex-col items-center text-center">
+                <div className="py-24 px-10 flex flex-col items-center text-center">
 
                   {/* Animated planning tree */}
                   <div className="mb-4 w-full flex flex-col items-center gap-3">
@@ -1308,7 +1308,7 @@ export default function Visualizer() {
                         <div key={label} className="flex items-center gap-1.5">
                           <div className="w-2.5 h-2.5 rounded-full border border-white/20 flex-shrink-0"
                             style={{ background: color }} />
-                          <span className="text-[10px] text-slate-600">{label}</span>
+                          <span className="text-xs text-slate-500">{label}</span>
                         </div>
                       ))}
                     </motion.div>
@@ -1351,8 +1351,8 @@ export default function Visualizer() {
       </main>
 
       <footer className="border-t border-white/[0.05] bg-[#0B1524]/80 mt-16" style={{ position: "relative", zIndex: 1 }}>
-        <div className="container max-w-7xl py-5">
-          <p className="text-center text-[11px] text-slate-700 tracking-wide font-mono">
+        <div className="container max-w-[1440px] py-5">
+          <p className="text-center text-xs text-slate-600 tracking-wide font-mono">
             Planning Visualizer &middot; Built for AI Planning Education
           </p>
         </div>
@@ -1382,8 +1382,8 @@ export default function Visualizer() {
                     </h3>
                   </div>
                   <button onClick={() => setErrorModal({ show: false, title: "", message: "" })}
-                    className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]">
-                    <CloseIcon className="w-4 h-4" />
+                    className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
+                    <CloseIcon className="w-5 h-5" />
                   </button>
                 </div>
               </div>
@@ -1402,7 +1402,7 @@ export default function Visualizer() {
               </div>
               <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-end">
                 <button onClick={() => setErrorModal({ show: false, title: "", message: "" })}
-                  className="px-4 py-2 text-sm text-slate-500 hover:text-slate-200 font-medium transition-colors rounded-lg hover:bg-white/[0.06]">
+                  className="px-5 py-2.5 text-sm text-slate-400 hover:text-slate-200 font-medium transition-all duration-150 rounded-xl hover:bg-white/[0.08]">
                   Close
                 </button>
               </div>
@@ -1421,11 +1421,12 @@ export default function Visualizer() {
                   <h3 className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                     Example Problem
                   </h3>
-                  <p className="text-[11px] text-slate-600 mt-0.5">{currentDomain?.name}</p>
+                  <p className="text-xs text-slate-500 mt-1">{currentDomain?.name}</p>
                 </div>
                 <button onClick={() => setShowExampleProblem(false)}
-                  className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]">
-                  <CloseIcon className="w-4 h-4" />
+                  aria-label="Close modal"
+                  className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
+                  <CloseIcon className="w-5 h-5" />
                 </button>
               </div>
               <div className="p-6 overflow-y-auto flex-1">
@@ -1435,7 +1436,7 @@ export default function Visualizer() {
               </div>
               <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-end">
                 <button onClick={() => setShowExampleProblem(false)}
-                  className="px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] text-sm text-slate-300 font-medium rounded-xl transition-colors">
+                  className="px-5 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-sm text-slate-300 font-medium rounded-xl transition-all duration-150 border border-white/[0.06] hover:border-white/[0.1]">
                   Close
                 </button>
               </div>
@@ -1454,11 +1455,12 @@ export default function Visualizer() {
                   <h3 className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                     Domain Definition
                   </h3>
-                  <p className="text-[11px] text-slate-600 mt-0.5">{currentDomain?.name}</p>
+                  <p className="text-xs text-slate-500 mt-1">{currentDomain?.name}</p>
                 </div>
                 <button onClick={() => setShowDomainDefinition(false)}
-                  className="text-slate-600 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/[0.06]">
-                  <CloseIcon className="w-4 h-4" />
+                  aria-label="Close modal"
+                  className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
+                  <CloseIcon className="w-5 h-5" />
                 </button>
               </div>
               <div className="p-6 overflow-y-auto flex-1">
@@ -1480,7 +1482,7 @@ export default function Visualizer() {
               </div>
               <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-end">
                 <button onClick={() => setShowDomainDefinition(false)}
-                  className="px-4 py-2 bg-white/[0.06] hover:bg-white/[0.09] text-sm text-slate-300 font-medium rounded-xl transition-colors">
+                  className="px-5 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-sm text-slate-300 font-medium rounded-xl transition-all duration-150 border border-white/[0.06] hover:border-white/[0.1]">
                   Close
                 </button>
               </div>
