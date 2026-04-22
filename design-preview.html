@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planning Visualizer — Design System Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B1524;
+    --card: #111E30;
+    --secondary: #1A2840;
+    --muted: #0F1A2E;
+    --fg: #E2E8F0;
+    --fg-secondary: #CBD5E1;
+    --fg-muted: #64748B;
+    --green: #22C55E;
+    --green-light: #4ADE80;
+    --green-bg: rgba(34, 197, 94, 0.1);
+    --border: rgba(255, 255, 255, 0.07);
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  ::selection {
+    background: rgba(34, 197, 94, 0.25);
+    color: #E2E8F0;
+  }
+
+  .scanlines {
+    position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+    background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.018) 3px, rgba(0,0,0,0.018) 4px);
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+
+  h1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+  }
+
+  h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--green);
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .subtitle {
+    color: var(--fg-muted);
+    font-size: 0.95rem;
+    margin-bottom: 3rem;
+  }
+
+  .section { margin-bottom: 4rem; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
+    position: relative;
+  }
+
+  .card-accent::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(34,197,94,0.45), transparent);
+    border-radius: 1px;
+  }
+
+  /* ── Typography Specimens ── */
+  .type-specimen { margin-bottom: 2rem; }
+  .type-label {
+    font-size: 0.75rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+  }
+  .type-hero {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.5rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .type-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  .type-section {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--green);
+  }
+  .type-body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.875rem;
+    color: var(--fg-secondary);
+    max-width: 60ch;
+  }
+  .type-label-text {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--fg-muted);
+  }
+  .type-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
+    color: var(--green-light);
+    background: var(--green-bg);
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    display: block;
+    margin-top: 0.5rem;
+  }
+
+  /* ── Color Swatches ── */
+  .swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+  }
+  .swatch {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .swatch-color {
+    height: 72px;
+    display: flex;
+    align-items: flex-end;
+    padding: 0.5rem;
+  }
+  .swatch-info {
+    padding: 0.625rem 0.75rem;
+    background: var(--card);
+  }
+  .swatch-name {
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-bottom: 0.125rem;
+  }
+  .swatch-hex {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6875rem;
+    color: var(--fg-muted);
+  }
+
+  /* ── Domain Colors ── */
+  .domain-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+  }
+  .domain-card {
+    background: var(--secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    text-align: center;
+  }
+  .domain-icon {
+    width: 32px;
+    height: 32px;
+    margin: 0 auto 0.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+  }
+  .domain-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  /* ── Component Samples ── */
+  .component-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  .component-label {
+    font-size: 0.6875rem;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    width: 100%;
+    margin-bottom: 0.25rem;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.5rem;
+    border-radius: var(--radius-lg);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+    color: #0B1524;
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0.28), 0 1px 0 rgba(255,255,255,0.12) inset;
+  }
+  .btn-primary:hover {
+    box-shadow: 0 6px 32px rgba(34, 197, 94, 0.5), 0 1px 0 rgba(255,255,255,0.16) inset;
+    filter: brightness(1.07);
+  }
+  .btn-secondary {
+    background: rgba(255,255,255,0.06);
+    color: var(--fg);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .btn-secondary:hover { background: rgba(255,255,255,0.10); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--fg-muted);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.04); color: var(--fg); }
+  .btn-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #F87171;
+  }
+  .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+  }
+  .badge-green { background: rgba(34,197,94,0.15); color: #4ADE80; }
+  .badge-blue { background: rgba(96,165,250,0.15); color: #60A5FA; }
+  .badge-orange { background: rgba(251,146,60,0.15); color: #FB923C; }
+  .badge-amber { background: rgba(245,158,11,0.15); color: #FBBF24; }
+  .badge-red { background: rgba(248,113,113,0.15); color: #F87171; }
+
+  .step-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .step-active { background: #22C55E; color: #0B1524; }
+  .step-inactive { background: rgba(255,255,255,0.06); color: var(--fg-muted); border: 1px solid var(--border); }
+  .step-done { background: rgba(34,197,94,0.15); color: #4ADE80; }
+
+  .input-sample {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 0.5rem 0.75rem;
+    color: var(--fg);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.8125rem;
+    width: 240px;
+    outline: none;
+    caret-color: var(--green);
+  }
+  .input-sample:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px rgba(34,197,94,0.2);
+  }
+
+  /* ── Spacing Visualization ── */
+  .spacing-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-end;
+  }
+  .spacing-item {
+    text-align: center;
+  }
+  .spacing-box {
+    background: rgba(34,197,94,0.2);
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+  }
+  .spacing-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.625rem;
+    color: var(--fg-muted);
+  }
+
+  /* ── Border Radius ── */
+  .radius-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: center;
+  }
+  .radius-item {
+    text-align: center;
+  }
+  .radius-box {
+    width: 64px;
+    height: 64px;
+    background: var(--secondary);
+    border: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+  }
+
+  /* ── Animation Preview ── */
+  @keyframes btn-idle-glow {
+    0%, 100% { box-shadow: 0 4px 20px rgba(34, 197, 94, 0.28), 0 1px 0 rgba(255,255,255,0.12) inset; }
+    50%       { box-shadow: 0 4px 36px rgba(34, 197, 94, 0.52), 0 1px 0 rgba(255,255,255,0.14) inset; }
+  }
+  @keyframes step-pulse {
+    0%, 100% { box-shadow: inset 2px 0 0 #22C55E, 0 0 0 0 rgba(34,197,94,0); }
+    50%       { box-shadow: inset 2px 0 0 #22C55E, 0 0 8px 0 rgba(34,197,94,0.12); }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .anim-glow { animation: btn-idle-glow 2.8s ease-in-out infinite; }
+  .anim-pulse {
+    animation: step-pulse 2s ease-in-out infinite;
+    padding: 0.75rem 1rem;
+    background: var(--card);
+    border-radius: var(--radius-lg);
+  }
+  .anim-blink { animation: blink 1s steps(2) infinite; }
+
+  /* ── Mockup Section ── */
+  .mockup-sidebar {
+    width: 280px;
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    padding: 1.5rem;
+    flex-shrink: 0;
+  }
+  .mockup-main {
+    flex: 1;
+    padding: 1.5rem;
+    background: var(--bg);
+  }
+  .mockup-layout {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    min-height: 400px;
+  }
+  .mockup-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .mockup-logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .mockup-step {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    font-size: 0.8125rem;
+    color: var(--fg-secondary);
+  }
+  .mockup-domain-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-lg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    cursor: default;
+    margin-bottom: 0.25rem;
+  }
+  .mockup-domain-active {
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.2);
+  }
+  .mockup-domain-inactive {
+    color: var(--fg-muted);
+    border: 1px solid transparent;
+  }
+  .mockup-viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 1.5rem;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .mockup-viz-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(34,197,94,0.45), transparent);
+  }
+  .mockup-empty-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+    text-align: center;
+  }
+  .mockup-empty-sub {
+    font-size: 0.8125rem;
+    color: var(--fg-muted);
+    text-align: center;
+    margin-top: 0.5rem;
+    opacity: 0.7;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--fg-muted);
+    font-size: 0.75rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+
+  @media (max-width: 768px) {
+    .container { padding: 2rem 1rem; }
+    .swatch-grid { grid-template-columns: repeat(3, 1fr); }
+    .domain-grid { grid-template-columns: repeat(3, 1fr); }
+    .mockup-layout { flex-direction: column; }
+    .mockup-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+
+<div class="container">
+  <!-- Header -->
+  <h1>Planning Visualizer</h1>
+  <p class="subtitle">Design System Preview — Inferred from existing codebase</p>
+
+  <!-- Typography -->
+  <div class="section">
+    <h2>Typography</h2>
+    <div class="card card-accent">
+      <div class="type-specimen">
+        <div class="type-label">Display / Hero — JetBrains Mono 600</div>
+        <div class="type-hero">Ready to Visualize</div>
+      </div>
+      <div class="type-specimen">
+        <div class="type-label">Title — JetBrains Mono 600</div>
+        <div class="type-title">Planning Visualizer</div>
+      </div>
+      <div class="type-specimen">
+        <div class="type-label">Section Header — JetBrains Mono 600 uppercase tracking-wide</div>
+        <div class="type-section">CONFIGURE VISUALIZATION</div>
+      </div>
+      <div class="type-specimen">
+        <div class="type-label">Body — IBM Plex Sans 400</div>
+        <div class="type-body">Select a domain, configure the problem and strategy, then generate a step-by-step visualization of the planner's solution. Each state is rendered as an interactive canvas.</div>
+      </div>
+      <div class="type-specimen">
+        <div class="type-label">Label — IBM Plex Sans 500</div>
+        <div class="type-label-text">RENDER MODE &middot; CACHED RENDERERS &middot; PLAN STEPS</div>
+      </div>
+      <div class="type-specimen">
+        <div class="type-label">Code / Data — JetBrains Mono 400</div>
+        <code class="type-mono">(unstack b1 b2) &rarr; (put-down b1) &rarr; (pick-up b3) &rarr; (stack b3 b2)</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- Colors: Core Palette -->
+  <div class="section">
+    <h2>Core Palette</h2>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-color" style="background:#0B1524"></div>
+        <div class="swatch-info"><div class="swatch-name">Background</div><div class="swatch-hex">#0B1524</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#111E30"></div>
+        <div class="swatch-info"><div class="swatch-name">Card</div><div class="swatch-hex">#111E30</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#1A2840"></div>
+        <div class="swatch-info"><div class="swatch-name">Secondary</div><div class="swatch-hex">#1A2840</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#0F1A2E"></div>
+        <div class="swatch-info"><div class="swatch-name">Muted</div><div class="swatch-hex">#0F1A2E</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#22C55E"><span style="color:#0B1524;font-size:0.6875rem;font-family:'JetBrains Mono',monospace">Primary</span></div>
+        <div class="swatch-info"><div class="swatch-name">Terminal Green</div><div class="swatch-hex">#22C55E</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#4ADE80"><span style="color:#0B1524;font-size:0.6875rem;font-family:'JetBrains Mono',monospace">Accent</span></div>
+        <div class="swatch-info"><div class="swatch-name">Green Light</div><div class="swatch-hex">#4ADE80</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#E2E8F0"><span style="color:#0B1524;font-size:0.6875rem;font-family:'JetBrains Mono',monospace">Foreground</span></div>
+        <div class="swatch-info"><div class="swatch-name">Primary Text</div><div class="swatch-hex">#E2E8F0</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#64748B"><span style="color:#E2E8F0;font-size:0.6875rem;font-family:'JetBrains Mono',monospace">Muted</span></div>
+        <div class="swatch-info"><div class="swatch-name">Muted Text</div><div class="swatch-hex">#64748B</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Colors: Semantic -->
+  <div class="section">
+    <h2>Semantic Colors</h2>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-color" style="background:#22C55E"></div>
+        <div class="swatch-info"><div class="swatch-name">Success / Active</div><div class="swatch-hex">#22C55E</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#F87171"></div>
+        <div class="swatch-info"><div class="swatch-name">Error</div><div class="swatch-hex">#F87171</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#F59E0B"></div>
+        <div class="swatch-info"><div class="swatch-name">Warning</div><div class="swatch-hex">#F59E0B</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#6366F1"></div>
+        <div class="swatch-info"><div class="swatch-name">Info / Indigo</div><div class="swatch-hex">#6366F1</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#FB923C"></div>
+        <div class="swatch-info"><div class="swatch-name">Claude</div><div class="swatch-hex">#FB923C</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background:#60A5FA"></div>
+        <div class="swatch-info"><div class="swatch-name">Gemini</div><div class="swatch-hex">#60A5FA</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Domain Colors -->
+  <div class="section">
+    <h2>Domain Colors</h2>
+    <div class="domain-grid">
+      <div class="domain-card">
+        <div class="domain-icon" style="background:rgba(74,222,128,0.15);color:#4ade80">&#9632;</div>
+        <div class="domain-name" style="color:#86efac">Blocks World</div>
+        <div class="swatch-hex">#4ade80 / #86efac</div>
+      </div>
+      <div class="domain-card">
+        <div class="domain-icon" style="background:rgba(56,189,248,0.15);color:#38bdf8">&#9632;</div>
+        <div class="domain-name" style="color:#7dd3fc">Gripper</div>
+        <div class="swatch-hex">#38bdf8 / #7dd3fc</div>
+      </div>
+      <div class="domain-card">
+        <div class="domain-icon" style="background:rgba(251,146,60,0.15);color:#fb923c">&#9632;</div>
+        <div class="domain-name" style="color:#fdba74">Depot</div>
+        <div class="swatch-hex">#fb923c / #fdba74</div>
+      </div>
+      <div class="domain-card">
+        <div class="domain-icon" style="background:rgba(167,139,250,0.15);color:#a78bfa">&#9632;</div>
+        <div class="domain-name" style="color:#c4b5fd">Hanoi</div>
+        <div class="swatch-hex">#a78bfa / #c4b5fd</div>
+      </div>
+      <div class="domain-card">
+        <div class="domain-icon" style="background:rgba(248,113,113,0.15);color:#f87171">&#9632;</div>
+        <div class="domain-name" style="color:#fca5a5">Rovers</div>
+        <div class="swatch-hex">#f87171 / #fca5a5</div>
+      </div>
+      <div class="domain-card">
+        <div class="domain-icon" style="background:rgba(45,212,191,0.15);color:#2dd4bf">&#9632;</div>
+        <div class="domain-name" style="color:#5eead4">Satellite</div>
+        <div class="swatch-hex">#2dd4bf / #5eead4</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Components -->
+  <div class="section">
+    <h2>Components</h2>
+    <div class="card" style="display:flex;flex-direction:column;gap:2rem">
+      <!-- Buttons -->
+      <div>
+        <div class="component-label">Buttons</div>
+        <div class="component-row">
+          <button class="btn btn-primary anim-glow">Generate Visualization</button>
+          <button class="btn btn-secondary">View PDDL</button>
+          <button class="btn btn-ghost">Cancel</button>
+          <button class="btn btn-danger">Delete Cache</button>
+        </div>
+      </div>
+
+      <!-- Badges -->
+      <div>
+        <div class="component-label">Badges</div>
+        <div class="component-row">
+          <span class="badge badge-green">Active</span>
+          <span class="badge badge-blue">Gemini</span>
+          <span class="badge badge-orange">Claude</span>
+          <span class="badge badge-amber">BFS</span>
+          <span class="badge badge-red">Error</span>
+        </div>
+      </div>
+
+      <!-- Step Circles -->
+      <div>
+        <div class="component-label">Step Circles</div>
+        <div class="component-row">
+          <span class="step-circle step-done">1</span>
+          <span class="step-circle step-done">2</span>
+          <span class="step-circle step-active">3</span>
+          <span class="step-circle step-inactive">4</span>
+        </div>
+      </div>
+
+      <!-- Input -->
+      <div>
+        <div class="component-label">Input</div>
+        <div class="component-row">
+          <input class="input-sample" type="text" placeholder="Enter problem number..." value="">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spacing -->
+  <div class="section">
+    <h2>Spacing Scale</h2>
+    <div class="spacing-grid">
+      <div class="spacing-item">
+        <div class="spacing-box" style="width:16px;height:16px"></div>
+        <div class="spacing-label">4px</div>
+      </div>
+      <div class="spacing-item">
+        <div class="spacing-box" style="width:24px;height:24px"></div>
+        <div class="spacing-label">6px</div>
+      </div>
+      <div class="spacing-item">
+        <div class="spacing-box" style="width:32px;height:32px"></div>
+        <div class="spacing-label">8px</div>
+      </div>
+      <div class="spacing-item">
+        <div class="spacing-box" style="width:48px;height:48px"></div>
+        <div class="spacing-label">12px</div>
+      </div>
+      <div class="spacing-item">
+        <div class="spacing-box" style="width:64px;height:64px"></div>
+        <div class="spacing-label">16px</div>
+      </div>
+      <div class="spacing-item">
+        <div class="spacing-box" style="width:96px;height:96px"></div>
+        <div class="spacing-label">24px</div>
+      </div>
+      <div class="spacing-item">
+        <div class="spacing-box" style="width:128px;height:128px"></div>
+        <div class="spacing-label">32px</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Border Radius -->
+  <div class="section">
+    <h2>Border Radius</h2>
+    <div class="radius-grid">
+      <div class="radius-item">
+        <div class="radius-box" style="border-radius:6px"></div>
+        <div class="spacing-label">md (6px)</div>
+      </div>
+      <div class="radius-item">
+        <div class="radius-box" style="border-radius:8px"></div>
+        <div class="spacing-label">lg (8px)</div>
+      </div>
+      <div class="radius-item">
+        <div class="radius-box" style="border-radius:12px"></div>
+        <div class="spacing-label">xl (12px)</div>
+      </div>
+      <div class="radius-item">
+        <div class="radius-box" style="border-radius:16px"></div>
+        <div class="spacing-label">2xl (16px)</div>
+      </div>
+      <div class="radius-item">
+        <div class="radius-box" style="border-radius:9999px"></div>
+        <div class="spacing-label">full (pill)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Animations -->
+  <div class="section">
+    <h2>Motion</h2>
+    <div class="card" style="display:flex;flex-direction:column;gap:2rem">
+      <div>
+        <div class="component-label">Button Idle Glow (2.8s infinite)</div>
+        <div class="component-row">
+          <button class="btn btn-primary anim-glow">Generate Visualization</button>
+        </div>
+      </div>
+      <div>
+        <div class="component-label">Active Step Pulse (2s infinite)</div>
+        <div class="component-row">
+          <div class="anim-pulse" style="display:flex;align-items:center;gap:0.75rem">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:#4ADE80">Step 3</span>
+            <span style="font-size:0.8125rem;color:var(--fg-secondary)">(pick-up b3)</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="component-label">Terminal Cursor Blink (1s steps)</div>
+        <div class="component-row">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:0.875rem;color:var(--green)">$ visualize<span class="anim-blink">_</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mockup -->
+  <div class="section">
+    <h2>Layout Mockup</h2>
+    <div class="mockup-layout">
+      <div class="mockup-sidebar">
+        <div class="mockup-header">
+          <div style="width:8px;height:8px;border-radius:50%;background:#22C55E"></div>
+          <div class="mockup-logo">Planning Visualizer</div>
+        </div>
+
+        <div class="mockup-step">
+          <span class="step-circle step-active" style="width:24px;height:24px;font-size:10px">1</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;font-weight:600">Domain</span>
+        </div>
+        <div style="padding-left:2.5rem;margin-bottom:1rem">
+          <div class="mockup-domain-item mockup-domain-active" style="color:#86efac">
+            <span style="color:#4ade80">&#9632;</span> blocks-world
+          </div>
+          <div class="mockup-domain-item mockup-domain-inactive">
+            <span style="color:#38bdf8">&#9632;</span> gripper
+          </div>
+          <div class="mockup-domain-item mockup-domain-inactive">
+            <span style="color:#fb923c">&#9632;</span> depot
+          </div>
+        </div>
+
+        <div class="mockup-step">
+          <span class="step-circle step-inactive" style="width:24px;height:24px;font-size:10px">2</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--fg-muted)">Problem</span>
+        </div>
+
+        <div style="margin-top:auto;padding-top:2rem">
+          <button class="btn btn-primary" style="width:100%;justify-content:center;font-size:0.75rem;padding:0.5rem 1rem">Generate Visualization</button>
+        </div>
+      </div>
+
+      <div class="mockup-main">
+        <div class="mockup-viz-card">
+          <div>
+            <div class="mockup-empty-text">Ready to Visualize</div>
+            <div class="mockup-empty-sub">Configure a domain and problem, then click Generate</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Planning Visualizer Design System &middot; Generated from /plan-design-review &middot; April 2026
+  </div>
+</div>
+
+</body>
+</html>
