@@ -222,19 +222,22 @@
   /* Green glow button */
   .btn-primary-green {
     background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
-    box-shadow: 0 4px 20px rgba(34, 197, 94, 0.25), 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0.28), 0 1px 0 rgba(255, 255, 255, 0.12) inset;
     color: #0B1524;
     font-weight: 600;
+    animation: btn-idle-glow 2.8s ease-in-out infinite;
   }
 
   .btn-primary-green:hover:not(:disabled) {
-    box-shadow: 0 6px 28px rgba(34, 197, 94, 0.35), 0 1px 0 rgba(255, 255, 255, 0.12) inset;
-    filter: brightness(1.06);
+    box-shadow: 0 6px 32px rgba(34, 197, 94, 0.5), 0 1px 0 rgba(255, 255, 255, 0.16) inset;
+    filter: brightness(1.07);
+    animation: none;
   }
 
   .btn-primary-green:disabled {
     opacity: 0.5;
     cursor: wait;
+    animation: none;
   }
 
   /* Badge styles */
@@ -364,3 +367,32 @@
 .orb-a { animation: orb-drift-a 24s ease-in-out infinite; }
 .orb-b { animation: orb-drift-b 30s ease-in-out infinite; animation-delay: -8s; }
 .orb-c { animation: orb-drift-c 20s ease-in-out infinite; animation-delay: -14s; }
+
+@keyframes btn-idle-glow {
+  0%, 100% { box-shadow: 0 4px 20px rgba(34, 197, 94, 0.28), 0 1px 0 rgba(255,255,255,0.12) inset; }
+  50%       { box-shadow: 0 4px 36px rgba(34, 197, 94, 0.52), 0 1px 0 rgba(255,255,255,0.14) inset; }
+}
+
+@keyframes step-pulse {
+  0%, 100% { box-shadow: inset 2px 0 0 #22C55E, 0 0 0 0 rgba(34,197,94,0); }
+  50%       { box-shadow: inset 2px 0 0 #22C55E, 0 0 8px 0 rgba(34,197,94,0.12); }
+}
+
+.active-plan-step {
+  animation: step-pulse 2s ease-in-out infinite;
+}
+
+/* Subtle input caret */
+input, textarea {
+  caret-color: #22C55E;
+}
+
+/* Top accent hairline for loaded cards */
+.card-accent-top::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,197,94,0.45), transparent);
+  border-radius: 1px;
+}
