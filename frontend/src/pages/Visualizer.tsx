@@ -197,11 +197,13 @@ const CollapseSection = ({ open, children }: { open: boolean; children: React.Re
 const PillToggle = ({
   options, value, onChange,
 }: { options: { id: string; label: React.ReactNode }[]; value: string; onChange: (v: string) => void }) => (
-  <div className="flex bg-white/[0.05] rounded-lg p-0.5 border border-white/[0.06]">
+  <div className="flex bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.07]">
     {options.map(o => (
       <button key={o.id} onClick={() => onChange(o.id)}
-        className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-all duration-150 ${
-          value === o.id ? "bg-white/[0.08] text-slate-100 shadow-sm" : "text-slate-500 hover:text-slate-300"
+        className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all duration-150 ${
+          value === o.id
+            ? "bg-[#1a2e48] text-slate-100 shadow-sm border border-white/[0.1]"
+            : "text-slate-600 hover:text-slate-400"
         }`}>
         {o.label}
       </button>
@@ -490,27 +492,57 @@ export default function Visualizer() {
         <div className="container max-w-7xl py-3.5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {/* Logo mark */}
+              {/* Logo mark — grid path */}
               <motion.div
-                className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center flex-shrink-0"
-                style={{ boxShadow: "0 0 0 1px rgba(34,197,94,0.5), 0 4px 16px rgba(34,197,94,0.3)" }}
+                className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
+                style={{ background: "#0D1929", boxShadow: "0 0 0 1px rgba(34,197,94,0.3), 0 4px 24px rgba(34,197,94,0.22)" }}
                 animate={{ boxShadow: [
-                  "0 0 0 1px rgba(34,197,94,0.5), 0 4px 16px rgba(34,197,94,0.3)",
-                  "0 0 0 3px rgba(34,197,94,0.15), 0 4px 24px rgba(34,197,94,0.45)",
-                  "0 0 0 1px rgba(34,197,94,0.5), 0 4px 16px rgba(34,197,94,0.3)",
+                  "0 0 0 1px rgba(34,197,94,0.3), 0 4px 24px rgba(34,197,94,0.22)",
+                  "0 0 0 1px rgba(34,197,94,0.55), 0 4px 36px rgba(34,197,94,0.42)",
+                  "0 0 0 1px rgba(34,197,94,0.3), 0 4px 24px rgba(34,197,94,0.22)",
                 ]}}
-                transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
               >
-                <svg viewBox="0 0 16 16" fill="none" className="w-4 h-4">
-                  <path d="M2 4h12M2 8h8M2 12h10" stroke="#0B1524" strokeWidth="1.75" strokeLinecap="round" />
+                <svg viewBox="0 0 20 20" fill="none" className="w-10 h-10">
+                  {/* Grid edges — faded */}
+                  <line x1="3" y1="5" x2="10" y2="5" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="10" y1="5" x2="17" y2="5" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="3" y1="10" x2="10" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="10" y1="10" x2="17" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="3" y1="15" x2="10" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="10" y1="15" x2="17" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="3" y1="5" x2="3" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="3" y1="10" x2="3" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="10" y1="5" x2="10" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="10" y1="10" x2="10" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="17" y1="5" x2="17" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  <line x1="17" y1="10" x2="17" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
+                  {/* Highlighted path edges — green */}
+                  <line x1="3" y1="5" x2="10" y2="5" stroke="#22C55E" strokeWidth="1.7" strokeLinecap="round"/>
+                  <line x1="10" y1="5" x2="10" y2="10" stroke="#22C55E" strokeWidth="1.7" strokeLinecap="round"/>
+                  <line x1="10" y1="10" x2="17" y2="10" stroke="#22C55E" strokeWidth="1.7" strokeLinecap="round"/>
+                  <line x1="17" y1="10" x2="17" y2="15" stroke="#22C55E" strokeWidth="1.7" strokeLinecap="round"/>
+                  {/* Off-path grid nodes */}
+                  {([[3,10],[3,15],[10,15],[17,5]] as [number,number][]).map(([cx,cy]) => (
+                    <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.5" fill="rgba(148,163,184,0.08)" stroke="rgba(148,163,184,0.22)" strokeWidth="0.8"/>
+                  ))}
+                  {/* Path waypoint nodes */}
+                  <circle cx="10" cy="5" r="1.8" fill="rgba(34,197,94,0.18)" stroke="#22C55E" strokeWidth="1"/>
+                  <circle cx="10" cy="10" r="1.8" fill="rgba(34,197,94,0.18)" stroke="#22C55E" strokeWidth="1"/>
+                  <circle cx="17" cy="10" r="1.8" fill="rgba(34,197,94,0.18)" stroke="#22C55E" strokeWidth="1"/>
+                  {/* Start node — indigo */}
+                  <circle cx="3" cy="5" r="2.3" fill="#6366F1"/>
+                  {/* Goal node — solid green with glow ring */}
+                  <circle cx="17" cy="15" r="2.5" fill="#22C55E"/>
+                  <circle cx="17" cy="15" r="4" fill="none" stroke="rgba(34,197,94,0.25)" strokeWidth="0.8"/>
                 </svg>
               </motion.div>
               <div>
-                <h1 className="text-[15px] font-semibold leading-none tracking-tight"
-                  style={{ fontFamily: "'JetBrains Mono', monospace", background: "linear-gradient(90deg, #ffffff 0%, #86efac 60%, #4ade80 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                <h1 className="text-2xl font-bold leading-none tracking-tight text-white"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                   Planning Visualizer
                 </h1>
-                <p className="text-[10px] text-slate-500 font-medium tracking-[0.18em] uppercase mt-0.5">
+                <p className="text-[11px] text-slate-500 font-medium tracking-[0.18em] uppercase mt-1">
                   Classical AI Planning
                 </p>
               </div>
@@ -606,21 +638,20 @@ export default function Visualizer() {
                   transition={{ duration: 0.32, ease: easeOut }}
                 >
                   {/* Panel header bar */}
-                  <div className="px-4 py-2.5 flex items-center gap-2 border-b border-white/[0.05]"
-                    style={{ background: "rgba(11,21,36,0.6)" }}>
-                    <SettingsIcon className="w-3 h-3 text-slate-600" />
-                    <span className="text-[10px] font-semibold tracking-[0.15em] uppercase text-slate-600"
+                  <div className="px-4 py-3 flex items-center gap-2 border-b border-white/[0.06]"
+                    style={{ background: "rgba(255,255,255,0.02)" }}>
+                    <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-slate-600"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}>Configure</span>
                     <div className="flex-1" />
-                    {/* Step progress pips */}
-                    <div className="flex items-center gap-1">
+                    {/* Step progress pips — live domain color for step 1 */}
+                    <div className="flex items-center gap-1.5">
                       {[
-                        domainColors[selectedDomain]?.dotColor ?? "#22c55e",
-                        "#0EA5E9",
-                        "#8B5CF6",
-                      ].map((c, i) => (
-                        <div key={i} className="w-1.5 h-1.5 rounded-full"
-                          style={{ background: c, boxShadow: `0 0 4px ${c}` }} />
+                        { c: domainColors[selectedDomain]?.dotColor ?? "#22c55e", key: "d" },
+                        { c: "#0EA5E9", key: "p" },
+                        { c: "#8B5CF6", key: "s" },
+                      ].map(({ c, key }) => (
+                        <div key={key} className="w-1.5 h-1.5 rounded-full transition-all duration-300"
+                          style={{ background: c, opacity: 0.7 }} />
                       ))}
                     </div>
                   </div>
@@ -629,15 +660,12 @@ export default function Visualizer() {
                   <div>
                     <button onClick={() => setIsDomainOpen(!isDomainOpen)}
                       className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.025] transition-colors">
-                      {/* Step badge */}
-                      <div className="w-5 h-5 rounded-full border border-white/[0.1] flex items-center justify-center flex-shrink-0"
-                        style={{ background: "rgba(255,255,255,0.04)" }}>
-                        <span className="text-[9px] font-bold text-slate-500"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>1</span>
+                      {/* Colorized step badge */}
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                        style={{ background: domainColors[selectedDomain]?.iconBg ?? "rgba(34,197,94,0.15)", border: `1px solid ${domainColors[selectedDomain]?.selBorder ?? "rgba(34,197,94,0.3)"}` }}>
+                        <span className="text-[9px] font-bold"
+                          style={{ fontFamily: "'JetBrains Mono', monospace", color: domainColors[selectedDomain]?.iconColor ?? "#4ade80" }}>1</span>
                       </div>
-                      {/* Domain color bar */}
-                      <div className="w-1 h-5 rounded-full flex-shrink-0 transition-all"
-                        style={{ background: `linear-gradient(to bottom, ${domainColors[selectedDomain]?.iconColor ?? "#4ade80"}, ${domainColors[selectedDomain]?.dotColor ?? "#22c55e"})` }} />
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
                           style={{ fontFamily: "'JetBrains Mono', monospace" }}>Domain</span>
@@ -713,13 +741,11 @@ export default function Visualizer() {
                   {/* ── Step 2: Problem ── */}
                   <div>
                     <div className="px-4 py-3.5 flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full border border-white/[0.1] flex items-center justify-center flex-shrink-0"
-                        style={{ background: "rgba(255,255,255,0.04)" }}>
-                        <span className="text-[9px] font-bold text-slate-500"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>2</span>
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ background: "rgba(14,165,233,0.15)", border: "1px solid rgba(14,165,233,0.3)" }}>
+                        <span className="text-[9px] font-bold"
+                          style={{ fontFamily: "'JetBrains Mono', monospace", color: "#38BDF8" }}>2</span>
                       </div>
-                      <div className="w-1 h-5 rounded-full flex-shrink-0"
-                        style={{ background: "linear-gradient(to bottom, #38BDF8, #0369A1)" }} />
                       <span className="text-sm font-semibold text-slate-200"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>Problem</span>
                     </div>
@@ -797,13 +823,11 @@ export default function Visualizer() {
                   <div>
                     <button onClick={() => setIsStrategyOpen(!isStrategyOpen)}
                       className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.025] transition-colors">
-                      <div className="w-5 h-5 rounded-full border border-white/[0.1] flex items-center justify-center flex-shrink-0"
-                        style={{ background: "rgba(255,255,255,0.04)" }}>
-                        <span className="text-[9px] font-bold text-slate-500"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>3</span>
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)" }}>
+                        <span className="text-[9px] font-bold"
+                          style={{ fontFamily: "'JetBrains Mono', monospace", color: "#A78BFA" }}>3</span>
                       </div>
-                      <div className="w-1 h-5 rounded-full flex-shrink-0"
-                        style={{ background: "linear-gradient(to bottom, #A78BFA, #6D28D9)" }} />
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
                           style={{ fontFamily: "'JetBrains Mono', monospace" }}>Strategy</span>
@@ -863,31 +887,28 @@ export default function Visualizer() {
                 </motion.div>
 
                 {/* ── Step 4: Generate ── */}
-                <div className="flex items-stretch gap-3 px-1">
-                  {/* Connector line + step 4 badge */}
-                  <div className="flex flex-col items-center pt-1 pb-1">
-                    <div className="w-px flex-1 mb-1" style={{ background: "linear-gradient(to bottom, rgba(255,255,255,0.07), transparent)" }} />
-                    <div className="w-5 h-5 rounded-full border border-white/[0.1] flex items-center justify-center flex-shrink-0"
-                      style={{ background: "rgba(255,255,255,0.04)" }}>
-                      <span className="text-[9px] font-bold text-slate-500"
+                <div>
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}>
+                      <span className="text-[9px] font-bold text-green-400"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>4</span>
                     </div>
+                    <span className="text-[10px] text-slate-600 font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Run</span>
                   </div>
-                  <div className="flex-1 pb-0.5">
-                    <p className="text-[10px] text-slate-600 mb-2 font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Run</p>
-                    <motion.button
-                      onClick={handleGenerate}
-                      disabled={uploadMutation.isPending || isProcessing}
-                      whileTap={!isProcessing ? { scale: 0.98 } : undefined}
-                      whileHover={!isProcessing ? { y: -1 } : undefined}
-                      transition={{ duration: 0.15 }}
-                      className={`w-full py-4 px-6 rounded-2xl font-bold text-sm transition-all duration-200 ${
-                        isProcessing
-                          ? "bg-green-600/40 text-green-200/60 cursor-wait"
-                          : "btn-primary-green text-[#0B1524]"
-                      }`}
-                      style={{ fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.04em" }}
-                    >
+                  <motion.button
+                    onClick={handleGenerate}
+                    disabled={uploadMutation.isPending || isProcessing}
+                    whileTap={!isProcessing ? { scale: 0.98 } : undefined}
+                    whileHover={!isProcessing ? { y: -1 } : undefined}
+                    transition={{ duration: 0.15 }}
+                    className={`w-full py-4 px-6 rounded-2xl font-bold text-sm transition-all duration-200 ${
+                      isProcessing
+                        ? "bg-green-600/40 text-green-200/60 cursor-wait"
+                        : "btn-primary-green text-[#0B1524]"
+                    }`}
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
                   {isProcessing ? (
                     <span className="flex items-center justify-center gap-2.5">
                       <div className="w-4 h-4 border-2 border-green-200/30 border-t-green-200 rounded-full animate-spin" />
@@ -904,8 +925,7 @@ export default function Visualizer() {
                       Generate States
                     </span>
                   )}
-                    </motion.button>
-                  </div>
+                  </motion.button>
                 </div>
 
                 <AnimatePresence>
@@ -1302,7 +1322,7 @@ export default function Visualizer() {
                   </div>
 
                   <motion.h3
-                    className="text-base font-semibold text-slate-200 mb-2"
+                    className="text-xl font-semibold text-slate-100 mb-3"
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
                     initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.7, duration: 0.3, ease: easeOut }}
@@ -1310,22 +1330,23 @@ export default function Visualizer() {
                     Ready to Visualize
                   </motion.h3>
                   <motion.p
-                    className="text-sm text-slate-600 max-w-xs leading-relaxed"
+                    className="text-sm text-slate-500 max-w-[280px] leading-relaxed"
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                     transition={{ delay: 0.85, duration: 0.3 }}
                   >
                     {problemType === "custom"
                       ? "Upload a PDDL problem file or paste your problem definition, then click Solve Problem"
-                      : "Select a domain and click Generate States to see the planning visualization"}
+                      : "Configure the domain and strategy, then click Generate States"}
                   </motion.p>
 
                   {/* Terminal hint with blinking cursor */}
                   <motion.div
-                    className="mt-6 px-4 py-2.5 bg-white/[0.03] rounded-xl border border-white/[0.05] font-mono text-xs text-slate-600"
+                    className="mt-8 px-4 py-3 rounded-xl border border-white/[0.07] font-mono text-xs text-slate-500"
+                    style={{ background: "rgba(11,21,36,0.7)" }}
                     initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 1.0, duration: 0.3, ease: easeOut }}
                   >
-                    <span className="text-green-600">$</span>
+                    <span className="text-green-500">$</span>
                     {" "}planner --domain {selectedDomain} --run
                     <BlinkingCursor />
                   </motion.div>
