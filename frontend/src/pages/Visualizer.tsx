@@ -473,6 +473,17 @@ export default function Visualizer() {
         setTransformerModelInfo(`${data.provider} (${data.model})`);
         setSelectedCachedTransformer(data.savedFile || null);
         cachedTransformersQuery.refetch();
+        // Auto-chain: trigger canvas renderer generation using the enriched states
+        // The transformer code is now available; generate the LLM canvas renderer
+        if (renderedStates.length > 0) {
+          setRenderMode("llm");
+          setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null); setSelectedCachedFile(null);
+          llmGenerateMutation.mutate({
+            domainName: customDomainName || "custom",
+            states: renderedStates.slice(0, 3),
+            provider: data.provider as "claude" | "gemini",
+          });
+        }
       }
     },
     onError: (error: any) => {
@@ -1520,9 +1531,54 @@ export default function Visualizer() {
                           Visualization
                         </h2>
                         <p className="text-xs text-slate-500 mt-1">
-                          {currentDomain?.name} &middot; {plan.length} {plan.length === 1 ? "action" : "actions"}
+                          {isCustomDomain ? (customDomainName || "Custom Domain") : currentDomain?.name} &middot; {plan.length} {plan.length === 1 ? "action" : "actions"}
                         </p>
                       </div>
+                      {/* Custom domain pipeline status badges */}
+                      {isCustomDomain && renderedStates.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          {/* Step 1: Transformer */}
+                          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                            isTransformerGenerating
+                              ? "bg-purple-500/10 text-purple-300 border-purple-500/25 animate-pulse"
+                              : llmTransformerCode
+                              ? "bg-purple-500/10 text-purple-400 border-purple-500/25"
+                              : transformerError
+                              ? "bg-red-500/10 text-red-400 border-red-500/20"
+                              : "bg-white/[0.04] text-slate-500 border-white/[0.06]"
+                          }`}>
+                            {isTransformerGenerating ? (
+                              <><motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-3 h-3 border border-purple-400 border-t-transparent rounded-full" /><span>Analyzing domain…</span></>
+                            ) : llmTransformerCode ? (
+                              <><CheckCircleIcon className="w-3 h-3" /><span>Transformer ready</span></>
+                            ) : transformerError ? (
+                              <><AlertIcon className="w-3 h-3" /><span>Transformer failed</span></>
+                            ) : (
+                              <><span className="w-3 h-3 rounded-full bg-slate-600" /><span>Transformer pending</span></>
+                            )}
+                          </div>
+                          {/* Step 2: Canvas renderer */}
+                          {(llmTransformerCode || isLlmGenerating || llmRendererCode) && (
+                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                              isLlmGenerating
+                                ? "bg-green-500/10 text-green-300 border-green-500/25 animate-pulse"
+                                : llmRendererCode
+                                ? "bg-green-500/10 text-green-400 border-green-500/25"
+                                : llmError
+                                ? "bg-red-500/10 text-red-400 border-red-500/20"
+                                : "bg-white/[0.04] text-slate-500 border-white/[0.06]"
+                            }`}>
+                              {isLlmGenerating ? (
+                                <><motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-3 h-3 border border-green-400 border-t-transparent rounded-full" /><span>Drawing…</span></>
+                              ) : llmRendererCode ? (
+                                <><CheckCircleIcon className="w-3 h-3" /><span>Renderer ready</span></>
+                              ) : llmError ? (
+                                <><AlertIcon className="w-3 h-3" /><span>Renderer failed</span></>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {plannerInfo && (
                         <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
                           plannerInfo.used_planner
