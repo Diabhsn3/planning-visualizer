@@ -72,7 +72,9 @@ def visualize_plan(
         strategy = get_strategy(strategy_id)
         
         # Step 0: Check for domain mismatch BEFORE running planner
-        if domain_name:
+        # Skip mismatch detection for custom domains (they are user-defined)
+        is_custom_domain = domain_name == "custom" or domain_name not in DOMAIN_SIGNATURES
+        if domain_name and not is_custom_domain:
             try:
                 with open(problem_path, 'r') as f:
                     problem_content = f.read()

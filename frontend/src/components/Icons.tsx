@@ -311,3 +311,29 @@ export const SatelliteIcon = ({ className = "" }: IconProps) => (
     <path d="M8 2C4.1 2 1 4.7 1 8.5" stroke="currentColor" strokeWidth="0.7" strokeLinecap="round" strokeOpacity="0.22" />
   </svg>
 );
+
+export const PlusIcon = ({ className = "" }: IconProps) => (
+  <svg viewBox="0 0 16 16" fill="none" className={className}>
+    <line x1="8" y1="3" x2="8" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <line x1="3" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+export const SparklesIcon = ({ className = "" }: IconProps) => (
+  <svg viewBox="0 0 16 16" fill="none" className={className}>
+    <path d="M8 2L9 5.5L12.5 6.5L9 7.5L8 11L7 7.5L3.5 6.5L7 5.5L8 2Z"
+      stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" fill="currentColor" fillOpacity="0.15" />
+    <path d="M12.5 10L13 11.5L14.5 12L13 12.5L12.5 14L12 12.5L10.5 12L12 11.5L12.5 10Z"
+      stroke="currentColor" strokeWidth="0.9" strokeLinejoin="round" strokeOpacity="0.7" />
+    <path d="M3.5 2L4 3L5 3.5L4 4L3.5 5L3 4L2 3.5L3 3L3.5 2Z"
+      stroke="currentColor" strokeWidth="0.8" strokeLinejoin="round" strokeOpacity="0.5" />
+  </svg>
+);
+
+export const LayersIcon = ({ className = "" }: IconProps) => (
+  <svg viewBox="0 0 16 16" fill="none" className={className}>
+    <path d="M8 1.5L14 5L8 8.5L2 5L8 1.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M2 8.5L8 12L14 8.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.6" />
+    <path d="M2 11L8 14.5L14 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.35" />
+  </svg>
+);

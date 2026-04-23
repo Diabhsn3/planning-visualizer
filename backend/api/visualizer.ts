@@ -319,6 +319,95 @@ export const visualizerRouter = router({
     }),
 
   /**
+   * Upload a fully custom domain + problem file and solve with planner.
+   * Unlike uploadAndGenerate, this accepts any domain name and requires
+   * the domain PDDL content to be provided. The DefaultRenderer handles
+   * state generation for unknown domains.
+   */
+  uploadAndGenerateCustom: publicProcedure
+    .input(
+      z.object({
+        domainContent: z.string().min(1, "Domain PDDL content is required"),
+        problemContent: z.string().min(1, "Problem PDDL content is required"),
+        domainName: z.string().min(1, "Domain name is required"),
+        searchStrategy: z.enum(VALID_STRATEGY_IDS).optional().default("lazy-greedy-ff"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      console.log('[uploadAndGenerateCustom] Starting with custom domain:', input.domainName);
+      console.log('[uploadAndGenerateCustom] Search strategy:', input.searchStrategy);
+
+      let domainPath: string = "";
+      let problemPath: string = "";
+
+      try {
+        const uploadsDir = path.join(__dirname, "uploads");
+        await mkdir(uploadsDir, { recursive: true });
+        const timestamp = Date.now();
+
+        domainPath = path.join(uploadsDir, `custom_domain_${timestamp}.pddl`);
+        problemPath = path.join(uploadsDir, `custom_problem_${timestamp}.pddl`);
+        await writeFile(domainPath, input.domainContent, "utf-8");
+        await writeFile(problemPath, input.problemContent, "utf-8");
+
+        const pythonScript = path.join(PLANNER_DIR, "visualizer_api.py");
+        console.log('[uploadAndGenerateCustom] Running Python script...');
+
+        // Pass "custom" as domain_name to skip domain mismatch detection
+        const { stdout, stderr } = await execAsync(
+          `"${PYTHON_CMD}" "${pythonScript}" "${domainPath}" "${problemPath}" "custom" "${input.searchStrategy}"`,
+          {
+            maxBuffer: 50 * 1024 * 1024,
+            timeout: 2400000,
+            env: {
+              ...process.env,
+              PYTHONPATH: '',
+              PYTHONHOME: '',
+            },
+          }
+        );
+
+        console.log('[uploadAndGenerateCustom] Python script completed');
+        if (stderr && !stdout) {
+          throw new Error(`Python error: ${stderr}`);
+        }
+
+        const data = JSON.parse(stdout);
+        if (!data.success) {
+          throw new Error(data.error || "Failed to solve custom problem");
+        }
+
+        try {
+          await unlink(domainPath);
+          await unlink(problemPath);
+        } catch { /* ignore cleanup errors */ }
+
+        return {
+          success: true,
+          domain: data.domain,
+          problem: data.problem,
+          plan: data.plan,
+          num_states: data.num_states,
+          states: data.states,
+          used_planner: data.used_planner,
+          planner_info: data.planner_info,
+          search_strategy: data.search_strategy,
+        };
+      } catch (error) {
+        try {
+          if (domainPath) await unlink(domainPath).catch(() => {});
+          if (problemPath) await unlink(problemPath).catch(() => {});
+        } catch { /* ignore */ }
+        console.error('[uploadAndGenerateCustom] Error:', error);
+        throw new Error(
+          error instanceof Error
+            ? error.message
+            : "Failed to process custom domain files"
+        );
+      }
+    }),
+
+  /**
    * Get list of available domains
    */
   listDomains: publicProcedure.query(() => {

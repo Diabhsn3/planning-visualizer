@@ -10,6 +10,7 @@ import {
   ChevronDownIcon, WandIcon, RefreshIcon, BrainIcon,
   TrashIcon, HistoryIcon, MenuIcon, CloseIcon, TerminalIcon,
   BlocksWorldIcon, GripperIcon, DepotIcon, HanoiIcon, RoverIcon, SatelliteIcon,
+  PlusIcon, SparklesIcon, LayersIcon,
 } from "@/components/Icons";
 
 interface SearchStrategy {
@@ -268,6 +269,22 @@ export default function Visualizer() {
     show: boolean; title: string; message: string;
     errorType?: string; suggestedDomain?: string; suggestedDomainName?: string;
   }>({ show: false, title: "", message: "" });
+  // Custom Domain state
+  const [isCustomDomain, setIsCustomDomain]         = useState(false);
+  const [customDomainName, setCustomDomainName]     = useState("");
+  const [customDomainFile, setCustomDomainFile]     = useState<File | null>(null);
+  const [customDomainText, setCustomDomainText]     = useState("");
+  const [customDomainInputMode, setCustomDomainInputMode] = useState<"file" | "text">("file");
+  const [customProblemFile, setCustomProblemFile]   = useState<File | null>(null);
+  const [customProblemText, setCustomProblemText]   = useState("");
+  const [customProblemInputMode, setCustomProblemInputMode] = useState<"file" | "text">("file");
+  // LLM Transformer state (for custom domains)
+  const [llmTransformerCode, setLlmTransformerCode]     = useState<string | null>(null);
+  const [isTransformerGenerating, setIsTransformerGenerating] = useState(false);
+  const [transformerError, setTransformerError]         = useState<string | null>(null);
+  const [transformerModelInfo, setTransformerModelInfo] = useState<string | null>(null);
+  const [showCachedTransformers, setShowCachedTransformers] = useState(false);
+  const [selectedCachedTransformer, setSelectedCachedTransformer] = useState<string | null>(null);
 
   const strategiesQuery      = trpc.visualizer.listStrategies.useQuery();
   const statusQuery          = trpc.visualizer.checkStatus.useQuery(undefined, { enabled: showStatus });
@@ -311,6 +328,12 @@ export default function Visualizer() {
     // Reset visualization state when switching domains
     setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null);
     setIsPlaying(false); if (playbackIntervalRef.current) { clearInterval(playbackIntervalRef.current); playbackIntervalRef.current = null; }
+    // Reset custom domain state when switching to a built-in domain
+    if (isCustomDomain) {
+      setIsCustomDomain(false); setCustomDomainName(""); setCustomDomainFile(null);
+      setCustomDomainText(""); setCustomProblemFile(null); setCustomProblemText("");
+      setLlmTransformerCode(null); setTransformerError(null); setTransformerModelInfo(null);
+    }
   }, [selectedDomain]);
 
   useEffect(() => {
@@ -421,9 +444,120 @@ export default function Visualizer() {
 
   useEffect(() => { setLlmRendererCode(null); setLlmError(null); setLlmModelInfo(null); setSelectedCachedFile(null); }, [selectedDomain]);
   useEffect(() => { if (renderMode === "llm") cachedRenderersQuery.refetch(); }, [renderMode, selectedDomain]);
+  // Custom domain upload mutation
+  const uploadCustomMutation = trpc.visualizer.uploadAndGenerateCustom.useMutation({
+    onSuccess: (data) => {
+      setIsProcessing(false);
+      setRenderedStates(data.states);
+      setPlan(data.plan);
+      setCurrentStateIndex(0);
+      setPlannerInfo({ used_planner: data.used_planner || false, info: data.planner_info || "Unknown", strategy: data.search_strategy });
+      setShowSuccessFlash(true);
+      setTimeout(() => setShowSuccessFlash(false), 900);
+      // Auto-trigger transformer generation after states are ready
+      if (data.states.length > 0) {
+        triggerTransformerGeneration(data.states);
+      }
+    },
+    onError: (error: any) => {
+      setIsProcessing(false);
+      setErrorModal({ show: true, title: "Error", message: error.message || "Failed to solve custom problem" });
+    },
+  });
+  // LLM Transformer mutation
+  const llmTransformerMutation = trpc.visualizer.llmGenerateTransformer.useMutation({
+    onSuccess: (data) => {
+      setIsTransformerGenerating(false);
+      if (data.code) {
+        setLlmTransformerCode(data.code); setTransformerError(null);
+        setTransformerModelInfo(`${data.provider} (${data.model})`);
+        setSelectedCachedTransformer(data.savedFile || null);
+        cachedTransformersQuery.refetch();
+      }
+    },
+    onError: (error: any) => {
+      setIsTransformerGenerating(false);
+      setTransformerError(error.message || "Failed to generate state transformer");
+    },
+  });
+  const cachedTransformersQuery = trpc.visualizer.llmListCachedTransformers.useQuery(
+    { domain: customDomainName || undefined }, { enabled: isCustomDomain }
+  );
+  const deleteTransformerMutation = trpc.visualizer.llmDeleteCachedTransformer.useMutation({
+    onSuccess: () => cachedTransformersQuery.refetch(),
+  });
+  const triggerTransformerGeneration = (states: any[]) => {
+    const domainContent = customDomainText || "";
+    if (!domainContent && !customDomainFile) return;
+    setIsTransformerGenerating(true); setTransformerError(null); setLlmTransformerCode(null); setSelectedCachedTransformer(null);
+    const readAndGenerate = (domainPddl: string) => {
+      llmTransformerMutation.mutate({
+        domainName: customDomainName || "custom",
+        domainPddl,
+        sampleStates: states.slice(0, 3),
+        provider: llmProvider,
+      });
+    };
+    if (customDomainFile) {
+      const reader = new FileReader();
+      reader.onload = (e) => readAndGenerate(e.target?.result as string);
+      reader.readAsText(customDomainFile);
+    } else {
+      readAndGenerate(customDomainText);
+    }
+  };
+  const handleLoadCachedTransformer = async (filename: string) => {
+    try {
+      setTransformerError(null);
+      const res  = await fetch(`/api/trpc/visualizer.llmLoadCachedTransformer?input=${encodeURIComponent(JSON.stringify({ json: { filename } }))}`);
+      const json = await res.json();
+      const data = json?.result?.data?.json;
+      if (data?.code) {
+        setLlmTransformerCode(data.code); setSelectedCachedTransformer(filename);
+        const parts = filename.replace('.ts','').split('_');
+        setTransformerModelInfo(`Cached (${parts.length >= 2 ? parts[parts.length - 2] : 'unknown'})`);
+      } else setTransformerError("Failed to load cached transformer");
+    } catch (e: any) { setTransformerError(e.message || "Failed to load cached transformer"); }
+  };
+  const handleDeleteCachedTransformer = (filename: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (selectedCachedTransformer === filename) { setLlmTransformerCode(null); setSelectedCachedTransformer(null); setTransformerModelInfo(null); }
+    deleteTransformerMutation.mutate({ filename });
+  };
+  // Reset custom domain state when switching away
+  useEffect(() => {
+    if (!isCustomDomain) {
+      setLlmTransformerCode(null); setTransformerError(null); setTransformerModelInfo(null);
+      setSelectedCachedTransformer(null);
+    }
+  }, [isCustomDomain]);
 
   const handleGenerate = () => {
     setIsProcessing(true);
+    // Custom domain flow: requires both domain.pddl and problem.pddl
+    if (isCustomDomain) {
+      const hasDomain = customDomainInputMode === "file" ? !!customDomainFile : !!customDomainText.trim();
+      const hasProblem = customProblemInputMode === "file" ? !!customProblemFile : !!customProblemText.trim();
+      if (!customDomainName.trim()) { setIsProcessing(false); alert("Please enter a domain name"); return; }
+      if (!hasDomain) { setIsProcessing(false); alert("Please provide the domain PDDL file"); return; }
+      if (!hasProblem) { setIsProcessing(false); alert("Please provide the problem PDDL file"); return; }
+      const readFile = (file: File): Promise<string> =>
+        new Promise((resolve) => { const r = new FileReader(); r.onload = (e) => resolve(e.target?.result as string); r.readAsText(file); });
+      const run = async () => {
+        const domainContent = customDomainInputMode === "file" && customDomainFile
+          ? await readFile(customDomainFile) : customDomainText;
+        const problemContent = customProblemInputMode === "file" && customProblemFile
+          ? await readFile(customProblemFile) : customProblemText;
+        uploadCustomMutation.mutate({
+          domainContent, problemContent,
+          domainName: customDomainName.trim(),
+          searchStrategy: selectedStrategy as any,
+        });
+      };
+      run();
+      return;
+    }
+    // Standard domain flow
     if (problemType === "custom") {
       if (inputMode === "file" && !problemFile) { setIsProcessing(false); alert("Please select a problem file"); return; }
       if (inputMode === "text" && !problemText.trim()) { setIsProcessing(false); alert("Please paste PDDL content"); return; }
@@ -736,6 +870,35 @@ export default function Visualizer() {
                           <FileCodeIcon className="w-3 h-3" />
                           View Domain Definition
                         </button>
+                        {/* Custom Domain entry */}
+                        <motion.button
+                          variants={listItem}
+                          transition={{ duration: 0.18, ease: easeOut }}
+                          onClick={() => { setIsCustomDomain(true); setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null); }}
+                          whileTap={{ scale: 0.98 }}
+                          whileHover={!isCustomDomain ? { x: 2 } : undefined}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border mt-1"
+                          style={isCustomDomain ? { background: "rgba(168,85,247,0.12)", borderColor: "rgba(168,85,247,0.35)" } : { borderColor: "transparent" }}
+                        >
+                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+                            style={{ background: isCustomDomain ? "rgba(168,85,247,0.18)" : "rgba(255,255,255,0.06)" }}>
+                            <span style={{ color: isCustomDomain ? "#c084fc" : "#64748B" }} className="transition-colors"><PlusIcon className="w-5 h-5" /></span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium leading-none transition-colors"
+                              style={{ fontFamily: "'JetBrains Mono', monospace", color: isCustomDomain ? "#c084fc" : "#CBD5E1" }}>
+                              Custom Domain
+                            </div>
+                            <div className="text-xs text-slate-500 truncate mt-0.5">Upload your own PDDL domain</div>
+                          </div>
+                          {isCustomDomain && (
+                            <motion.div
+                              layoutId="domain-sel-dot"
+                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                              style={{ background: "#c084fc", boxShadow: "0 0 8px rgba(192,132,252,0.6)" }}
+                            />
+                          )}
+                        </motion.button>
                       </div>
                     </CollapseSection>
                   </div>
@@ -743,6 +906,113 @@ export default function Visualizer() {
                   {/* Divider */}
                   <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)" }} />
 
+                  {/* ── Custom Domain Panel (shown when Custom Domain is selected) ── */}
+                  <AnimatePresence>
+                    {isCustomDomain && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.25, ease: easeOut }}
+                        className="overflow-hidden"
+                      >
+                        <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(168,85,247,0.15) 30%, rgba(168,85,247,0.15) 70%, transparent)" }} />
+                        <div>
+                          <div className="px-4 py-3.5 flex items-center gap-3">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                              style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.3)" }}>
+                              <span style={{ color: "#c084fc" }}><LayersIcon className="w-3.5 h-3.5" /></span>
+                            </div>
+                            <span className="text-sm font-semibold text-slate-200"
+                              style={{ fontFamily: "'JetBrains Mono', monospace" }}>Custom Domain</span>
+                          </div>
+                          <div className="px-4 pb-4 space-y-3">
+                            {/* Domain Name */}
+                            <div>
+                              <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain Name</label>
+                              <input
+                                type="text"
+                                value={customDomainName}
+                                onChange={e => setCustomDomainName(e.target.value)}
+                                placeholder="e.g. logistics, ferry, floortile..."
+                                className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 placeholder-slate-600 border border-white/[0.08] bg-white/[0.04] focus:outline-none focus:border-purple-500/40 focus:bg-white/[0.06] transition-all"
+                                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                              />
+                            </div>
+                            {/* Domain PDDL */}
+                            <div>
+                              <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain PDDL</label>
+                              <div className="flex gap-1 mb-2">
+                                {(["file", "text"] as const).map(m => (
+                                  <button key={m} onClick={() => setCustomDomainInputMode(m)}
+                                    className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                                    style={{ background: customDomainInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customDomainInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customDomainInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
+                                    {m === "file" ? "Upload File" : "Paste Text"}
+                                  </button>
+                                ))}
+                              </div>
+                              {customDomainInputMode === "file" ? (
+                                <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
+                                  style={{ borderColor: customDomainFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customDomainFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
+                                  <span style={{ color: customDomainFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
+                                  <span className="text-xs text-center" style={{ color: customDomainFile ? "#c084fc" : "#475569" }}>
+                                    {customDomainFile ? customDomainFile.name : "Click to upload domain.pddl"}
+                                  </span>
+                                  <input type="file" accept=".pddl,.txt" className="hidden"
+                                    onChange={e => setCustomDomainFile(e.target.files?.[0] || null)} />
+                                </label>
+                              ) : (
+                                <Textarea value={customDomainText} onChange={e => setCustomDomainText(e.target.value)}
+                                  placeholder="(define (domain my-domain)&#10;  (:requirements :strips)&#10;  ...)"
+                                  className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
+                                />
+                              )}
+                            </div>
+                            {/* Problem PDDL */}
+                            <div>
+                              <label className="text-xs font-medium text-slate-400 block mb-1.5">Problem PDDL</label>
+                              <div className="flex gap-1 mb-2">
+                                {(["file", "text"] as const).map(m => (
+                                  <button key={m} onClick={() => setCustomProblemInputMode(m)}
+                                    className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                                    style={{ background: customProblemInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customProblemInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customProblemInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
+                                    {m === "file" ? "Upload File" : "Paste Text"}
+                                  </button>
+                                ))}
+                              </div>
+                              {customProblemInputMode === "file" ? (
+                                <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
+                                  style={{ borderColor: customProblemFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customProblemFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
+                                  <span style={{ color: customProblemFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
+                                  <span className="text-xs text-center" style={{ color: customProblemFile ? "#c084fc" : "#475569" }}>
+                                    {customProblemFile ? customProblemFile.name : "Click to upload problem.pddl"}
+                                  </span>
+                                  <input type="file" accept=".pddl,.txt" className="hidden"
+                                    onChange={e => setCustomProblemFile(e.target.files?.[0] || null)} />
+                                </label>
+                              ) : (
+                                <Textarea value={customProblemText} onChange={e => setCustomProblemText(e.target.value)}
+                                  placeholder="(define (problem my-problem)&#10;  (:domain my-domain)&#10;  ...)"
+                                  className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)" }} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  {/* ── Step 2: Problem (hidden when custom domain is selected) ── */}
+                  <AnimatePresence>
+                    {!isCustomDomain && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2, ease: easeOut }}
+                        className="overflow-hidden"
+                      >
                   {/* ── Step 2: Problem ── */}
                   <div>
                     <div className="px-4 py-3.5 flex items-center gap-3">
@@ -820,6 +1090,9 @@ export default function Visualizer() {
                       </AnimatePresence>
                     </div>
                   </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Divider */}
                   <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)" }} />
@@ -1040,6 +1313,106 @@ export default function Visualizer() {
                     </div>
                   </CollapseSection>
                 </motion.div>
+                {/* ── Transformer Status (shown for custom domains) ── */}
+                <AnimatePresence>
+                  {isCustomDomain && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.22, ease: easeOut }}
+                      className="overflow-hidden"
+                    >
+                      <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 overflow-hidden mb-0">
+                        <div className="px-4 py-3 border-b border-purple-500/10 flex items-center gap-2">
+                          <SparklesIcon className="w-4 h-4 text-purple-400" />
+                          <span className="text-xs font-semibold text-slate-300" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                            State Transformer
+                          </span>
+                          {llmTransformerCode && (
+                            <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/25">
+                              Active
+                            </span>
+                          )}
+                        </div>
+                        <div className="p-3 space-y-2">
+                          {isTransformerGenerating && (
+                            <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-500/8 px-3 py-2 rounded-lg border border-purple-500/20">
+                              <div className="w-3.5 h-3.5 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin flex-shrink-0" />
+                              Generating state transformer...
+                            </div>
+                          )}
+                          {llmTransformerCode && !isTransformerGenerating && (
+                            <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-500/8 px-3 py-2 rounded-lg border border-purple-500/20">
+                              <CheckCircleIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                              Transformer active{transformerModelInfo && ` — ${transformerModelInfo}`}
+                            </div>
+                          )}
+                          {transformerError && (
+                            <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/8 px-3 py-2 rounded-lg border border-red-500/20">
+                              <AlertIcon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                              <span className="leading-relaxed">{transformerError}</span>
+                            </div>
+                          )}
+                          {renderedStates.length > 0 && !isTransformerGenerating && !llmTransformerCode && (
+                            <button
+                              onClick={() => triggerTransformerGeneration(renderedStates)}
+                              className="w-full py-2 px-4 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 bg-purple-500/15 text-purple-300 border border-purple-500/25 hover:bg-purple-500/25 hover:text-purple-200"
+                            >
+                              <SparklesIcon className="w-3 h-3" />
+                              Generate State Transformer
+                            </button>
+                          )}
+                          {/* Cached Transformers */}
+                          {(cachedTransformersQuery.data?.length ?? 0) > 0 && (
+                            <div className="border border-white/[0.06] rounded-lg overflow-hidden">
+                              <button onClick={() => setShowCachedTransformers(!showCachedTransformers)}
+                                className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
+                                <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                                  <HistoryIcon className="w-3.5 h-3.5" />
+                                  Cached Transformers
+                                  <span className="bg-white/[0.08] text-slate-400 px-2 py-0.5 rounded-full text-[11px]">
+                                    {cachedTransformersQuery.data?.length}
+                                  </span>
+                                </div>
+                                <motion.div animate={{ rotate: showCachedTransformers ? 0 : -90 }} transition={{ duration: 0.16 }}>
+                                  <ChevronDownIcon className="w-3.5 h-3.5 text-slate-600" />
+                                </motion.div>
+                              </button>
+                              <CollapseSection open={showCachedTransformers}>
+                                <div className="max-h-40 overflow-y-auto divide-y divide-white/[0.04]">
+                                  {cachedTransformersQuery.data?.map((t: any) => (
+                                    <div key={t.filename} onClick={() => handleLoadCachedTransformer(t.filename)}
+                                      className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors ${
+                                        selectedCachedTransformer === t.filename
+                                          ? "bg-purple-500/10 border-l-2 border-purple-400"
+                                          : "hover:bg-white/[0.03] border-l-2 border-transparent"
+                                      }`}>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-purple-500/15 text-purple-400">
+                                            {t.provider}
+                                          </span>
+                                          <span className="text-[11px] text-slate-500">
+                                            {new Date(t.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <button onClick={e => handleDeleteCachedTransformer(t.filename, e)}
+                                        className="p-1.5 rounded-md hover:bg-red-500/15 text-slate-600 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
+                                        <TrashIcon className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </CollapseSection>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
                 {/* ── Step 4: Generate ── */}
                 <div>
                   <div className="flex items-center gap-2 mb-2 px-1">
@@ -1182,6 +1555,7 @@ export default function Visualizer() {
                       isFirst={currentStateIndex === 0}
                       isLast={currentStateIndex === renderedStates.length - 1}
                       llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
+                      transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
                       onLlmError={err => setLlmError(err)}
                     />
                   </div>

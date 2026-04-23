@@ -97,6 +97,8 @@ interface StateCanvasProps {
   isLast?: boolean;
   /** LLM-generated TypeScript code to use instead of hardcoded renderers */
   llmRendererCode?: string;
+  /** LLM-generated TypeScript code to transform/enrich raw states before rendering */
+  transformerCode?: string;
   /** Callback when LLM renderer execution fails */
   onLlmError?: (error: string) => void;
 }
@@ -207,7 +209,46 @@ function compileLlmRenderer(code: string): CompiledLlmRenderer {
   return result;
 }
 
-export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmRendererCode, onLlmError }: StateCanvasProps) {
+// ============================================
+// TRANSFORMER EXECUTION ENGINE
+// ============================================
+// Compiles and runs LLM-generated transformer code to enrich raw states
+// before they are passed to the renderer.
+const transformerCache = new Map<string, ((state: RenderedState) => RenderedState) | null>();
+
+function compileTransformer(code: string): ((state: RenderedState) => RenderedState) | null {
+  const cacheKey = code.length + "_" + code.slice(0, 80) + code.slice(-80);
+  if (transformerCache.has(cacheKey)) return transformerCache.get(cacheKey)!;
+  try {
+    const fnRegex = /(?:function|const|let|var)\s+(transform\w*)/g;
+    let match;
+    let transformFnName: string | null = null;
+    while ((match = fnRegex.exec(code)) !== null) {
+      transformFnName = match[1];
+      break;
+    }
+    if (!transformFnName) {
+      console.warn("[Transformer] No transform* function found in code");
+      transformerCache.set(cacheKey, null);
+      return null;
+    }
+    const wrappedCode = `
+      ${code}
+      return typeof ${transformFnName} !== 'undefined' ? ${transformFnName} : null;
+    `;
+    const factory = new Function(wrappedCode);
+    const fn = factory();
+    transformerCache.set(cacheKey, fn);
+    console.log("[Transformer] Compiled successfully:", transformFnName);
+    return fn;
+  } catch (error) {
+    console.error("[Transformer] Compilation failed:", error);
+    transformerCache.set(cacheKey, null);
+    return null;
+  }
+}
+
+export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmRendererCode, transformerCode, onLlmError }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -287,6 +328,22 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     ctx.clearRect(0, 0, width, height);
 
     // ============================================
+    // APPLY TRANSFORMER (enrich state before rendering)
+    // ============================================
+    let effectiveState = state;
+    if (transformerCode) {
+      try {
+        const transformFn = compileTransformer(transformerCode);
+        if (transformFn) {
+          effectiveState = transformFn(state);
+        }
+      } catch (err) {
+        console.error("[Transformer] Runtime error:", err);
+        // Fall back to raw state on error
+      }
+    }
+
+    // ============================================
     // DETERMINE RENDERER: LLM or hardcoded
     // ============================================
     let useLlm = false;
@@ -303,7 +360,7 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     }
 
     // Get domain-specific renderer configuration (hardcoded fallback)
-    const domainConfig = domainRenderers[state.domain];
+    const domainConfig = domainRenderers[effectiveState.domain];
 
     // ============================================
     // 1. DRAW BACKGROUND (BEFORE zoom/pan transform)
@@ -333,21 +390,21 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     // ============================================
     if (useLlm && llmRenderer?.render) {
       try {
-        llmRenderer.render(ctx, state);
+        llmRenderer.render(ctx, effectiveState);
       } catch (err) {
         console.error("[LLM Renderer] Render error:", err);
         onLlmError?.("LLM renderer crashed: " + (err instanceof Error ? err.message : String(err)));
         // Fall back to default renderer on error
-        renderDefault(ctx, state);
+        renderDefault(ctx, effectiveState);
       }
     } else if (domainConfig) {
-      domainConfig.render(ctx, state);
-    } else if (state.domain === "blocks-world") {
-      renderBlocksWorld(ctx, state);
-    } else if (state.domain === "gripper") {
-      renderGripper(ctx, state);
+      domainConfig.render(ctx, effectiveState);
+    } else if (effectiveState.domain === "blocks-world") {
+      renderBlocksWorld(ctx, effectiveState);
+    } else if (effectiveState.domain === "gripper") {
+      renderGripper(ctx, effectiveState);
     } else {
-      renderDefault(ctx, state);
+      renderDefault(ctx, effectiveState);
     }
 
     // Restore context state (removes zoom/pan transform)
@@ -365,7 +422,7 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     } else if (!useLlm && domainConfig?.legend) {
       domainConfig.legend(ctx, 20, 70);
     }
-  }, [state, width, height, scale, offset, isFirst, isLast, llmRendererCode]);
+  }, [state, width, height, scale, offset, isFirst, isLast, llmRendererCode, transformerCode]);
 
   // Default background with grid pattern
   function drawDefaultBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
