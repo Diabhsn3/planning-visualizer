@@ -13,6 +13,7 @@ warnings.filterwarnings('ignore')
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
 import json
+import re
 from pathlib import Path
 
 # Add modules to path
@@ -71,9 +72,38 @@ def visualize_plan(
             strategy_id = get_default_strategy_id()
         strategy = get_strategy(strategy_id)
         
-        # Step 0: Check for domain mismatch BEFORE running planner
-        # Skip mismatch detection for custom domains (they are user-defined)
+        # Step 0a: For custom domains, extract the actual domain name from the domain PDDL
+        # and patch the problem PDDL so Fast Downward doesn't reject a name mismatch.
         is_custom_domain = domain_name == "custom" or domain_name not in DOMAIN_SIGNATURES
+        if is_custom_domain:
+            try:
+                with open(domain_path, 'r') as f:
+                    domain_content = f.read()
+                # Extract domain name from: (define (domain <name>) ...)
+                domain_name_match = re.search(
+                    r'\(\s*define\s*\(\s*domain\s+([\w\-]+)\s*\)', 
+                    domain_content, re.IGNORECASE
+                )
+                if domain_name_match:
+                    actual_domain_name = domain_name_match.group(1)
+                    # Read problem PDDL and patch the (:domain ...) line to match
+                    with open(problem_path, 'r') as f:
+                        problem_content = f.read()
+                    # Replace (:domain <anything>) with the actual domain name
+                    patched_problem = re.sub(
+                        r'(\(:domain\s+)[\w\-]+(\s*\))',
+                        lambda m: m.group(1) + actual_domain_name + m.group(2),
+                        problem_content,
+                        flags=re.IGNORECASE
+                    )
+                    if patched_problem != problem_content:
+                        with open(problem_path, 'w') as f:
+                            f.write(patched_problem)
+            except Exception:
+                pass  # If patching fails, let the planner report the error naturally
+
+        # Step 0b: Check for domain mismatch BEFORE running planner
+        # Skip mismatch detection for custom domains (they are user-defined)
         if domain_name and not is_custom_domain:
             try:
                 with open(problem_path, 'r') as f:

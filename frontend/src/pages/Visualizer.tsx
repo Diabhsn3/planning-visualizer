@@ -820,13 +820,15 @@ export default function Visualizer() {
                         <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
                           style={{ fontFamily: "'JetBrains Mono', monospace" }}>Domain</span>
                         <motion.span
-                          key={selectedDomain}
+                          key={isCustomDomain ? "custom" : selectedDomain}
                           initial={{ opacity: 0, y: -4 }}
                           animate={{ opacity: 1, y: 0 }}
                           className="text-xs font-semibold px-2 py-0.5 rounded-full truncate"
-                          style={{ color: domainColors[selectedDomain]?.nameColor ?? "#4ade80", background: domainColors[selectedDomain]?.selBg ?? "rgba(34,197,94,0.1)", border: `1px solid ${domainColors[selectedDomain]?.selBorder ?? "rgba(34,197,94,0.25)"}` }}
+                          style={isCustomDomain
+                            ? { color: "#c084fc", background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)" }
+                            : { color: domainColors[selectedDomain]?.nameColor ?? "#4ade80", background: domainColors[selectedDomain]?.selBg ?? "rgba(34,197,94,0.1)", border: `1px solid ${domainColors[selectedDomain]?.selBorder ?? "rgba(34,197,94,0.25)"}` }}
                         >
-                          {currentDomain?.name}
+                          {isCustomDomain ? (customDomainName || "Custom") : currentDomain?.name}
                         </motion.span>
                       </div>
                       <motion.div animate={{ rotate: isDomainOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }}>
@@ -845,7 +847,7 @@ export default function Visualizer() {
                                 key={domain.id}
                                 variants={listItem}
                                 transition={{ duration: 0.18, ease: easeOut }}
-                                onClick={() => setSelectedDomain(domain.id)}
+                                onClick={() => { setSelectedDomain(domain.id); setIsCustomDomain(false); }}
                                 whileTap={{ scale: 0.98 }}
                                 whileHover={!sel ? { x: 2 } : undefined}
                                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border"
@@ -885,7 +887,7 @@ export default function Visualizer() {
                         <motion.button
                           variants={listItem}
                           transition={{ duration: 0.18, ease: easeOut }}
-                          onClick={() => { setIsCustomDomain(true); setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null); }}
+                          onClick={() => { setIsCustomDomain(true); setSelectedDomain(""); setIsDomainOpen(false); setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null); }}
                           whileTap={{ scale: 0.98 }}
                           whileHover={!isCustomDomain ? { x: 2 } : undefined}
                           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border mt-1"
