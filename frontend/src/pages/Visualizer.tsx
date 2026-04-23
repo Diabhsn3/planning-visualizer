@@ -10,7 +10,7 @@ import {
   ChevronDownIcon, WandIcon, RefreshIcon, BrainIcon,
   TrashIcon, HistoryIcon, MenuIcon, CloseIcon, TerminalIcon,
   BlocksWorldIcon, GripperIcon, DepotIcon, HanoiIcon, RoverIcon, SatelliteIcon,
-  PlusIcon, SparklesIcon, LayersIcon,
+  SparklesIcon,
 } from "@/components/Icons";
 
 interface SearchStrategy {
@@ -812,9 +812,11 @@ export default function Visualizer() {
                       className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-all duration-150">
                       {/* Colorized step badge */}
                       <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-                        style={{ background: domainColors[selectedDomain]?.iconBg ?? "rgba(34,197,94,0.15)", border: `1px solid ${domainColors[selectedDomain]?.selBorder ?? "rgba(34,197,94,0.3)"}` }}>
+                        style={isCustomDomain
+                          ? { background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.3)" }
+                          : { background: domainColors[selectedDomain]?.iconBg ?? "rgba(34,197,94,0.15)", border: `1px solid ${domainColors[selectedDomain]?.selBorder ?? "rgba(34,197,94,0.3)"}` }}>
                         <span className="text-[11px] font-bold"
-                          style={{ fontFamily: "'JetBrains Mono', monospace", color: domainColors[selectedDomain]?.iconColor ?? "#4ade80" }}>1</span>
+                          style={{ fontFamily: "'JetBrains Mono', monospace", color: isCustomDomain ? "#c084fc" : (domainColors[selectedDomain]?.iconColor ?? "#4ade80") }}>1</span>
                       </div>
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
@@ -837,81 +839,193 @@ export default function Visualizer() {
                     </button>
 
                     <CollapseSection open={isDomainOpen}>
-                      <div className="px-3 pb-4 pt-1 border-t border-white/[0.04]">
-                        <motion.div className="space-y-0.5" variants={listStagger} initial="initial" animate="animate">
-                          {domains.map(domain => {
-                            const DomainIcon = domain.Icon;
-                            const sel = selectedDomain === domain.id;
-                            return (
-                              <motion.button
-                                key={domain.id}
-                                variants={listItem}
-                                transition={{ duration: 0.18, ease: easeOut }}
-                                onClick={() => { setSelectedDomain(domain.id); setIsCustomDomain(false); }}
-                                whileTap={{ scale: 0.98 }}
-                                whileHover={!sel ? { x: 2 } : undefined}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border"
-                                style={sel ? { background: domainColors[domain.id]?.selBg, borderColor: domainColors[domain.id]?.selBorder } : { borderColor: "transparent" }}
-                              >
-                                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                                  style={{ background: sel ? domainColors[domain.id]?.iconBg : "rgba(255,255,255,0.06)" }}>
-                                  <span style={{ color: sel ? domainColors[domain.id]?.iconColor : "#64748B", display: "contents" }}>
-                                    <DomainIcon className="w-5 h-5 transition-colors" />
-                                  </span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-sm font-medium leading-none transition-colors"
-                                    style={{ fontFamily: "'JetBrains Mono', monospace", color: sel ? domainColors[domain.id]?.nameColor : "#CBD5E1" }}>
-                                    {domain.name}
-                                  </div>
-                                  <div className="text-xs text-slate-500 truncate mt-0.5">{domain.description}</div>
-                                </div>
-                                {sel && (
-                                  <motion.div
-                                    layoutId="domain-sel-dot"
-                                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                    style={{ background: domainColors[domain.id]?.dotColor, boxShadow: `0 0 8px ${domainColors[domain.id]?.dotGlow}` }}
-                                  />
-                                )}
-                              </motion.button>
-                            );
-                          })}
-                        </motion.div>
-                        <button
-                          onClick={() => setShowDomainDefinition(true)}
-                          className="w-full mt-2 px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/[0.04] transition-all duration-150 flex items-center justify-center gap-1.5">
-                          <FileCodeIcon className="w-3 h-3" />
-                          View Domain Definition
-                        </button>
-                        {/* Custom Domain entry */}
-                        <motion.button
-                          variants={listItem}
-                          transition={{ duration: 0.18, ease: easeOut }}
-                          onClick={() => { setIsCustomDomain(true); setSelectedDomain(""); setIsDomainOpen(false); setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null); }}
-                          whileTap={{ scale: 0.98 }}
-                          whileHover={!isCustomDomain ? { x: 2 } : undefined}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border mt-1"
-                          style={isCustomDomain ? { background: "rgba(168,85,247,0.12)", borderColor: "rgba(168,85,247,0.35)" } : { borderColor: "transparent" }}
-                        >
-                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                            style={{ background: isCustomDomain ? "rgba(168,85,247,0.18)" : "rgba(255,255,255,0.06)" }}>
-                            <span style={{ color: isCustomDomain ? "#c084fc" : "#64748B" }} className="transition-colors"><PlusIcon className="w-5 h-5" /></span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium leading-none transition-colors"
-                              style={{ fontFamily: "'JetBrains Mono', monospace", color: isCustomDomain ? "#c084fc" : "#CBD5E1" }}>
-                              Custom Domain
-                            </div>
-                            <div className="text-xs text-slate-500 truncate mt-0.5">Upload your own PDDL domain</div>
-                          </div>
+                      <div className="px-3 pb-4 pt-2 border-t border-white/[0.04] space-y-3">
+                        {/* Basic / Custom domain type toggle */}
+                        <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06]">
+                          {[
+                            { id: "basic",  label: "Basic" },
+                            { id: "custom", label: "Custom" },
+                          ].map(t => (
+                            <button
+                              key={t.id}
+                              onClick={() => {
+                                if (t.id === "custom") {
+                                  setIsCustomDomain(true);
+                                  setSelectedDomain("");
+                                  setIsDomainOpen(true);
+                                  setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null);
+                                } else {
+                                  setIsCustomDomain(false);
+                                  setCustomDomainName(""); setCustomDomainFile(null);
+                                  setCustomDomainText(""); setCustomProblemFile(null); setCustomProblemText("");
+                                  setLlmTransformerCode(null); setTransformerError(null); setTransformerModelInfo(null);
+                                  setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null);
+                                  setIsDomainOpen(true);
+                                }
+                              }}
+                              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all duration-150 ${
+                                (t.id === "custom" ? isCustomDomain : !isCustomDomain)
+                                  ? t.id === "custom"
+                                    ? "bg-purple-600/80 text-white shadow-sm"
+                                    : "bg-white/[0.08] text-slate-200 shadow-sm"
+                                  : "text-slate-600 hover:text-slate-400"
+                              }`}
+                              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                            >
+                              {t.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Basic: domain list */}
+                        <AnimatePresence mode="wait">
+                          {!isCustomDomain && (
+                            <motion.div
+                              key="basic-list"
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.2, ease: easeOut }}
+                              className="overflow-hidden space-y-0.5"
+                            >
+                              <motion.div className="space-y-0.5" variants={listStagger} initial="initial" animate="animate">
+                                {domains.map(domain => {
+                                  const DomainIcon = domain.Icon;
+                                  const sel = selectedDomain === domain.id;
+                                  return (
+                                    <motion.button
+                                      key={domain.id}
+                                      variants={listItem}
+                                      transition={{ duration: 0.18, ease: easeOut }}
+                                      onClick={() => { setSelectedDomain(domain.id); setIsCustomDomain(false); }}
+                                      whileTap={{ scale: 0.98 }}
+                                      whileHover={!sel ? { x: 2 } : undefined}
+                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border"
+                                      style={sel ? { background: domainColors[domain.id]?.selBg, borderColor: domainColors[domain.id]?.selBorder } : { borderColor: "transparent" }}
+                                    >
+                                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+                                        style={{ background: sel ? domainColors[domain.id]?.iconBg : "rgba(255,255,255,0.06)" }}>
+                                        <span style={{ color: sel ? domainColors[domain.id]?.iconColor : "#64748B", display: "contents" }}>
+                                          <DomainIcon className="w-5 h-5 transition-colors" />
+                                        </span>
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-medium leading-none transition-colors"
+                                          style={{ fontFamily: "'JetBrains Mono', monospace", color: sel ? domainColors[domain.id]?.nameColor : "#CBD5E1" }}>
+                                          {domain.name}
+                                        </div>
+                                        <div className="text-xs text-slate-500 truncate mt-0.5">{domain.description}</div>
+                                      </div>
+                                      {sel && (
+                                        <motion.div
+                                          layoutId="domain-sel-dot"
+                                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                          style={{ background: domainColors[domain.id]?.dotColor, boxShadow: `0 0 8px ${domainColors[domain.id]?.dotGlow}` }}
+                                        />
+                                      )}
+                                    </motion.button>
+                                  );
+                                })}
+                              </motion.div>
+                              <button
+                                onClick={() => setShowDomainDefinition(true)}
+                                className="w-full mt-1 px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/[0.04] transition-all duration-150 flex items-center justify-center gap-1.5">
+                                <FileCodeIcon className="w-3 h-3" />
+                                View Domain Definition
+                              </button>
+                            </motion.div>
+                          )}
+
+                          {/* Custom: PDDL upload panel */}
                           {isCustomDomain && (
                             <motion.div
-                              layoutId="domain-sel-dot"
-                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                              style={{ background: "#c084fc", boxShadow: "0 0 8px rgba(192,132,252,0.6)" }}
-                            />
+                              key="custom-panel"
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              transition={{ duration: 0.2, ease: easeOut }}
+                              className="overflow-hidden space-y-3"
+                            >
+                              {/* LLM-only notice */}
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/[0.08] border border-purple-500/20">
+                                <SparklesIcon className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                                <span className="text-[11px] text-purple-300/80 leading-relaxed">
+                                  LLM rendering is used automatically for custom domains.
+                                </span>
+                              </div>
+                              {/* Domain Name */}
+                              <div>
+                                <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain Name</label>
+                                <input
+                                  type="text"
+                                  value={customDomainName}
+                                  onChange={e => setCustomDomainName(e.target.value)}
+                                  placeholder="e.g. logistics, ferry, floortile..."
+                                  className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 placeholder-slate-600 border border-white/[0.08] bg-white/[0.04] focus:outline-none focus:border-purple-500/40 focus:bg-white/[0.06] transition-all"
+                                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                                />
+                              </div>
+                              {/* Domain PDDL */}
+                              <div>
+                                <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain PDDL</label>
+                                <div className="flex gap-1 mb-2">
+                                  {(["file", "text"] as const).map(m => (
+                                    <button key={m} onClick={() => setCustomDomainInputMode(m)}
+                                      className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                                      style={{ background: customDomainInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customDomainInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customDomainInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
+                                      {m === "file" ? "Upload File" : "Paste Text"}
+                                    </button>
+                                  ))}
+                                </div>
+                                {customDomainInputMode === "file" ? (
+                                  <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
+                                    style={{ borderColor: customDomainFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customDomainFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
+                                    <span style={{ color: customDomainFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
+                                    <span className="text-xs text-center" style={{ color: customDomainFile ? "#c084fc" : "#475569" }}>
+                                      {customDomainFile ? customDomainFile.name : "Click to upload domain.pddl"}
+                                    </span>
+                                    <input type="file" accept=".pddl,.txt" className="hidden"
+                                      onChange={e => setCustomDomainFile(e.target.files?.[0] || null)} />
+                                  </label>
+                                ) : (
+                                  <Textarea value={customDomainText} onChange={e => setCustomDomainText(e.target.value)}
+                                    placeholder="(define (domain my-domain)&#10;  (:requirements :strips)&#10;  ...)"
+                                    className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
+                                  />
+                                )}
+                              </div>
+                              {/* Problem PDDL */}
+                              <div>
+                                <label className="text-xs font-medium text-slate-400 block mb-1.5">Problem PDDL</label>
+                                <div className="flex gap-1 mb-2">
+                                  {(["file", "text"] as const).map(m => (
+                                    <button key={m} onClick={() => setCustomProblemInputMode(m)}
+                                      className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                                      style={{ background: customProblemInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customProblemInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customProblemInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
+                                      {m === "file" ? "Upload File" : "Paste Text"}
+                                    </button>
+                                  ))}
+                                </div>
+                                {customProblemInputMode === "file" ? (
+                                  <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
+                                    style={{ borderColor: customProblemFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customProblemFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
+                                    <span style={{ color: customProblemFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
+                                    <span className="text-xs text-center" style={{ color: customProblemFile ? "#c084fc" : "#475569" }}>
+                                      {customProblemFile ? customProblemFile.name : "Click to upload problem.pddl"}
+                                    </span>
+                                    <input type="file" accept=".pddl,.txt" className="hidden"
+                                      onChange={e => setCustomProblemFile(e.target.files?.[0] || null)} />
+                                  </label>
+                                ) : (
+                                  <Textarea value={customProblemText} onChange={e => setCustomProblemText(e.target.value)}
+                                    placeholder="(define (problem my-problem)&#10;  (:domain my-domain)&#10;  ...)"
+                                    className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
+                                  />
+                                )}
+                              </div>
+                            </motion.div>
                           )}
-                        </motion.button>
+                        </AnimatePresence>
                       </div>
                     </CollapseSection>
                   </div>
@@ -919,103 +1033,6 @@ export default function Visualizer() {
                   {/* Divider */}
                   <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)" }} />
 
-                  {/* ── Custom Domain Panel (shown when Custom Domain is selected) ── */}
-                  <AnimatePresence>
-                    {isCustomDomain && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.25, ease: easeOut }}
-                        className="overflow-hidden"
-                      >
-                        <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(168,85,247,0.15) 30%, rgba(168,85,247,0.15) 70%, transparent)" }} />
-                        <div>
-                          <div className="px-4 py-3.5 flex items-center gap-3">
-                            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-                              style={{ background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.3)" }}>
-                              <span style={{ color: "#c084fc" }}><LayersIcon className="w-3.5 h-3.5" /></span>
-                            </div>
-                            <span className="text-sm font-semibold text-slate-200"
-                              style={{ fontFamily: "'JetBrains Mono', monospace" }}>Custom Domain</span>
-                          </div>
-                          <div className="px-4 pb-4 space-y-3">
-                            {/* Domain Name */}
-                            <div>
-                              <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain Name</label>
-                              <input
-                                type="text"
-                                value={customDomainName}
-                                onChange={e => setCustomDomainName(e.target.value)}
-                                placeholder="e.g. logistics, ferry, floortile..."
-                                className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 placeholder-slate-600 border border-white/[0.08] bg-white/[0.04] focus:outline-none focus:border-purple-500/40 focus:bg-white/[0.06] transition-all"
-                                style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                              />
-                            </div>
-                            {/* Domain PDDL */}
-                            <div>
-                              <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain PDDL</label>
-                              <div className="flex gap-1 mb-2">
-                                {(["file", "text"] as const).map(m => (
-                                  <button key={m} onClick={() => setCustomDomainInputMode(m)}
-                                    className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
-                                    style={{ background: customDomainInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customDomainInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customDomainInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
-                                    {m === "file" ? "Upload File" : "Paste Text"}
-                                  </button>
-                                ))}
-                              </div>
-                              {customDomainInputMode === "file" ? (
-                                <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
-                                  style={{ borderColor: customDomainFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customDomainFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
-                                  <span style={{ color: customDomainFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
-                                  <span className="text-xs text-center" style={{ color: customDomainFile ? "#c084fc" : "#475569" }}>
-                                    {customDomainFile ? customDomainFile.name : "Click to upload domain.pddl"}
-                                  </span>
-                                  <input type="file" accept=".pddl,.txt" className="hidden"
-                                    onChange={e => setCustomDomainFile(e.target.files?.[0] || null)} />
-                                </label>
-                              ) : (
-                                <Textarea value={customDomainText} onChange={e => setCustomDomainText(e.target.value)}
-                                  placeholder="(define (domain my-domain)&#10;  (:requirements :strips)&#10;  ...)"
-                                  className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
-                                />
-                              )}
-                            </div>
-                            {/* Problem PDDL */}
-                            <div>
-                              <label className="text-xs font-medium text-slate-400 block mb-1.5">Problem PDDL</label>
-                              <div className="flex gap-1 mb-2">
-                                {(["file", "text"] as const).map(m => (
-                                  <button key={m} onClick={() => setCustomProblemInputMode(m)}
-                                    className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
-                                    style={{ background: customProblemInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customProblemInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customProblemInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
-                                    {m === "file" ? "Upload File" : "Paste Text"}
-                                  </button>
-                                ))}
-                              </div>
-                              {customProblemInputMode === "file" ? (
-                                <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
-                                  style={{ borderColor: customProblemFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customProblemFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
-                                  <span style={{ color: customProblemFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
-                                  <span className="text-xs text-center" style={{ color: customProblemFile ? "#c084fc" : "#475569" }}>
-                                    {customProblemFile ? customProblemFile.name : "Click to upload problem.pddl"}
-                                  </span>
-                                  <input type="file" accept=".pddl,.txt" className="hidden"
-                                    onChange={e => setCustomProblemFile(e.target.files?.[0] || null)} />
-                                </label>
-                              ) : (
-                                <Textarea value={customProblemText} onChange={e => setCustomProblemText(e.target.value)}
-                                  placeholder="(define (problem my-problem)&#10;  (:domain my-domain)&#10;  ...)"
-                                  className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
-                                />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)" }} />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                   {/* ── Step 2: Problem (hidden when custom domain is selected) ── */}
                   <AnimatePresence>
                     {!isCustomDomain && (
@@ -1177,13 +1194,17 @@ export default function Visualizer() {
                   </div>
                 </motion.div>
 
-                {/* ── Render Mode Panel ── */}
+                {/* ── Render Mode Panel (hidden for custom domains — LLM is automatic) ── */}
+                <AnimatePresence>
+                {!isCustomDomain && (
                 <motion.div
+                  key="render-mode-panel"
                   className="rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden"
                   style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(0,0,0,0.18)" }}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.32, ease: easeOut, delay: 0.05 }}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.25, ease: easeOut }}
                 >
                   <button onClick={() => setIsRenderModeOpen(!isRenderModeOpen)}
                     className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-all duration-150">
@@ -1326,6 +1347,8 @@ export default function Visualizer() {
                     </div>
                   </CollapseSection>
                 </motion.div>
+                )}
+                </AnimatePresence>
                 {/* ── Transformer Status (shown for custom domains) ── */}
                 <AnimatePresence>
                   {isCustomDomain && (
