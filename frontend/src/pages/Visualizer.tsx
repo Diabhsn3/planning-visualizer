@@ -3,6 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useMotionValueEvent, animate a
 import { trpc } from "@/lib/trpc";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
+import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
 import {
   PlayIcon, PauseIcon, SkipForwardIcon, SkipBackIcon,
   UploadIcon, FileCodeIcon, AlertIcon, ClockIcon, ZapIcon,
@@ -636,67 +637,79 @@ export default function Visualizer() {
       <AmbientOrbs />
 
       {/* ── Header ── */}
-      <header className="border-b border-white/[0.06] bg-[#0B1524]/90 backdrop-blur-md sticky top-0"
+      {/* h-24 = 96 px — enough vertical room for 3-block stack in the animation */}
+      <header className="border-b border-white/[0.06] bg-[#0B1524]/90 backdrop-blur-md sticky top-0 h-[100px]"
         style={{ zIndex: 40 }}>
-        <div className="container max-w-[1440px] py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Logo mark — grid path */}
-              <motion.div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "#0D1929", boxShadow: "0 0 0 1px rgba(34,197,94,0.3), 0 4px 24px rgba(34,197,94,0.22)" }}
-                animate={{ boxShadow: [
-                  "0 0 0 1px rgba(34,197,94,0.3), 0 4px 24px rgba(34,197,94,0.22)",
-                  "0 0 0 1px rgba(34,197,94,0.55), 0 4px 36px rgba(34,197,94,0.42)",
-                  "0 0 0 1px rgba(34,197,94,0.3), 0 4px 24px rgba(34,197,94,0.22)",
-                ]}}
-                transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-              >
-                <svg viewBox="0 0 20 20" fill="none" className="w-10 h-10">
-                  {/* Grid edges — faded */}
-                  <line x1="3" y1="5" x2="10" y2="5" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="10" y1="5" x2="17" y2="5" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="3" y1="10" x2="10" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="10" y1="10" x2="17" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="3" y1="15" x2="10" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="10" y1="15" x2="17" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="3" y1="5" x2="3" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="3" y1="10" x2="3" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="10" y1="5" x2="10" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="10" y1="10" x2="10" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="17" y1="5" x2="17" y2="10" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="17" y1="10" x2="17" y2="15" stroke="rgba(148,163,184,0.2)" strokeWidth="0.9" strokeLinecap="round"/>
-                  {/* Highlighted path edges — green */}
-                  <line x1="3" y1="5" x2="10" y2="5" stroke="#22C55E" strokeWidth="1.7" strokeLinecap="round"/>
-                  <line x1="10" y1="5" x2="10" y2="10" stroke="#22C55E" strokeWidth="1.7" strokeLinecap="round"/>
-                  <line x1="10" y1="10" x2="17" y2="10" stroke="#22C55E" strokeWidth="1.7" strokeLinecap="round"/>
-                  <line x1="17" y1="10" x2="17" y2="15" stroke="#22C55E" strokeWidth="1.7" strokeLinecap="round"/>
-                  {/* Off-path grid nodes */}
-                  {([[3,10],[3,15],[10,15],[17,5]] as [number,number][]).map(([cx,cy]) => (
-                    <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.5" fill="rgba(148,163,184,0.08)" stroke="rgba(148,163,184,0.22)" strokeWidth="0.8"/>
-                  ))}
-                  {/* Path waypoint nodes */}
-                  <circle cx="10" cy="5" r="1.8" fill="rgba(34,197,94,0.18)" stroke="#22C55E" strokeWidth="1"/>
-                  <circle cx="10" cy="10" r="1.8" fill="rgba(34,197,94,0.18)" stroke="#22C55E" strokeWidth="1"/>
-                  <circle cx="17" cy="10" r="1.8" fill="rgba(34,197,94,0.18)" stroke="#22C55E" strokeWidth="1"/>
-                  {/* Start node — indigo */}
-                  <circle cx="3" cy="5" r="2.3" fill="#6366F1"/>
-                  {/* Goal node — solid green with glow ring */}
-                  <circle cx="17" cy="15" r="2.5" fill="#22C55E"/>
-                  <circle cx="17" cy="15" r="4" fill="none" stroke="rgba(34,197,94,0.25)" strokeWidth="0.8"/>
-                </svg>
-              </motion.div>
-              <div>
-                <h1 className="text-2xl font-bold leading-none tracking-tight text-white"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                  Planning Visualizer
-                </h1>
-                <p className="text-xs text-slate-500 font-medium tracking-[0.15em] uppercase mt-1">
-                  Classical AI Planning
-                </p>
-              </div>
-            </div>
+        <div className="container max-w-[1440px] h-full flex items-center gap-6">
 
+          {/* ── Left: eye icon + title ── */}
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <motion.div
+              className="w-[84px] h-[84px] rounded-2xl flex-shrink-0 overflow-hidden"
+              style={{ boxShadow: "0 0 0 1px rgba(167,139,250,0.3), 0 4px 24px rgba(109,99,184,0.28)" }}
+              animate={{ boxShadow: [
+                "0 0 0 1px rgba(167,139,250,0.3), 0 4px 24px rgba(109,99,184,0.28)",
+                "0 0 0 1px rgba(167,139,250,0.55), 0 4px 36px rgba(109,99,184,0.50)",
+                "0 0 0 1px rgba(167,139,250,0.3), 0 4px 24px rgba(109,99,184,0.28)",
+              ]}}
+              transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+            >
+              {/* icon6.svg — glowing eye with eyelashes and three-node graph iris */}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" className="w-full h-full" aria-hidden="true">
+                <defs>
+                  <filter id="outerglow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="2.5"/>
+                  </filter>
+                  <radialGradient id="bgglow" cx="50%" cy="50%" r="60%">
+                    <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.6"/>
+                    <stop offset="100%" stopColor="#a78bfa" stopOpacity="0"/>
+                  </radialGradient>
+                </defs>
+                <rect x="2" y="2" width="96" height="96" rx="20" fill="#151336"/>
+                <circle cx="50" cy="50" r="42" fill="url(#bgglow)"/>
+                {/* glow layer */}
+                <path d="M18 50 Q50 22 82 50 Q50 78 18 50 Z" fill="none" stroke="#a78bfa" strokeWidth="4" strokeLinejoin="round" opacity="0.5" filter="url(#outerglow)"/>
+                {/* eyelashes */}
+                <g stroke="#d8cfff" strokeWidth="1.7" strokeLinecap="round">
+                  <line x1="30" y1="28" x2="28" y2="22"/>
+                  <line x1="40" y1="24" x2="39" y2="17"/>
+                  <line x1="50" y1="22" x2="50" y2="15"/>
+                  <line x1="60" y1="24" x2="61" y2="17"/>
+                  <line x1="70" y1="28" x2="72" y2="22"/>
+                </g>
+                {/* crisp eye outline */}
+                <path d="M18 50 Q50 22 82 50 Q50 78 18 50 Z" fill="none" stroke="#d8cfff" strokeWidth="2" strokeLinejoin="round"/>
+                {/* iris */}
+                <circle cx="50" cy="50" r="14" fill="#6d63b8"/>
+                <circle cx="50" cy="50" r="14" fill="none" stroke="#e8e6ff" strokeWidth="0.6" opacity="0.9"/>
+                {/* graph edges */}
+                <line x1="44" y1="46" x2="56" y2="46" stroke="#e8e6ff" strokeWidth="1" opacity="1"/>
+                <line x1="44" y1="46" x2="50" y2="56" stroke="#e8e6ff" strokeWidth="1" opacity="1"/>
+                <line x1="56" y1="46" x2="50" y2="56" stroke="#e8e6ff" strokeWidth="1" opacity="1"/>
+                {/* graph nodes */}
+                <circle cx="44" cy="46" r="2.8" fill="#c4b5fd"/>
+                <circle cx="56" cy="46" r="2.8" fill="#a5e3ff"/>
+                <circle cx="50" cy="56" r="2.8" fill="#d8b4fe"/>
+              </svg>
+            </motion.div>
+            <div>
+              <h1 className="text-2xl font-bold leading-none tracking-tight text-white"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                Planning Visualizer
+              </h1>
+              <p className="text-xs text-slate-500 font-medium tracking-[0.15em] uppercase mt-1">
+                Classical AI Planning
+              </p>
+            </div>
+          </div>
+
+          {/* ── Middle: PDDL animation — flex-1 owns its own canvas ── */}
+          <div className="relative flex-1 h-full overflow-hidden">
+            <PDDLHeaderBackground />
+          </div>
+
+          {/* ── Right: System Status button ── */}
+          <div className="flex-shrink-0">
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => setShowStatus(!showStatus)}
@@ -710,6 +723,7 @@ export default function Visualizer() {
               System Status
             </motion.button>
           </div>
+
         </div>
       </header>
 
