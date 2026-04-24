@@ -1189,7 +1189,10 @@ export default function Visualizer() {
                                     </span>
                                     {getSpeedBadge(strategy.speed)}
                                   </div>
-                                  <div className="text-xs text-slate-600 truncate mt-0.5">{strategy.description}</div>
+                                  <div className="text-xs text-slate-500 leading-relaxed mt-0.5">{strategy.description}</div>
+                                  {strategy.whenToUse && (
+                                    <div className="text-xs text-slate-600 leading-relaxed mt-0.5 italic">{strategy.whenToUse}</div>
+                                  )}
                                 </div>
                                 {sel && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0"
                                   style={{ boxShadow: "0 0 6px rgba(34,197,94,0.8)" }} />}
