@@ -7,7 +7,7 @@ import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
 import {
   PlayIcon, PauseIcon, SkipForwardIcon, SkipBackIcon,
   UploadIcon, FileCodeIcon, AlertIcon, ClockIcon, ZapIcon,
-  SettingsIcon, CpuIcon, CheckCircleIcon, XCircleIcon,
+  CheckCircleIcon,
   ChevronDownIcon, WandIcon, RefreshIcon, BrainIcon,
   TrashIcon, HistoryIcon, MenuIcon, CloseIcon, TerminalIcon,
   BlocksWorldIcon, GripperIcon, DepotIcon, HanoiIcon, RoverIcon, SatelliteIcon,
@@ -242,7 +242,6 @@ export default function Visualizer() {
   const [isPlaying, setIsPlaying]               = useState(false);
   const [playbackSpeed, setPlaybackSpeed]       = useState(1000);
   const [plannerInfo, setPlannerInfo]           = useState<{ used_planner: boolean; info: string; strategy?: any } | null>(null);
-  const [showStatus, setShowStatus]             = useState(false);
   const [elapsedTime, setElapsedTime]           = useState(0);
   const [isProcessing, setIsProcessing]         = useState(false);
   const [isDomainOpen, setIsDomainOpen]         = useState(true);
@@ -288,7 +287,6 @@ export default function Visualizer() {
   const [selectedCachedTransformer, setSelectedCachedTransformer] = useState<string | null>(null);
 
   const strategiesQuery      = trpc.visualizer.listStrategies.useQuery();
-  const statusQuery          = trpc.visualizer.checkStatus.useQuery(undefined, { enabled: showStatus });
   const domainDefinitionQuery = trpc.visualizer.getDomainDefinition.useQuery(
     { domainName: selectedDomain as any }, { enabled: showDomainDefinition }
   );
@@ -708,74 +706,14 @@ export default function Visualizer() {
             <PDDLHeaderBackground />
           </div>
 
-          {/* ── Right: System Status button ── */}
-          <div className="flex-shrink-0">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => setShowStatus(!showStatus)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-medium border transition-colors ${
-                showStatus
-                  ? "bg-green-500/10 text-green-400 border-green-500/25"
-                  : "bg-white/[0.04] text-slate-400 border-white/[0.08] hover:text-slate-200 hover:border-white/[0.14]"
-              }`}
-            >
-              <SettingsIcon className="w-3.5 h-3.5" />
-              System Status
-            </motion.button>
-          </div>
+
 
         </div>
       </header>
 
       <main className="container max-w-[1440px] py-8" style={{ position: "relative", zIndex: 1 }}>
 
-        {/* ── System Status Panel ── */}
-        <AnimatePresence>
-          {showStatus && (
-            <motion.div {...fadeInUp} transition={{ duration: 0.22, ease: easeOut }} className="mb-6">
-              <div className="rounded-2xl border border-white/[0.07] bg-[#111E30] overflow-hidden"
-                style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
-                <div className="px-6 py-4 border-b border-white/[0.05] bg-white/[0.02]">
-                  <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-                    <CpuIcon className="w-4 h-4 text-green-500" />
-                    System Status
-                  </h2>
-                </div>
-                <div className="p-6">
-                  {statusQuery.isLoading ? (
-                    <div className="flex items-center gap-3 text-sm text-slate-500">
-                      <div className="w-4 h-4 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
-                      Checking system status...
-                    </div>
-                  ) : statusQuery.data ? (
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {[
-                        { label: "Python", ok: statusQuery.data.python.available, detail: statusQuery.data.python.available ? `Version ${statusQuery.data.python.version}` : "Python 3.11+ required" },
-                        { label: "Fast Downward", ok: statusQuery.data.fastDownward.available, detail: statusQuery.data.fastDownward.available ? "Planner available" : "./build.py", isCode: !statusQuery.data.fastDownward.available },
-                      ].map(({ label, ok, detail, isCode }) => (
-                        <div key={label} className={`p-4 rounded-xl border flex items-start gap-3 ${ok ? "bg-green-500/8 border-green-500/20" : "bg-red-500/8 border-red-500/20"}`}>
-                          {ok
-                            ? <CheckCircleIcon className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                            : <XCircleIcon    className="w-4 h-4 text-red-400  mt-0.5 flex-shrink-0" />}
-                          <div>
-                            <div className="text-sm font-semibold text-slate-200">{label} {ok ? "Ready" : "Not Found"}</div>
-                            <div className={`text-xs mt-0.5 ${ok ? "text-slate-500" : "text-red-400"}`}>
-                              {isCode
-                                ? <code className="bg-red-500/15 px-1.5 py-0.5 rounded font-mono">{detail}</code>
-                                : detail}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-red-400">Failed to check system status</p>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
 
         {/* ── Main layout ── */}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
