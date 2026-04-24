@@ -3,6 +3,7 @@ import { z } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { generateRenderer, listCachedRenderers, loadCachedRenderer, deleteCachedRenderer, transpileCachedCode, type LLMProvider } from "./llm-renderer";
 import { generateTransformer, listCachedTransformers, loadCachedTransformer, deleteCachedTransformer, transpileCachedTransformer } from "./llm-domain-interpreter";
+import { generatePlanSummary } from "./llm-summarizer";
 import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
@@ -132,15 +133,12 @@ const DOMAIN_CONFIGS = {
 // Whitelist of valid search strategy IDs (must match backend/planner/search_strategies.py)
 const VALID_STRATEGY_IDS = [
   "astar-lmcut",
-  "astar-blind", 
-  "astar-hmax",
+  "astar-blind",
   "greedy-ff",
   "lazy-greedy-ff",
   "greedy-add",
   "lama-first",
   "greedy-cea",
-  "wastar-ff-3",
-  "wastar-lmcut-2",
 ] as const;
 
 export const visualizerRouter = router({
@@ -705,5 +703,29 @@ export const visualizerRouter = router({
     .mutation(async ({ input }) => {
       const success = await deleteCachedTransformer(input.filename);
       return { success, filename: input.filename };
+    }),
+
+  /**
+   * Generate a strategic summary of a plan using an LLM.
+   */
+  getPlanSummary: publicProcedure
+    .input(
+      z.object({
+        domainName: z.string(),
+        domainPddl: z.string(),
+        problemPddl: z.string(),
+        plan: z.array(z.string()),
+        provider: z.enum(["claude", "gemini"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      console.log("[getPlanSummary] Starting for domain:", input.domainName);
+      return await generatePlanSummary({
+        domainName: input.domainName,
+        domainPddl: input.domainPddl,
+        problemPddl: input.problemPddl,
+        plan: input.plan,
+        provider: input.provider as any,
+      });
     }),
 });

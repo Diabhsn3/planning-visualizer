@@ -54,17 +54,6 @@ SEARCH_STRATEGIES: Dict[str, SearchStrategy] = {
         warning="⚠️ Blind search explores all states - only suitable for tiny problems."
     ),
     
-    "astar-hmax": SearchStrategy(
-        id="astar-hmax",
-        name="A* + h^max (Optimal)",
-        description="Optimal search using A* with h^max heuristic",
-        is_optimal=True,
-        speed="slow",
-        when_to_use="Alternative optimal search when LM-cut is too slow",
-        fd_args=["--search", "astar(hmax())"],
-        warning="⚠️ Optimal search can be very slow for large problems."
-    ),
-    
     # ============== SATISFICING STRATEGIES (FAST) ==============
     
     "greedy-ff": SearchStrategy(
@@ -124,29 +113,6 @@ SEARCH_STRATEGIES: Dict[str, SearchStrategy] = {
         warning=None
     ),
     
-    # ============== WEIGHTED A* (BOUNDED SUBOPTIMAL) ==============
-    
-    "wastar-ff-3": SearchStrategy(
-        id="wastar-ff-3",
-        name="Weighted A* (w=3) + FF",
-        description="Bounded suboptimal search - at most 3x optimal cost",
-        is_optimal=False,
-        speed="medium",
-        when_to_use="When you want better quality than greedy but faster than optimal",
-        fd_args=["--search", "astar(ff(), w=3)"],
-        warning=None
-    ),
-    
-    "wastar-lmcut-2": SearchStrategy(
-        id="wastar-lmcut-2",
-        name="Weighted A* (w=2) + LM-cut",
-        description="Bounded suboptimal search - at most 2x optimal cost",
-        is_optimal=False,
-        speed="medium",
-        when_to_use="Good compromise between optimality and speed",
-        fd_args=["--search", "astar(lmcut(), w=2)"],
-        warning=None
-    ),
 }
 
 
