@@ -66,12 +66,17 @@ class PDDLParser:
         return '\n'.join(lines)
     
     def _tokenize(self, text: str) -> List[str]:
-        """Tokenize PDDL text into a list of tokens."""
+        """Tokenize PDDL text into a list of tokens.
+        
+        All tokens are lowercased because PDDL is case-insensitive by specification,
+        and planners like Fast Downward output plans in lowercase. Normalizing here
+        ensures consistent matching between parsed state predicates and plan actions.
+        """
         text = self._remove_comments(text)
         # Replace parentheses with spaces around them
         text = text.replace('(', ' ( ').replace(')', ' ) ')
-        # Split and filter empty tokens
-        tokens = [t for t in text.split() if t]
+        # Split, filter empty tokens, and lowercase for PDDL case-insensitivity
+        tokens = [t.lower() for t in text.split() if t]
         return tokens
     
     def _parse_domain(self):

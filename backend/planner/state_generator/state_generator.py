@@ -57,8 +57,10 @@ class StateGenerator:
             grounded_action = grounded_action[1:-1]
         
         parts = grounded_action.split()
-        action_name = parts[0]
-        parameters = parts[1:] if len(parts) > 1 else []
+        # Lowercase to match PDDL case-insensitive semantics
+        # (planners like Fast Downward output lowercase, but user plans may not)
+        action_name = parts[0].lower()
+        parameters = [p.lower() for p in parts[1:]] if len(parts) > 1 else []
         
         return action_name, parameters
     
