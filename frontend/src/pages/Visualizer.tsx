@@ -228,6 +228,171 @@ const ModalBackdrop = ({ children, onClose }: { children: React.ReactNode; onClo
   </motion.div>
 );
 
+// ─── Custom-domain LLM loading state ─────────────────────────────────────────
+// Shown in the visualization box while the two LLM calls (transformer →
+// renderer) are pending for a custom domain.
+
+type LoadingStage = "transformer" | "renderer";
+
+const StepPill = ({
+  n, label, state,
+}: { n: number; label: string; state: "pending" | "active" | "done" }) => (
+  <div className="flex items-center gap-2">
+    <div className={`relative w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-colors ${
+      state === "done"
+        ? "bg-green-500/15 text-green-400 ring-1 ring-green-500/35"
+        : state === "active"
+        ? "bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/45"
+        : "bg-white/[0.04] text-slate-600 ring-1 ring-white/[0.06]"
+    }`}>
+      {state === "active" && (
+        <motion.span
+          className="absolute inset-[-2px] rounded-full ring-1 ring-purple-400/70 pointer-events-none"
+          animate={{ scale: [1, 1.55], opacity: [0.55, 0] }}
+          transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
+        />
+      )}
+      {state === "done" ? <CheckCircleIcon className="w-3.5 h-3.5" /> : <span>{n}</span>}
+    </div>
+    <span className={`text-[11px] uppercase tracking-wider font-semibold ${
+      state === "done"   ? "text-green-400/85"
+      : state === "active" ? "text-purple-200"
+      : "text-slate-600"
+    }`}>{label}</span>
+  </div>
+);
+
+const FloatingParticles = () => {
+  const particles = Array.from({ length: 16 }, (_, i) => ({
+    id:       i,
+    x:        5  + (i * 37) % 90,
+    y:        10 + (i * 53) % 80,
+    delay:    (i * 0.41) % 4,
+    duration: 5  + (i * 0.31) % 4,
+    color:    i % 3 === 0 ? "#a78bfa" : i % 3 === 1 ? "#7dd3fc" : "#d8b4fe",
+  }));
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {particles.map(p => (
+        <motion.div key={p.id}
+          className="absolute w-1 h-1 rounded-full"
+          style={{ left: `${p.x}%`, top: `${p.y}%`, background: p.color }}
+          animate={{ y: [0, -22, 0], opacity: [0, 0.7, 0] }}
+          transition={{ duration: p.duration, repeat: Infinity, ease: "easeInOut", delay: p.delay }}
+        />
+      ))}
+    </div>
+  );
+};
+
+const CustomDomainLoading = ({
+  stage, domainName,
+}: { stage: LoadingStage; domainName: string }) => {
+  const copy = stage === "transformer"
+    ? { title: "Reading domain structure", desc: "Identifying objects, predicates, and how they relate" }
+    : { title: "Composing visualization",   desc: "Drawing the visual primitives that match your domain" };
+
+  return (
+    <div className="relative w-full h-[420px] flex items-center justify-center overflow-hidden rounded-xl"
+      style={{ background: "radial-gradient(ellipse at 50% 38%, rgba(167,139,250,0.07) 0%, rgba(11,21,36,0) 62%)" }}>
+
+      {/* Drawing-surface grid */}
+      <div className="absolute inset-0 opacity-[0.035] pointer-events-none"
+        style={{
+          backgroundImage: "linear-gradient(rgba(167,139,250,1) 1px, transparent 1px), linear-gradient(90deg, rgba(167,139,250,1) 1px, transparent 1px)",
+          backgroundSize:  "32px 32px",
+        }}
+      />
+
+      <FloatingParticles />
+
+      <div className="relative flex flex-col items-center px-6 text-center">
+        {/* Pulsing graph emblem (matches the brand eye icon) */}
+        <div className="relative w-32 h-32 mb-7">
+          <motion.div
+            className="absolute inset-[-14px] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(167,139,250,0.22) 0%, transparent 70%)" }}
+            animate={{ scale: [1, 1.18, 1], opacity: [0.55, 1, 0.55] }}
+            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <svg viewBox="0 0 128 128" className="absolute inset-0 w-full h-full">
+            <motion.line x1="48" y1="56" x2="80" y2="56"
+              stroke="#a78bfa" strokeWidth="1.4" strokeLinecap="round"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: [0, 1, 1, 0], opacity: [0, 1, 1, 0] }}
+              transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut", times: [0, 0.25, 0.7, 1] }}
+            />
+            <motion.line x1="48" y1="56" x2="64" y2="80"
+              stroke="#7dd3fc" strokeWidth="1.4" strokeLinecap="round"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: [0, 1, 1, 0], opacity: [0, 1, 1, 0] }}
+              transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut", delay: 0.25, times: [0, 0.25, 0.7, 1] }}
+            />
+            <motion.line x1="80" y1="56" x2="64" y2="80"
+              stroke="#d8b4fe" strokeWidth="1.4" strokeLinecap="round"
+              initial={{ pathLength: 0, opacity: 0 }}
+              animate={{ pathLength: [0, 1, 1, 0], opacity: [0, 1, 1, 0] }}
+              transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut", delay: 0.5, times: [0, 0.25, 0.7, 1] }}
+            />
+            <motion.circle cx="48" cy="56" r="5.5" fill="#c4b5fd"
+              animate={{ r: [4.5, 7, 4.5], opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.circle cx="80" cy="56" r="5.5" fill="#a5e3ff"
+              animate={{ r: [4.5, 7, 4.5], opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+            />
+            <motion.circle cx="64" cy="80" r="5.5" fill="#d8b4fe"
+              animate={{ r: [4.5, 7, 4.5], opacity: [0.7, 1, 0.7] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
+            />
+          </svg>
+        </div>
+
+        {/* Stage text crossfades when stage flips */}
+        <AnimatePresence mode="wait">
+          <motion.div key={stage}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.32, ease: easeOut }}
+          >
+            <h3 className="text-base font-semibold text-slate-100 tracking-tight"
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+              {copy.title}
+            </h3>
+            <p className="text-xs text-slate-500 mt-2 max-w-md leading-relaxed">
+              {copy.desc}
+              {domainName && stage === "transformer" && (
+                <> in <span className="text-purple-300/85 font-medium">{domainName}</span></>
+              )}…
+            </p>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Step pills with progress connector */}
+        <div className="mt-7 flex items-center gap-3">
+          <StepPill n={1} label="Analyze" state={stage === "transformer" ? "active" : "done"} />
+          <div className="relative w-14 h-[2px] rounded-full bg-white/[0.06] overflow-hidden">
+            <motion.div
+              className="absolute inset-y-0 left-0"
+              style={{ background: "linear-gradient(90deg, #a78bfa, #22c55e)" }}
+              initial={{ width: "0%" }}
+              animate={{ width: stage === "renderer" ? "100%" : "50%" }}
+              transition={{ duration: 0.55, ease: easeOut }}
+            />
+          </div>
+          <StepPill n={2} label="Render" state={stage === "renderer" ? "active" : "pending"} />
+        </div>
+
+        <p className="text-[10px] text-slate-600 mt-6 uppercase tracking-[0.22em]">
+          The AI is working · this usually takes a few seconds
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Visualizer() {
   const [selectedDomain, setSelectedDomain]     = useState("blocks-world");
@@ -1584,16 +1749,23 @@ export default function Visualizer() {
                     )}
 
                   </div>
-                  {/* Canvas */}
+                  {/* Canvas — replaced by a loading state while custom-domain LLM calls are in flight */}
                   <div className="p-4" style={{ maxHeight: "500px", overflow: "auto" }}>
-                    <StateCanvas
-                      state={renderedStates[currentStateIndex]}
-                      isFirst={currentStateIndex === 0}
-                      isLast={currentStateIndex === renderedStates.length - 1}
-                      llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
-                      transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
-                      onLlmError={err => setLlmError(err)}
-                    />
+                    {isCustomDomain && (isTransformerGenerating || isLlmGenerating) && !llmError && !transformerError ? (
+                      <CustomDomainLoading
+                        stage={isTransformerGenerating ? "transformer" : "renderer"}
+                        domainName={customDomainName}
+                      />
+                    ) : (
+                      <StateCanvas
+                        state={renderedStates[currentStateIndex]}
+                        isFirst={currentStateIndex === 0}
+                        isLast={currentStateIndex === renderedStates.length - 1}
+                        llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
+                        transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
+                        onLlmError={err => setLlmError(err)}
+                      />
+                    )}
                   </div>
 
                   {/* Controls */}
