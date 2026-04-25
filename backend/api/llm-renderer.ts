@@ -401,7 +401,6 @@ async function generateWithClaude(userMessage: string): Promise<string> {
       ],
     },
     tools: [{ type: "code_execution_20250522" as const, name: "code_execution" }],
-    tool_choice: { type: "none" as const },
     messages: [{ role: "user", content: userMessage }],
     
   });

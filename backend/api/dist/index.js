@@ -306,7 +306,6 @@ async function generateWithClaude(userMessage) {
       ]
     },
     tools: [{ type: "code_execution_20250522", name: "code_execution" }],
-    tool_choice: { type: "none" },
     messages: [{ role: "user", content: userMessage }]
   });
   const finalResponse = response;
@@ -699,7 +698,6 @@ async function generateWithClaude2(userMessage) {
       ]
     },
     tools: [{ type: "code_execution_20250522", name: "code_execution" }],
-    tool_choice: { type: "none" },
     messages: [{ role: "user", content: userMessage }]
   });
   const finalResponse = response;
