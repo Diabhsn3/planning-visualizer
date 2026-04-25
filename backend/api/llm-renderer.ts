@@ -345,10 +345,11 @@ async function generateWithClaude(userMessage: string): Promise<string> {
   console.log(`[LLM Renderer] Using Claude skill: ${skillId}`);
   console.log(`[LLM Renderer] Calling Claude (${model.id}) with Skills API...`);
 
-  // Call Claude with the skill and code execution
+  // Call Claude with the skill — system prompt forbids code execution
   const response = await client.beta.messages.create({
     model: model.id,
     max_tokens: model.maxTokens,
+    system: "CRITICAL INSTRUCTION: Do NOT use the code_execution tool under any circumstances. Do NOT run, test, or validate any code. Do NOT explain anything. Read the skill files, then output ONLY the raw TypeScript code in a single text block. No markdown fences. No commentary. Just code.",
     betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
     container: {
       skills: [
