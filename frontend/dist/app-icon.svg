@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Hasan Abu Nasra — PDDL to visual plans">
+  <title>Hasan Abu Nasra</title>
+  <desc>Eye with three-node graph iris, transparent background.</desc>
+  <path d="M18 50 Q50 22 82 50 Q50 78 18 50 Z" fill="none" stroke="#a89cee" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="50" cy="50" r="14" fill="#6d63b8"/>
+  <line x1="44" y1="46" x2="56" y2="46" stroke="#e8e6ff" stroke-width="0.9" opacity="0.9"/>
+  <line x1="44" y1="46" x2="50" y2="56" stroke="#e8e6ff" stroke-width="0.9" opacity="0.9"/>
+  <line x1="56" y1="46" x2="50" y2="56" stroke="#e8e6ff" stroke-width="0.9" opacity="0.9"/>
+  <circle cx="44" cy="46" r="2.8" fill="#a78bfa"/>
+  <circle cx="56" cy="46" r="2.8" fill="#7dd3fc"/>
+  <circle cx="50" cy="56" r="2.8" fill="#b794f4"/>
+</svg>

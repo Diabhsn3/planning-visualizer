@@ -3,6 +3,7 @@ import { z } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { generateRenderer, listCachedRenderers, loadCachedRenderer, deleteCachedRenderer, transpileCachedCode, type LLMProvider } from "./llm-renderer";
 import { generateTransformer, listCachedTransformers, loadCachedTransformer, deleteCachedTransformer, transpileCachedTransformer } from "./llm-domain-interpreter";
+import { listSavedDomains, getSavedDomain, saveDomain } from "./saved-domains";
 import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
@@ -557,9 +558,22 @@ export const visualizerRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      console.log("[llmGenerateRenderer] Starting for domain:", input.domainName);
-      console.log("[llmGenerateRenderer] Provider:", input.provider);
-      console.log("[llmGenerateRenderer] States count:", input.states.length);
+      console.log("[Stage 2 - Renderer] ========================================");
+      console.log("[Stage 2 - Renderer] Starting canvas renderer generation");
+      console.log("[Stage 2 - Renderer] Domain:", input.domainName);
+      console.log("[Stage 2 - Renderer] Provider:", input.provider);
+      console.log("[Stage 2 - Renderer] States count:", input.states.length);
+      // Log whether states appear to be enriched (have positions/properties)
+      if (input.states.length > 0) {
+        const firstState = input.states[0];
+        const hasObjects = firstState?.objects && Array.isArray(firstState.objects);
+        const firstObj = hasObjects ? firstState.objects[0] : null;
+        const isEnriched = firstObj && (firstObj.position || firstObj.properties);
+        console.log("[Stage 2 - Renderer] States enriched:", !!isEnriched);
+        if (firstObj) {
+          console.log("[Stage 2 - Renderer] Sample object keys:", Object.keys(firstObj).join(", "));
+        }
+      }
 
       const result = await generateRenderer({
         domainName: input.domainName,
@@ -568,9 +582,11 @@ export const visualizerRouter = router({
       });
 
       if (!result.success) {
+        console.error("[Stage 2 - Renderer] FAILED:", result.error);
         throw new Error(result.error || "LLM generation failed");
       }
-
+      console.log("[Stage 2 - Renderer] SUCCESS - Code length:", result.code?.length || 0);
+      console.log("[Stage 2 - Renderer] ========================================");
       return result;
     }),
 
@@ -704,4 +720,63 @@ export const visualizerRouter = router({
       return { success, filename: input.filename };
     }),
 
+
+  // ==================== SAVED DOMAINS LIBRARY ====================
+
+  /**
+   * List all saved custom domains (metadata only).
+   */
+  listSavedDomains: publicProcedure
+    .query(async () => {
+      console.log("[listSavedDomains] Fetching saved domains library");
+      const domains = await listSavedDomains();
+      console.log(`[listSavedDomains] Found ${domains.length} saved domains`);
+      return domains;
+    }),
+
+  /**
+   * Load a saved domain by ID (full data including transformer + renderer code).
+   */
+  loadSavedDomain: publicProcedure
+    .input(
+      z.object({
+        id: z.number(),
+      })
+    )
+    .query(async ({ input }) => {
+      console.log(`[loadSavedDomain] Loading domain id=${input.id}`);
+      const domain = await getSavedDomain(input.id);
+      if (!domain) {
+        throw new Error(`Saved domain not found: id=${input.id}`);
+      }
+      console.log(`[loadSavedDomain] Loaded: ${domain.displayName}`);
+      return domain;
+    }),
+
+  /**
+   * Save a custom domain to the library after successful LLM generation.
+   * Called automatically after both transformer and renderer are generated.
+   */
+  saveDomainToLibrary: publicProcedure
+    .input(
+      z.object({
+        domainName: z.string(),
+        domainPddl: z.string(),
+        transformerCode: z.string(),
+        rendererCode: z.string(),
+        provider: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      console.log(`[saveDomainToLibrary] Saving domain: ${input.domainName}`);
+      const saved = await saveDomain({
+        domainName: input.domainName,
+        domainPddl: input.domainPddl,
+        transformerCode: input.transformerCode,
+        rendererCode: input.rendererCode,
+        provider: input.provider,
+      });
+      console.log(`[saveDomainToLibrary] Saved as: ${saved.displayName} (id=${saved.id})`);
+      return saved;
+    }),
 });

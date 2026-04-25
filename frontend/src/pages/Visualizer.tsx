@@ -437,6 +437,8 @@ export default function Visualizer() {
   // Custom Domain state
   const [isCustomDomain, setIsCustomDomain]         = useState(false);
   const [customDomainName, setCustomDomainName]     = useState("");
+  const [customMode, setCustomMode]                 = useState<"saved" | "new">("saved");
+  const [selectedSavedDomainId, setSelectedSavedDomainId] = useState<number | null>(null);
   const [customDomainFile, setCustomDomainFile]     = useState<File | null>(null);
   const [customDomainText, setCustomDomainText]     = useState("");
   const [customDomainInputMode, setCustomDomainInputMode] = useState<"file" | "text">("file");
@@ -452,6 +454,19 @@ export default function Visualizer() {
   const [selectedCachedTransformer, setSelectedCachedTransformer] = useState<string | null>(null);
 
   const strategiesQuery      = trpc.visualizer.listStrategies.useQuery();
+  const savedDomainsQuery    = trpc.visualizer.listSavedDomains.useQuery(undefined, { enabled: isCustomDomain });
+  const loadSavedDomainQuery = trpc.visualizer.loadSavedDomain.useQuery(
+    { id: selectedSavedDomainId! }, { enabled: !!selectedSavedDomainId }
+  );
+  const saveDomainMutation   = trpc.visualizer.saveDomainToLibrary.useMutation({
+    onSuccess: (data) => {
+      console.log("[SavedDomains] Domain saved to library:", data.displayName);
+      savedDomainsQuery.refetch();
+    },
+    onError: (err) => {
+      console.error("[SavedDomains] Failed to save domain:", err.message);
+    },
+  });
   const domainDefinitionQuery = trpc.visualizer.getDomainDefinition.useQuery(
     { domainName: selectedDomain as any }, { enabled: showDomainDefinition }
   );
@@ -567,6 +582,31 @@ export default function Visualizer() {
         setLlmModelInfo(`${data.provider} (${data.model})`);
         setSelectedCachedFile(data.savedFile || null);
         cachedRenderersQuery.refetch();
+
+        // Auto-save to Saved Domains Library (only for new custom domains)
+        if (isCustomDomain && customMode === "new" && llmTransformerCode) {
+          const getDomainPddl = async () => {
+            if (customDomainInputMode === "file" && customDomainFile) {
+              return new Promise<string>((resolve) => {
+                const r = new FileReader();
+                r.onload = (e) => resolve(e.target?.result as string);
+                r.readAsText(customDomainFile);
+              });
+            }
+            return customDomainText;
+          };
+          getDomainPddl().then(domainPddl => {
+            if (domainPddl) {
+              saveDomainMutation.mutate({
+                domainName: customDomainName || "custom",
+                domainPddl,
+                transformerCode: llmTransformerCode,
+                rendererCode: data.code!,
+                provider: data.provider || "unknown",
+              });
+            }
+          });
+        }
       }
     },
     onError: (error: any) => { setIsLlmGenerating(false); setLlmError(error.message || "Failed to generate LLM renderer"); },
@@ -638,13 +678,43 @@ export default function Visualizer() {
         setSelectedCachedTransformer(data.savedFile || null);
         cachedTransformersQuery.refetch();
         // Auto-chain: trigger canvas renderer generation using the enriched states
-        // The transformer code is now available; generate the LLM canvas renderer
+        // Apply transformer to sample states FIRST so renderer LLM sees enriched
+        // objects (with positions, colors, etc.) instead of raw predicate data.
         if (renderedStates.length > 0) {
           setRenderMode("llm");
           setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null); setSelectedCachedFile(null);
+
+          // Dynamically find and run the transform* function on sample states
+          let enrichedStates = renderedStates.slice(0, 3);
+          try {
+            const fnMatch = data.code.match(/function\s+(transform\w+)/);
+            const transformFnName = fnMatch ? fnMatch[1] : null;
+            if (transformFnName) {
+              // eslint-disable-next-line no-new-func
+              const factory = new Function(
+                data.code + "\nreturn typeof " + transformFnName + " !== 'undefined' ? " + transformFnName + " : null;"
+              );
+              const transformFn = factory();
+              if (typeof transformFn === 'function') {
+                enrichedStates = enrichedStates.map((s: any) => {
+                  try { return transformFn(s); } catch { return s; }
+                });
+              }
+            }
+          } catch (e) {
+            console.warn("[Auto-chain] Could not pre-enrich states for renderer LLM:", e);
+          }
+
+          console.log("[Stage 2 - Frontend] Sending enriched states to renderer LLM");
+          console.log("[Stage 2 - Frontend] Domain:", customDomainName || "custom");
+          console.log("[Stage 2 - Frontend] Provider:", data.provider);
+          console.log("[Stage 2 - Frontend] Enriched states count:", enrichedStates.length);
+          if (enrichedStates.length > 0 && enrichedStates[0]?.objects?.[0]) {
+            console.log("[Stage 2 - Frontend] Sample object keys:", Object.keys(enrichedStates[0].objects[0]).join(", "));
+          }
           llmGenerateMutation.mutate({
             domainName: customDomainName || "custom",
-            states: renderedStates.slice(0, 3),
+            states: enrichedStates,
             provider: data.provider as "claude" | "gemini",
           });
         }
@@ -709,15 +779,41 @@ export default function Visualizer() {
 
   const handleGenerate = () => {
     setIsProcessing(true);
-    // Custom domain flow: requires both domain.pddl and problem.pddl
+    // Custom domain flow
     if (isCustomDomain) {
-      const hasDomain = customDomainInputMode === "file" ? !!customDomainFile : !!customDomainText.trim();
       const hasProblem = customProblemInputMode === "file" ? !!customProblemFile : !!customProblemText.trim();
-      if (!customDomainName.trim()) { setIsProcessing(false); alert("Please enter a domain name"); return; }
-      if (!hasDomain) { setIsProcessing(false); alert("Please provide the domain PDDL file"); return; }
       if (!hasProblem) { setIsProcessing(false); alert("Please provide the problem PDDL file"); return; }
+
       const readFile = (file: File): Promise<string> =>
         new Promise((resolve) => { const r = new FileReader(); r.onload = (e) => resolve(e.target?.result as string); r.readAsText(file); });
+
+      // Saved domain flow: use stored domain PDDL + pre-trained transformer/renderer
+      if (customMode === "saved" && selectedSavedDomainId && loadSavedDomainQuery.data) {
+        const savedDomain = loadSavedDomainQuery.data;
+        console.log("[handleGenerate] Using saved domain:", savedDomain.displayName);
+        const run = async () => {
+          const problemContent = customProblemInputMode === "file" && customProblemFile
+            ? await readFile(customProblemFile) : customProblemText;
+          // Use the saved domain's PDDL for planning
+          uploadCustomMutation.mutate({
+            domainContent: savedDomain.domainPddl,
+            problemContent,
+            domainName: savedDomain.domainName,
+            searchStrategy: selectedStrategy as any,
+          });
+          // Pre-load the saved transformer and renderer codes
+          setLlmTransformerCode(savedDomain.transformerCode);
+          setLlmRendererCode(savedDomain.rendererCode);
+          setRenderMode("llm");
+        };
+        run();
+        return;
+      }
+
+      // Upload New flow: requires both domain.pddl and problem.pddl
+      const hasDomain = customDomainInputMode === "file" ? !!customDomainFile : !!customDomainText.trim();
+      if (!customDomainName.trim()) { setIsProcessing(false); alert("Please enter a domain name"); return; }
+      if (!hasDomain) { setIsProcessing(false); alert("Please provide the domain PDDL file"); return; }
       const run = async () => {
         const domainContent = customDomainInputMode === "file" && customDomainFile
           ? await readFile(customDomainFile) : customDomainText;
@@ -1053,7 +1149,7 @@ export default function Visualizer() {
                             </motion.div>
                           )}
 
-                          {/* Custom: PDDL upload panel */}
+                          {/* Custom: Saved / Upload New sub-toggle + panels */}
                           {isCustomDomain && (
                             <motion.div
                               key="custom-panel"
@@ -1063,6 +1159,150 @@ export default function Visualizer() {
                               transition={{ duration: 0.2, ease: easeOut }}
                               className="overflow-hidden space-y-3"
                             >
+                              {/* Sub-toggle: Saved / Upload New */}
+                              <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: "rgba(255,255,255,0.04)" }}>
+                                {([{ id: "saved", label: "Saved Domains" }, { id: "new", label: "Upload New" }] as const).map(m => (
+                                  <button key={m.id} onClick={() => { setCustomMode(m.id); if (m.id === "new") setSelectedSavedDomainId(null); }}
+                                    className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                                      customMode === m.id
+                                        ? "bg-purple-500/20 text-purple-300 shadow-sm border border-purple-500/30"
+                                        : "text-slate-500 hover:text-slate-400 border border-transparent"
+                                    }`}
+                                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                                  >
+                                    {m.label}
+                                  </button>
+                                ))}
+                              </div>
+
+                              {/* Saved Domains List */}
+                              <AnimatePresence mode="wait">
+                                {customMode === "saved" && (
+                                  <motion.div
+                                    key="saved-list"
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2, ease: easeOut }}
+                                    className="overflow-hidden space-y-1"
+                                  >
+                                    {savedDomainsQuery.isLoading && (
+                                      <div className="text-xs text-slate-500 text-center py-4">Loading saved domains...</div>
+                                    )}
+                                    {savedDomainsQuery.data && savedDomainsQuery.data.length === 0 && (
+                                      <div className="text-center py-6 space-y-2">
+                                        <div className="text-xs text-slate-500">No saved domains yet.</div>
+                                        <div className="text-xs text-slate-600">Upload a new domain and it will be saved here automatically.</div>
+                                      </div>
+                                    )}
+                                    {savedDomainsQuery.data?.map(sd => {
+                                      const isSel = selectedSavedDomainId === sd.id;
+                                      return (
+                                        <motion.button
+                                          key={sd.id}
+                                          onClick={() => {
+                                            setSelectedSavedDomainId(sd.id);
+                                            setCustomDomainName(sd.domainName);
+                                          }}
+                                          whileTap={{ scale: 0.98 }}
+                                          whileHover={!isSel ? { x: 2 } : undefined}
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border"
+                                          style={isSel
+                                            ? { background: "rgba(168,85,247,0.1)", borderColor: "rgba(168,85,247,0.35)" }
+                                            : { borderColor: "transparent" }
+                                          }
+                                        >
+                                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+                                            style={{ background: isSel ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.06)" }}>
+                                            <FileCodeIcon className={`w-5 h-5 ${isSel ? "text-purple-400" : "text-slate-500"}`} />
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-medium leading-none transition-colors"
+                                              style={{ fontFamily: "'JetBrains Mono', monospace", color: isSel ? "#E9D5FF" : "#CBD5E1" }}>
+                                              {sd.displayName}
+                                            </div>
+                                            <div className="text-xs text-slate-500 mt-0.5">
+                                              {sd.provider} &middot; {new Date(sd.createdAt).toLocaleDateString()}
+                                            </div>
+                                          </div>
+                                          {isSel && (
+                                            <motion.div
+                                              layoutId="saved-domain-dot"
+                                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                              style={{ background: "#A855F7", boxShadow: "0 0 8px rgba(168,85,247,0.7)" }}
+                                            />
+                                          )}
+                                        </motion.button>
+                                      );
+                                    })}
+
+                                    {/* When a saved domain is selected, show domain definition + problem upload */}
+                                    <AnimatePresence>
+                                      {selectedSavedDomainId && loadSavedDomainQuery.data && (
+                                        <motion.div
+                                          initial={{ opacity: 0, height: 0 }}
+                                          animate={{ opacity: 1, height: "auto" }}
+                                          exit={{ opacity: 0, height: 0 }}
+                                          transition={{ duration: 0.2, ease: easeOut }}
+                                          className="overflow-hidden space-y-3 pt-2"
+                                        >
+                                          {/* Domain Definition Preview */}
+                                          <div>
+                                            <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain Definition</label>
+                                            <div className="w-full h-28 text-xs font-mono bg-white/[0.04] border border-white/[0.08] rounded-lg p-2 overflow-auto text-slate-400">
+                                              <pre className="whitespace-pre-wrap">{loadSavedDomainQuery.data.domainPddl}</pre>
+                                            </div>
+                                          </div>
+                                          {/* Problem PDDL */}
+                                          <div>
+                                            <label className="text-xs font-medium text-slate-400 block mb-1.5">Problem PDDL</label>
+                                            <div className="flex gap-1 mb-2">
+                                              {(["file", "text"] as const).map(m => (
+                                                <button key={m} onClick={() => setCustomProblemInputMode(m)}
+                                                  className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
+                                                  style={{ background: customProblemInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customProblemInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customProblemInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
+                                                  {m === "file" ? "Upload File" : "Paste Text"}
+                                                </button>
+                                              ))}
+                                            </div>
+                                            {customProblemInputMode === "file" ? (
+                                              <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
+                                                style={{ borderColor: customProblemFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customProblemFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
+                                                <span style={{ color: customProblemFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
+                                                <span className="text-xs text-center" style={{ color: customProblemFile ? "#c084fc" : "#475569" }}>
+                                                  {customProblemFile ? customProblemFile.name : "Click to upload problem.pddl"}
+                                                </span>
+                                                <input type="file" accept=".pddl,.txt" className="hidden"
+                                                  onChange={e => setCustomProblemFile(e.target.files?.[0] || null)} />
+                                              </label>
+                                            ) : (
+                                              <Textarea value={customProblemText} onChange={e => setCustomProblemText(e.target.value)}
+                                                placeholder="(define (problem my-problem)&#10;  (:domain my-domain)&#10;  ...)"
+                                                className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
+                                              />
+                                            )}
+                                          </div>
+                                          {/* Info banner */}
+                                          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.15)" }}>
+                                            <SparklesIcon className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                                            <span className="text-purple-300/80">Pre-trained renderer will be used. No LLM call needed.</span>
+                                          </div>
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </motion.div>
+                                )}
+
+                                {/* Upload New panel */}
+                                {customMode === "new" && (
+                                  <motion.div
+                                    key="upload-new"
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2, ease: easeOut }}
+                                    className="overflow-hidden space-y-3"
+                                  >
                               {/* LLM-only notice */}
                               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/[0.08] border border-purple-500/20">
                                 <SparklesIcon className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
@@ -1140,6 +1380,9 @@ export default function Visualizer() {
                                   />
                                 )}
                               </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </motion.div>
                           )}
                         </AnimatePresence>
