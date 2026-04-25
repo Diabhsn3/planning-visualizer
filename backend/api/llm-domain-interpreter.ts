@@ -31,7 +31,6 @@ import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createReadStream } from "fs";
-import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -63,9 +62,6 @@ const CACHE_DIR = __dirname.endsWith("dist")
 const SKILL_ID_CACHE_PATH = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", ".claude-transformer-skill-id")
   : path.join(__dirname, ".claude-transformer-skill-id");
-const SKILL_HASH_CACHE_PATH = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", ".claude-transformer-skill-hash")
-  : path.join(__dirname, ".claude-transformer-skill-hash");
 
 // Model configurations (same models as llm-renderer.ts)
 const MODELS = {
@@ -120,140 +116,98 @@ export interface CachedTransformer {
 
 // ==================== CLAUDE SKILLS API ====================
 
-const SKILL_DISPLAY_TITLE_INTERPRETER = "PDDL Domain Interpreter";
-
-/** In-memory cache for the skill ID (cleared on process restart) */
 let cachedSkillId: string | null = null;
 
-/** In-flight promise to prevent concurrent skill creation races */
-let skillCreationPromise: Promise<string> | null = null;
-
 /**
- * Compute a combined MD5 hash of all skill files.
- * Used to detect when skill files have changed and the skill needs re-uploading.
- */
-async function computeSkillHash(): Promise<string> {
-  const files = [SKILL_MD_PATH, SKILL_INTERFACES_PATH, SKILL_EXAMPLE_PATH, SKILL_RULES_PATH];
-  const hash = crypto.createHash("md5");
-  for (const f of files) {
-    try {
-      const fileContent = await readFile(f, "utf-8");
-      hash.update(fileContent);
-    } catch {
-      hash.update(`MISSING:${f}`);
-    }
-  }
-  return hash.digest("hex");
-}
-
-/**
- * Get or create the Claude Skill for the PDDL Domain Interpreter.
+ * Get or create the Claude Skill for the pddl-domain-interpreter.
  *
- * Caching strategy (fastest to slowest):
- *   1. In-memory module-level variable (zero cost, cleared on restart)
- *   2. Disk cache file (.claude-transformer-skill-id) trusted directly, no API round-trip
- *      BUT only if the skill file hash matches (.claude-transformer-skill-hash)
- *   3. Create a new skill via the API (uploads 4 files once)
- *
- * A combined hash of all skill files is stored alongside the skill ID.
- * If the files change (e.g. SKILL.md is updated), the hash mismatches,
- * the old skill is deleted, and a fresh one is uploaded automatically.
- *
- * An in-flight promise lock prevents concurrent requests from racing
- * to create the skill simultaneously.
+ * On first call, uploads the skill files (SKILL.md, interfaces.ts,
+ * example-blocks-world.ts, rules.md) to Claude's Skills API and saves
+ * the returned skill_id to disk.
+ * On subsequent calls, returns the cached skill_id.
  */
 async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
-  // 1. In-memory cache - fastest path, zero API calls
+  // 1. Check in-memory cache
   if (cachedSkillId) {
-    console.log(`[LLM Interpreter] Using in-memory cached skill: ${cachedSkillId}`);
+    console.log(`[LLM Interpreter] Using cached Claude skill: ${cachedSkillId}`);
     return cachedSkillId;
   }
 
-  // 2. In-flight lock - if another request is already resolving the skill, wait for it
-  if (skillCreationPromise) {
-    console.log("[LLM Interpreter] Waiting for in-flight skill resolution...");
-    return skillCreationPromise;
-  }
-
-  // 3. Kick off resolution (with lock held)
-  skillCreationPromise = (async () => {
-    try {
-      // 3a. Check disk cache + hash validation (no API round-trip needed)
-      const currentHash = await computeSkillHash();
+  // 2. Check disk cache
+  try {
+    const savedId = await readFile(SKILL_ID_CACHE_PATH, "utf-8");
+    if (savedId.trim()) {
       try {
-        const savedId = (await readFile(SKILL_ID_CACHE_PATH, "utf-8")).trim();
-        const savedHash = (await readFile(SKILL_HASH_CACHE_PATH, "utf-8")).trim();
-        if (savedId && savedHash === currentHash) {
-          // Files unchanged - trust the disk cache without an API round-trip
-          cachedSkillId = savedId;
-          console.log(`[LLM Interpreter] Loaded skill from disk cache (hash match): ${cachedSkillId}`);
-          return cachedSkillId;
-        } else if (savedId && savedHash !== currentHash) {
-          console.log(`[LLM Interpreter] Skill files changed (hash mismatch) - will re-upload skill`);
-          // Attempt to delete the stale skill from Anthropic (best-effort)
-          try {
-            await (client.beta.skills as any).delete(savedId, { betas: ["skills-2025-10-02"] });
-            console.log(`[LLM Interpreter] Deleted stale skill: ${savedId}`);
-          } catch {
-            // Deletion is best-effort; not fatal if it fails
-          }
-        }
-      } catch {
-        // No disk cache yet - proceed to create
-      }
-
-      // 3b. Upload a fresh skill (with fallback for duplicate-title errors)
-      console.log(`[LLM Interpreter] Uploading new Claude skill "${SKILL_DISPLAY_TITLE_INTERPRETER}"...`);
-      const skillDir = "pddl-domain-interpreter";
-      let newSkillId: string;
-      try {
-        const skill = await client.beta.skills.create({
-          display_title: SKILL_DISPLAY_TITLE_INTERPRETER,
-          files: [
-            await toFile(createReadStream(SKILL_MD_PATH), `${skillDir}/SKILL.md`, { type: "text/markdown" }),
-            await toFile(createReadStream(SKILL_INTERFACES_PATH), `${skillDir}/interfaces.ts`, { type: "text/plain" }),
-            await toFile(createReadStream(SKILL_EXAMPLE_PATH), `${skillDir}/example-blocks-world.ts`, { type: "text/plain" }),
-            await toFile(createReadStream(SKILL_RULES_PATH), `${skillDir}/rules.md`, { type: "text/markdown" }),
-          ],
+        await client.beta.skills.retrieve(savedId.trim(), {
           betas: ["skills-2025-10-02"],
         });
-        newSkillId = skill.id;
-        console.log(`[LLM Interpreter] Created Claude skill: ${newSkillId} (version: ${skill.latest_version})`);
-      } catch (createErr: any) {
-        // Anthropic returns 400 if a skill with this display_title already exists.
-        // This happens when the server has no local cache but the skill was previously uploaded.
-        // Recover by listing all skills and finding the existing one by title.
-        if (createErr?.status === 400 && createErr?.message?.includes("reuse an existing display_title")) {
-          console.log(`[LLM Interpreter] Skill already exists on Anthropic — fetching existing skill ID...`);
-          const skillsList = await client.beta.skills.list({ betas: ["skills-2025-10-02"] });
-          let foundId: string | null = null;
-          for await (const s of skillsList) {
-            if (s.display_title === SKILL_DISPLAY_TITLE_INTERPRETER) {
-              foundId = s.id;
-              break;
-            }
-          }
-          if (!foundId) {
-            throw new Error(`[LLM Interpreter] Could not find existing skill after duplicate-title error`);
-          }
-          newSkillId = foundId;
-          console.log(`[LLM Interpreter] Recovered existing skill: ${newSkillId}`);
-        } else {
-          throw createErr;
-        }
+        cachedSkillId = savedId.trim();
+        console.log(`[LLM Interpreter] Loaded Claude skill from disk: ${cachedSkillId}`);
+        return cachedSkillId;
+      } catch (err) {
+        console.log("[LLM Interpreter] Saved skill_id is invalid, will re-create");
       }
-      cachedSkillId = newSkillId;
-      // Persist skill ID and hash to disk for future restarts
-      await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
-      await writeFile(SKILL_HASH_CACHE_PATH, currentHash, "utf-8");
-      return cachedSkillId;
-    } finally {
-      // Release the in-flight lock so future calls go through the fast path
-      skillCreationPromise = null;
     }
-  })();
+  } catch {
+    // No cached skill_id file, will create new
+  }
 
-  return skillCreationPromise;
+  // 3. Try to find an existing skill by listing all skills
+  const SKILL_DISPLAY_TITLE = "PDDL Domain Interpreter";
+  console.log(`[LLM Interpreter] Looking for existing skill: "${SKILL_DISPLAY_TITLE}"...`);
+  try {
+    const skillsList = await client.beta.skills.list({
+      betas: ["skills-2025-10-02"],
+    });
+    for await (const existingSkill of skillsList) {
+      if (existingSkill.display_title === SKILL_DISPLAY_TITLE) {
+        cachedSkillId = existingSkill.id;
+        console.log(`[LLM Interpreter] Found existing Claude skill: ${cachedSkillId}`);
+        await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
+        return cachedSkillId;
+      }
+    }
+  } catch (listErr) {
+    console.warn("[LLM Interpreter] Could not list skills:", listErr);
+  }
+
+  // 4. Create new skill (only if not found)
+  console.log("[LLM Interpreter] Creating new Claude skill...");
+  const skillDir = "pddl-domain-interpreter";
+  const skill = await client.beta.skills.create({
+    display_title: SKILL_DISPLAY_TITLE,
+    files: [
+      await toFile(
+        createReadStream(SKILL_MD_PATH),
+        `${skillDir}/SKILL.md`,
+        { type: "text/markdown" }
+      ),
+      await toFile(
+        createReadStream(SKILL_INTERFACES_PATH),
+        `${skillDir}/interfaces.ts`,
+        { type: "text/plain" }
+      ),
+      await toFile(
+        createReadStream(SKILL_EXAMPLE_PATH),
+        `${skillDir}/example-blocks-world.ts`,
+        { type: "text/plain" }
+      ),
+      await toFile(
+        createReadStream(SKILL_RULES_PATH),
+        `${skillDir}/rules.md`,
+        { type: "text/markdown" }
+      ),
+    ],
+    betas: ["skills-2025-10-02"],
+  });
+
+  cachedSkillId = skill.id;
+  console.log(`[LLM Interpreter] Created Claude skill: ${cachedSkillId}`);
+  console.log(`[LLM Interpreter] Skill version: ${skill.latest_version}`);
+
+  // Save to disk for persistence across restarts
+  await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
+  return cachedSkillId;
 }
 
 // ==================== GEMINI PROMPT LOADER ====================
@@ -391,7 +345,7 @@ async function generateWithClaude(userMessage: string): Promise<string> {
   const response = await client.beta.messages.create({
     model: model.id,
     max_tokens: model.maxTokens,
-    betas: ["skills-2025-10-02"],
+    betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
     container: {
       skills: [
         {
@@ -401,13 +355,52 @@ async function generateWithClaude(userMessage: string): Promise<string> {
         },
       ],
     },
-    tools: [{ type: "code_execution_20250522" as const, name: "code_execution" }],
     messages: [{ role: "user", content: userMessage }],
-    
+    tools: [
+      {
+        type: "code_execution_20250825" as const,
+        name: "code_execution",
+      },
+    ],
   });
 
+  // Handle pause_turn for long operations
+  let finalResponse = response;
+  let retries = 0;
+  const maxRetries = 5;
+  while (finalResponse.stop_reason === "pause_turn" && retries < maxRetries) {
+    console.log(`[LLM Interpreter] Claude paused (turn ${retries + 1}), continuing...`);
+    retries++;
+    const continueMessages: any[] = [
+      { role: "user", content: userMessage },
+      { role: "assistant", content: finalResponse.content },
+      { role: "user", content: "Please continue." },
+    ];
+    finalResponse = await client.beta.messages.create({
+      model: model.id,
+      max_tokens: model.maxTokens,
+      betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+      container: {
+        id: finalResponse.container?.id,
+        skills: [
+          {
+            type: "custom" as const,
+            skill_id: skillId,
+            version: "latest",
+          },
+        ],
+      },
+      messages: continueMessages,
+      tools: [
+        {
+          type: "code_execution_20250825" as const,
+          name: "code_execution",
+        },
+      ],
+    });
+  }
+
   // Extract code from response content blocks.
-  const finalResponse = response;
   // Find the last text block that contains a transform function.
   const textBlocks: string[] = [];
   for (const block of finalResponse.content) {
@@ -660,12 +653,7 @@ ${JSON.stringify(samples, null, 2)}
 5. Generate the transformer function following the output contract in SKILL.md.
 6. Validate your code by running it with the sample states.
 
-Output ONLY the raw TypeScript code. 
-DO NOT use the code execution tool. 
-DO NOT include any explanations, comments, or markdown formatting. 
-DO NOT wrap the code in markdown blocks. 
-Start directly with the interface declarations. 
-Generate the code in a single turn without any testing loops.`;
+Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code, starting with the interface declarations.`;
 
     // 2. Call LLM
     let rawResponse: string;
