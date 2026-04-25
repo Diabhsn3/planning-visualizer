@@ -419,6 +419,7 @@ export default function Visualizer() {
 
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef        = useRef<HTMLDivElement>(null);
+  const usingSavedDomainRef = useRef(false);  // tracks if current upload is from a saved domain
 
   // LLM Renderer state
   const [renderMode, setRenderMode]           = useState<"basic" | "llm">("basic");
@@ -661,11 +662,13 @@ export default function Visualizer() {
       setPlannerInfo({ used_planner: data.used_planner || false, info: data.planner_info || "Unknown", strategy: data.search_strategy });
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 900);
-      // Auto-trigger transformer generation after states are ready
-      // BUT skip if we already have saved domain code loaded (saved domain flow)
-      if (data.states.length > 0 && !llmTransformerCode && !llmRendererCode) {
+      // Auto-trigger transformer generation ONLY for new domain flow
+      // Use ref (not state) to avoid React batching race condition
+      if (data.states.length > 0 && !usingSavedDomainRef.current) {
         triggerTransformerGeneration(data.states);
       }
+      // Reset the ref after processing
+      usingSavedDomainRef.current = false;
     },
     onError: (error: any) => {
       setIsProcessing(false);
@@ -795,20 +798,22 @@ export default function Visualizer() {
       if (customMode === "saved" && selectedSavedDomainId && loadSavedDomainQuery.data) {
         const savedDomain = loadSavedDomainQuery.data;
         console.log("[handleGenerate] Using saved domain:", savedDomain.displayName);
+        // Mark as saved domain flow BEFORE mutate (ref is synchronous, no batching issue)
+        usingSavedDomainRef.current = true;
+        // Pre-load the saved transformer and renderer codes BEFORE triggering upload
+        setLlmTransformerCode(savedDomain.transformerCode);
+        setLlmRendererCode(savedDomain.rendererCode);
+        setRenderMode("llm");
         const run = async () => {
           const problemContent = customProblemInputMode === "file" && customProblemFile
             ? await readFile(customProblemFile) : customProblemText;
-          // Use the saved domain's PDDL for planning
+          // Use the saved domain's PDDL for planning only (no LLM calls needed)
           uploadCustomMutation.mutate({
             domainContent: savedDomain.domainPddl,
             problemContent,
             domainName: savedDomain.domainName,
             searchStrategy: selectedStrategy as any,
           });
-          // Pre-load the saved transformer and renderer codes
-          setLlmTransformerCode(savedDomain.transformerCode);
-          setLlmRendererCode(savedDomain.rendererCode);
-          setRenderMode("llm");
         };
         run();
         return;
@@ -1166,7 +1171,24 @@ export default function Visualizer() {
                               {/* Sub-toggle: Saved / Upload New */}
                               <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: "rgba(255,255,255,0.04)" }}>
                                 {([{ id: "saved", label: "Saved Domains" }, { id: "new", label: "Upload New" }] as const).map(m => (
-                                  <button key={m.id} onClick={() => { setCustomMode(m.id); if (m.id === "new") setSelectedSavedDomainId(null); }}
+                                  <button key={m.id} onClick={() => {
+                                    setCustomMode(m.id);
+                                    if (m.id === "new") {
+                                      setSelectedSavedDomainId(null);
+                                      // Clear saved domain code when switching to new
+                                      setLlmTransformerCode(null);
+                                      setLlmRendererCode(null);
+                                      setLlmError(null);
+                                      setTransformerError(null);
+                                    }
+                                    if (m.id === "saved") {
+                                      // Clear new domain code when switching to saved
+                                      setLlmTransformerCode(null);
+                                      setLlmRendererCode(null);
+                                      setLlmError(null);
+                                      setTransformerError(null);
+                                    }
+                                  }}
                                     className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                                       customMode === m.id
                                         ? "bg-purple-500/20 text-purple-300 shadow-sm border border-purple-500/30"
