@@ -659,7 +659,8 @@ export default function Visualizer() {
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 900);
       // Auto-trigger transformer generation after states are ready
-      if (data.states.length > 0) {
+      // BUT skip if we already have saved domain code loaded (saved domain flow)
+      if (data.states.length > 0 && !llmTransformerCode && !llmRendererCode) {
         triggerTransformerGeneration(data.states);
       }
     },
