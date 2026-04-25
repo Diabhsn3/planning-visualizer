@@ -28,6 +28,7 @@ import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createReadStream } from "fs";
+import crypto from "crypto";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,10 +55,13 @@ const CACHE_DIR = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", "llm_renderers")
   : path.join(__dirname, "llm_renderers");
 
-// File to persist the skill_id after first upload
+// File to persist the skill_id and skill file hash after first upload
 const SKILL_ID_CACHE_PATH = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", ".claude-skill-id")
   : path.join(__dirname, ".claude-skill-id");
+const SKILL_HASH_CACHE_PATH = __dirname.endsWith("dist")
+  ? path.join(__dirname, "..", ".claude-skill-hash")
+  : path.join(__dirname, ".claude-skill-hash");
 
 // Model configurations
 const MODELS = {
@@ -102,103 +106,117 @@ export interface CachedRenderer {
 
 // ==================== CLAUDE SKILLS API ====================
 
+const SKILL_DISPLAY_TITLE_RENDERER = "Canvas Renderer Generator";
+
+/** In-memory cache for the skill ID (cleared on process restart) */
 let cachedSkillId: string | null = null;
 
+/** In-flight promise to prevent concurrent skill creation races */
+let skillCreationPromise: Promise<string> | null = null;
+
 /**
- * Get or create the Claude Skill.
- * 
- * On first call, uploads the skill files (SKILL.md, interfaces.ts, example-hanoi.ts, rules.md)
- * to Claude's Skills API and saves the returned skill_id to disk.
- * On subsequent calls, returns the cached skill_id.
+ * Compute a combined MD5 hash of all skill files.
+ * Used to detect when skill files have changed and the skill needs re-uploading.
+ */
+async function computeSkillHash(): Promise<string> {
+  const files = [SKILL_MD_PATH, SKILL_INTERFACES_PATH, SKILL_EXAMPLE_PATH, SKILL_RULES_PATH];
+  const hash = crypto.createHash("md5");
+  for (const f of files) {
+    try {
+      const fileContent = await readFile(f, "utf-8");
+      hash.update(fileContent);
+    } catch {
+      hash.update(`MISSING:${f}`);
+    }
+  }
+  return hash.digest("hex");
+}
+
+/**
+ * Get or create the Claude Skill for the Canvas Renderer Generator.
+ *
+ * Caching strategy (fastest to slowest):
+ *   1. In-memory module-level variable (zero cost, cleared on restart)
+ *   2. Disk cache file (.claude-skill-id) — trusted directly, no API round-trip
+ *      BUT only if the skill file hash matches (.claude-skill-hash)
+ *   3. Create a new skill via the API (uploads 4 files once)
+ *
+ * A combined hash of all skill files is stored alongside the skill ID.
+ * If the files change (e.g. SKILL.md is updated), the hash mismatches,
+ * the old skill is deleted, and a fresh one is uploaded automatically.
+ *
+ * An in-flight promise lock prevents concurrent requests from racing
+ * to create the skill simultaneously.
  */
 async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
-  // 1. Check in-memory cache
+  // 1. In-memory cache — fastest path, zero API calls
   if (cachedSkillId) {
-    console.log(`[LLM Renderer] Using cached Claude skill: ${cachedSkillId}`);
+    console.log(`[LLM Renderer] Using in-memory cached skill: ${cachedSkillId}`);
     return cachedSkillId;
   }
 
-  // 2. Check disk cache
-  try {
-    const savedId = await readFile(SKILL_ID_CACHE_PATH, "utf-8");
-    if (savedId.trim()) {
-      // Verify the skill still exists
+  // 2. In-flight lock — if another request is already resolving the skill, wait for it
+  if (skillCreationPromise) {
+    console.log("[LLM Renderer] Waiting for in-flight skill resolution...");
+    return skillCreationPromise;
+  }
+
+  // 3. Kick off resolution (with lock held)
+  skillCreationPromise = (async () => {
+    try {
+      // 3a. Check disk cache + hash validation (no API round-trip needed)
+      const currentHash = await computeSkillHash();
       try {
-        await client.beta.skills.retrieve(savedId.trim(), {
-          betas: ["skills-2025-10-02"],
-        });
-        cachedSkillId = savedId.trim();
-        console.log(`[LLM Renderer] Loaded Claude skill from disk: ${cachedSkillId}`);
-        return cachedSkillId;
-      } catch (err) {
-        console.log("[LLM Renderer] Saved skill_id is invalid, will re-create");
+        const savedId = (await readFile(SKILL_ID_CACHE_PATH, "utf-8")).trim();
+        const savedHash = (await readFile(SKILL_HASH_CACHE_PATH, "utf-8")).trim();
+        if (savedId && savedHash === currentHash) {
+          // Files unchanged — trust the disk cache without an API round-trip
+          cachedSkillId = savedId;
+          console.log(`[LLM Renderer] Loaded skill from disk cache (hash match): ${cachedSkillId}`);
+          return cachedSkillId;
+        } else if (savedId && savedHash !== currentHash) {
+          console.log(`[LLM Renderer] Skill files changed (hash mismatch) — will re-upload skill`);
+          // Attempt to delete the stale skill from Anthropic (best-effort)
+          try {
+            await (client.beta.skills as any).delete(savedId, { betas: ["skills-2025-10-02"] });
+            console.log(`[LLM Renderer] Deleted stale skill: ${savedId}`);
+          } catch {
+            // Deletion is best-effort; not fatal if it fails
+          }
+        }
+      } catch {
+        // No disk cache yet — proceed to create
       }
+
+      // 3b. Upload a fresh skill
+      console.log(`[LLM Renderer] Uploading new Claude skill "${SKILL_DISPLAY_TITLE_RENDERER}"...`);
+      const skillDir = "canvas-renderer-generator";
+      const skill = await client.beta.skills.create({
+        display_title: SKILL_DISPLAY_TITLE_RENDERER,
+        files: [
+          await toFile(createReadStream(SKILL_MD_PATH), `${skillDir}/SKILL.md`, { type: "text/markdown" }),
+          await toFile(createReadStream(SKILL_INTERFACES_PATH), `${skillDir}/interfaces.ts`, { type: "text/plain" }),
+          await toFile(createReadStream(SKILL_EXAMPLE_PATH), `${skillDir}/example-hanoi.ts`, { type: "text/plain" }),
+          await toFile(createReadStream(SKILL_RULES_PATH), `${skillDir}/rules.md`, { type: "text/markdown" }),
+        ],
+        betas: ["skills-2025-10-02"],
+      });
+
+      cachedSkillId = skill.id;
+      console.log(`[LLM Renderer] Created Claude skill: ${cachedSkillId} (version: ${skill.latest_version})`);
+
+      // Persist skill ID and hash to disk for future restarts
+      await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
+      await writeFile(SKILL_HASH_CACHE_PATH, currentHash, "utf-8");
+
+      return cachedSkillId;
+    } finally {
+      // Release the in-flight lock so future calls go through the fast path
+      skillCreationPromise = null;
     }
-  } catch {
-    // No cached skill_id file, will create new
-  }
+  })();
 
-  // 3. Try to find an existing skill by listing all skills
-  const SKILL_DISPLAY_TITLE = "Canvas Renderer Generator";
-  console.log(`[LLM Renderer] Looking for existing skill: "${SKILL_DISPLAY_TITLE}"...`);
-
-  try {
-    const skillsList = await client.beta.skills.list({
-      betas: ["skills-2025-10-02"],
-    });
-
-    for await (const existingSkill of skillsList) {
-      if (existingSkill.display_title === SKILL_DISPLAY_TITLE) {
-        cachedSkillId = existingSkill.id;
-        console.log(`[LLM Renderer] Found existing Claude skill: ${cachedSkillId}`);
-        await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
-        return cachedSkillId;
-      }
-    }
-  } catch (listErr) {
-    console.warn("[LLM Renderer] Could not list skills:", listErr);
-  }
-
-  // 4. Create new skill (only if not found)
-  console.log("[LLM Renderer] Creating new Claude skill...");
-
-  const skillDir = "canvas-renderer-generator";
-
-  const skill = await client.beta.skills.create({
-    display_title: SKILL_DISPLAY_TITLE,
-    files: [
-      await toFile(
-        createReadStream(SKILL_MD_PATH),
-        `${skillDir}/SKILL.md`,
-        { type: "text/markdown" }
-      ),
-      await toFile(
-        createReadStream(SKILL_INTERFACES_PATH),
-        `${skillDir}/interfaces.ts`,
-        { type: "text/plain" }
-      ),
-      await toFile(
-        createReadStream(SKILL_EXAMPLE_PATH),
-        `${skillDir}/example-hanoi.ts`,
-        { type: "text/plain" }
-      ),
-      await toFile(
-        createReadStream(SKILL_RULES_PATH),
-        `${skillDir}/rules.md`,
-        { type: "text/markdown" }
-      ),
-    ],
-    betas: ["skills-2025-10-02"],
-  });
-
-  cachedSkillId = skill.id;
-  console.log(`[LLM Renderer] Created Claude skill: ${cachedSkillId}`);
-  console.log(`[LLM Renderer] Skill version: ${skill.latest_version}`);
-
-  // Save to disk for persistence across restarts
-  await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
-
-  return cachedSkillId;
+  return skillCreationPromise;
 }
 
 // ==================== GEMINI PROMPT LOADER ====================

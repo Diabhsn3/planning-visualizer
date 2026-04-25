@@ -1,0 +1,8 @@
+# Claude Skills API runtime cache files (generated at runtime, not committed)
+.claude-skill-id
+.claude-skill-hash
+.claude-transformer-skill-id
+.claude-transformer-skill-hash
+
+# Node
+node_modules/
