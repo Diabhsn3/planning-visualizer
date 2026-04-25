@@ -715,7 +715,7 @@ export default function Visualizer() {
           llmGenerateMutation.mutate({
             domainName: customDomainName || "custom",
             states: enrichedStates,
-            provider: data.provider as "claude" | "gemini",
+            provider: (data.provider?.toLowerCase().includes("claude") ? "claude" : "gemini") as "claude" | "gemini",
           });
         }
       }
