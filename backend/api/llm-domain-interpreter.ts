@@ -345,7 +345,7 @@ async function generateWithClaude(userMessage: string): Promise<string> {
   const response = await client.beta.messages.create({
     model: model.id,
     max_tokens: model.maxTokens,
-    betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+    betas: ["skills-2025-10-02"],
     container: {
       skills: [
         {
@@ -356,51 +356,11 @@ async function generateWithClaude(userMessage: string): Promise<string> {
       ],
     },
     messages: [{ role: "user", content: userMessage }],
-    tools: [
-      {
-        type: "code_execution_20250825" as const,
-        name: "code_execution",
-      },
-    ],
+    
   });
 
-  // Handle pause_turn for long operations
-  let finalResponse = response;
-  let retries = 0;
-  const maxRetries = 5;
-  while (finalResponse.stop_reason === "pause_turn" && retries < maxRetries) {
-    console.log(`[LLM Interpreter] Claude paused (turn ${retries + 1}), continuing...`);
-    retries++;
-    const continueMessages: any[] = [
-      { role: "user", content: userMessage },
-      { role: "assistant", content: finalResponse.content },
-      { role: "user", content: "Please continue." },
-    ];
-    finalResponse = await client.beta.messages.create({
-      model: model.id,
-      max_tokens: model.maxTokens,
-      betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
-      container: {
-        id: finalResponse.container?.id,
-        skills: [
-          {
-            type: "custom" as const,
-            skill_id: skillId,
-            version: "latest",
-          },
-        ],
-      },
-      messages: continueMessages,
-      tools: [
-        {
-          type: "code_execution_20250825" as const,
-          name: "code_execution",
-        },
-      ],
-    });
-  }
-
   // Extract code from response content blocks.
+  const finalResponse = response;
   // Find the last text block that contains a transform function.
   const textBlocks: string[] = [];
   for (const block of finalResponse.content) {
@@ -653,7 +613,12 @@ ${JSON.stringify(samples, null, 2)}
 5. Generate the transformer function following the output contract in SKILL.md.
 6. Validate your code by running it with the sample states.
 
-Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code, starting with the interface declarations.`;
+Output ONLY the raw TypeScript code. 
+DO NOT use the code execution tool. 
+DO NOT include any explanations, comments, or markdown formatting. 
+DO NOT wrap the code in markdown blocks. 
+Start directly with the interface declarations. 
+Generate the code in a single turn without any testing loops.`;
 
     // 2. Call LLM
     let rawResponse: string;

@@ -349,7 +349,7 @@ async function generateWithClaude(userMessage: string): Promise<string> {
   const response = await client.beta.messages.create({
     model: model.id,
     max_tokens: model.maxTokens,
-    betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+    betas: ["skills-2025-10-02"],
     container: {
       skills: [
         {
@@ -360,54 +360,11 @@ async function generateWithClaude(userMessage: string): Promise<string> {
       ],
     },
     messages: [{ role: "user", content: userMessage }],
-    tools: [
-      {
-        type: "code_execution_20250825" as const,
-        name: "code_execution",
-      },
-    ],
+    
   });
 
-  // Handle pause_turn for long operations
-  let finalResponse = response;
-  let retries = 0;
-  const maxRetries = 5;
-
-  while (finalResponse.stop_reason === "pause_turn" && retries < maxRetries) {
-    console.log(`[LLM Renderer] Claude paused (turn ${retries + 1}), continuing...`);
-    retries++;
-
-    const continueMessages: any[] = [
-      { role: "user", content: userMessage },
-      { role: "assistant", content: finalResponse.content },
-      { role: "user", content: "Please continue." },
-    ];
-
-    finalResponse = await client.beta.messages.create({
-      model: model.id,
-      max_tokens: model.maxTokens,
-      betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
-      container: {
-        id: finalResponse.container?.id,
-        skills: [
-          {
-            type: "custom" as const,
-            skill_id: skillId,
-            version: "latest",
-          },
-        ],
-      },
-      messages: continueMessages,
-      tools: [
-        {
-          type: "code_execution_20250825" as const,
-          name: "code_execution",
-        },
-      ],
-    });
-  }
-
   // Extract code from response content blocks.
+  const finalResponse = response;
   // Claude Skills API returns a mix of:
   //   - text blocks (narration like "I'll read the skill files...")
   //   - code_execution_tool_use blocks (Claude running code in sandbox)
