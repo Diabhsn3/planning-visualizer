@@ -79,7 +79,10 @@ export type LLMProvider = keyof typeof MODELS;
 
 export interface GenerateRendererRequest {
   domainName: string;
-  states: any[]; // RenderedState[] - sample states
+  /** Full text of the PDDL domain file (domain.pddl) */
+  domainPddl: string;
+  /** The generated transformer code from Stage 1 — so the renderer knows the enriched state structure */
+  transformerCode: string;
   provider: LLMProvider;
 }
 
@@ -625,7 +628,7 @@ export async function clearCache(domain?: string): Promise<number> {
  * For Claude: Uses the formal Skills API with code execution sandbox.
  * For Gemini: Uses the system prompt approach.
  * 
- * 1. Builds the user message with domain name + sample states
+ * 1. Builds the user message with PDDL domain + transformer code (no sample states)
  * 2. Calls the selected LLM provider
  * 3. Extracts and validates the generated code
  * 4. Transpiles TypeScript to JavaScript
@@ -635,24 +638,46 @@ export async function clearCache(domain?: string): Promise<number> {
 export async function generateRenderer(
   request: GenerateRendererRequest
 ): Promise<GenerateRendererResponse> {
-  const { domainName, states, provider } = request;
+  const { domainName, domainPddl, transformerCode, provider } = request;
   const model = MODELS[provider];
 
   console.log(`[LLM Renderer] Starting generation for domain: ${domainName}`);
   console.log(`[LLM Renderer] Provider: ${provider} (${model.name})`);
-  console.log(`[LLM Renderer] Sample states: ${states.length}`);
+  console.log(`[LLM Renderer] PDDL domain length: ${domainPddl.length} chars`);
+  console.log(`[LLM Renderer] Transformer code length: ${transformerCode.length} chars`);
 
   try {
-    // 1. Build user message
-    const sampleStates = states.slice(0, 3);
+    // 1. Build user message — PDDL domain + transformer code, no sample states
     const userMessage = `Generate a complete Canvas renderer for the "${domainName}" domain.
 
-Here are ${sampleStates.length} sample states showing the data structure you need to visualize:
+## PDDL Domain File
 
-${JSON.stringify(sampleStates, null, 2)}
+\`\`\`pddl
+${domainPddl}
+\`\`\`
 
-Analyze the objects, their types, positions, properties, and the relations between them.
+## Stage 1 Transformer Code (already generated)
+
+The following transformer function converts raw planner states into enriched \`RenderedState\` objects with positions, colors, labels, and layout. Read it carefully to understand the exact structure of the enriched state your renderer will receive:
+
+\`\`\`typescript
+${transformerCode}
+\`\`\`
+
+## What Your Renderer Receives
+
+Your renderer will receive the OUTPUT of the transformer above — a \`RenderedState\` with:
+- \`objects\`: array of \`VisualObject\` — each has \`id\`, \`type\`, \`label\`, \`position: [x, y]\`, and \`properties\` (including \`color\`, \`width\`, \`height\`, and domain-specific fields)
+- \`relations\`: array of \`VisualRelation\` — each has \`type\`, \`source\`, optional \`target\`
+
+Analyze the transformer code to understand:
+1. What object types it creates (filter by \`type\` field)
+2. What properties each object type has (colors, dimensions, status flags)
+3. How objects are positioned (the layout strategy)
+4. What virtual objects it adds (e.g., surfaces, grippers, containers)
+
 Then generate the three TypeScript functions as specified in the instructions.
+The renderer MUST be generic — it must work for any number of objects, not just a specific problem.
 Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code.`;
 
     // 2. Call LLM

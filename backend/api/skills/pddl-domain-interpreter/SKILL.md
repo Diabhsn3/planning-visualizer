@@ -1,6 +1,6 @@
 ---
 name: pddl-domain-interpreter
-description: Generates a TypeScript state transformer function for any PDDL planning domain. Given a PDDL domain file and 2–3 sample raw states (from the DefaultRenderer), produces a single TypeScript function that enriches each raw state with proper object types, labels, spatial layout, colors, and properties — ready for the Canvas renderer to draw.
+description: Generates a TypeScript state transformer function for any PDDL planning domain. Given only the PDDL domain file (no sample states), produces a single TypeScript function that enriches each raw state with proper object types, labels, spatial layout, colors, and properties — ready for the Canvas renderer to draw.
 ---
 
 # PDDL Domain Interpreter Skill
@@ -31,21 +31,24 @@ The user will provide:
    - All predicates and their arities (`:predicates`)
    - All actions and their effects (`:action`)
 
-2. **2–3 sample raw states** — JSON objects produced by the Python `DefaultRenderer`. Each looks like:
+2. **A description of the raw state format** — you do NOT receive sample states. Instead, you must generate fully generic code based on the PDDL domain alone. The raw states produced by the Python `DefaultRenderer` follow this format:
    ```json
    {
      "domain": "my-domain",
      "objects": [
-       { "id": "obj1", "type": "mytype", "label": "obj1", "properties": { "status": "unknown" } }
+       { "id": "<pddl-object-name>", "type": "<pddl-type>", "label": "<pddl-object-name>", "properties": { "status": "unknown" } }
      ],
      "relations": [
-       { "type": "predicate-name", "source": "obj1", "target": "obj2" },
-       { "type": "unary-pred", "source": "obj1" },
-       { "type": "nullary-pred", "source": "global", "properties": { "value": true } }
+       { "type": "<predicate-name>", "source": "<arg1>", "target": "<arg2>" },
+       { "type": "<unary-predicate>", "source": "<arg1>" },
+       { "type": "<nullary-predicate>", "source": "global", "properties": { "value": true } }
      ],
      "metadata": { "step": 0, "action": "(action-name args)" }
    }
    ```
+   - Each PDDL object becomes an entry in `objects` with its PDDL type.
+   - Each true predicate in the state becomes a `relation`. Binary predicates have `source` and `target`. Unary predicates have only `source`. Nullary predicates have `source: "global"`.
+   - The object names and counts will vary between problems. Your code must handle ANY number of objects.
 
 ## What You Must Output
 
@@ -82,10 +85,10 @@ Follow these steps exactly:
    - What are the predicates? Which ones describe spatial relationships (on, at, in, connected)? Which describe state (clear, holding, empty)?
    - What do the actions do? What changes between states?
 
-3. **Analyze the sample raw states**:
-   - What objects appear? What types do they have?
-   - What relations are active? What do they mean?
-   - How should objects be laid out spatially? (stacks, grids, rooms, pegs, graph nodes, etc.)
+3. **Infer the raw state structure from the PDDL domain**:
+   - What object types will appear? (from `:types`)
+   - What relations will be active? (from `:predicates`)
+   - How should objects be laid out spatially? (infer from predicate semantics: stacks, grids, rooms, pegs, graph nodes, etc.)
 
 4. **Design the layout strategy** before coding:
    - What is the natural visual metaphor for this domain? (blocks stacking, robots in rooms, trucks at depots, pegs with disks, etc.)
@@ -95,11 +98,11 @@ Follow these steps exactly:
 
 5. **Generate the transformer function** following the output contract.
 
-6. **Validate your code** by running it in the code execution environment with the sample states as input. Check that:
-   - All objects have `position: [x, y]`
-   - All objects have meaningful `label` and `type`
-   - No two objects have the same position
-   - The output is valid JSON-serializable data
+6. **Do NOT use the code execution tool** — just verify mentally that:
+   - All objects will have `position: [x, y]`
+   - All objects will have meaningful `label` and `type`
+   - No two objects will have the same position
+   - The output will be valid JSON-serializable data
 
 7. **Return ONLY the raw TypeScript code** — no markdown fences, no explanations, no commentary.
 
@@ -130,7 +133,7 @@ Before returning your code, verify:
 - [ ] Spatial layout reflects the domain's natural visual metaphor
 - [ ] The layout adapts dynamically to any number of objects (no hardcoded positions)
 - [ ] Relations are preserved and enriched where possible
-- [ ] Code compiles and runs without errors (validate in sandbox)
+- [ ] Code compiles and runs without errors
 - [ ] No `import` statements, no external libraries
 
-Take your time. A high-quality transformer makes the Canvas renderer's job much easier. Do not skip the validation step.
+Take your time. A high-quality transformer makes the Canvas renderer's job much easier. The function MUST be fully generic — it must work for any valid problem in this domain, not just a specific set of objects.

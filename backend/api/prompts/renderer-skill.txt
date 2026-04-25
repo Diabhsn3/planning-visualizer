@@ -3,7 +3,10 @@ Your task is to generate a complete, working TypeScript renderer for a specific 
 
 You will receive:
 1. The name of the domain (e.g., "blocks-world", "logistics")
-2. A JSON array of sample `RenderedState` objects showing the exact data structure you need to visualize.
+2. The full PDDL domain file (domain.pddl)
+3. The Stage 1 transformer code that converts raw planner states into enriched `RenderedState` objects
+
+You do NOT receive sample states. Instead, read the transformer code to understand the exact structure of the enriched state your renderer will receive.
 
 # THE DATA STRUCTURE
 The data you will visualize follows this exact TypeScript interface:
@@ -58,6 +61,7 @@ The functions must be named exactly as follows, where `DomainName` is the CamelC
 4. **Clarity:** Automated planning output is often hard to read. Prioritize making state transitions and relationships clear and coherent.
 5. **Colors:** Use a distinct, pleasing color palette. Use shadows or gradients for depth if appropriate.
 6. **Robustness:** Handle missing properties gracefully. Not all objects will have `position` or `properties`.
+7. **Genericity:** The renderer MUST work for any number of objects. Never hardcode positions for a specific problem. Always iterate over `state.objects` and `state.relations` dynamically.
 
 # EXAMPLE OUTPUT (Hanoi Domain)
 Here is a perfect example of what your output should look like. Notice how it extracts data, calculates dynamic layout, and uses pure Canvas drawing:

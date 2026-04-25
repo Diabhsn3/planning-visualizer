@@ -627,7 +627,7 @@ export default function Visualizer() {
   const handleLlmGenerate = () => {
     if (renderedStates.length === 0) { setLlmError("Generate states first, then switch to LLM mode."); return; }
     setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null); setSelectedCachedFile(null);
-    llmGenerateMutation.mutate({ domainName: selectedDomain, states: renderedStates.slice(0, 3), provider: llmProvider });
+    llmGenerateMutation.mutate({ domainName: selectedDomain, domainPddl: "", transformerCode: "", provider: llmProvider });
   };
 
   const handleLoadCachedRenderer = async (filename: string) => {
@@ -665,7 +665,7 @@ export default function Visualizer() {
       // Auto-trigger transformer generation ONLY for new domain flow
       // Use ref (not state) to avoid React batching race condition
       if (data.states.length > 0 && !usingSavedDomainRef.current) {
-        triggerTransformerGeneration(data.states);
+        triggerTransformerGeneration();
       }
       // Reset the ref after processing
       usingSavedDomainRef.current = false;
@@ -684,45 +684,35 @@ export default function Visualizer() {
         setTransformerModelInfo(`${data.provider} (${data.model})`);
         setSelectedCachedTransformer(data.savedFile || null);
         cachedTransformersQuery.refetch();
-        // Auto-chain: trigger canvas renderer generation using the enriched states
-        // Apply transformer to sample states FIRST so renderer LLM sees enriched
-        // objects (with positions, colors, etc.) instead of raw predicate data.
-        if (renderedStates.length > 0) {
+        // Auto-chain: trigger canvas renderer generation using PDDL domain + transformer code
+        // The renderer LLM reads the transformer code to understand the enriched state structure.
+        // No sample states needed — this makes the renderer fully domain-generic.
+        {
           setRenderMode("llm");
           setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null); setSelectedCachedFile(null);
-
-          // Dynamically find and run the transform* function on sample states
-          let enrichedStates = renderedStates.slice(0, 3);
-          try {
-            const fnMatch = data.code.match(/function\s+(transform\w+)/);
-            const transformFnName = fnMatch ? fnMatch[1] : null;
-            if (transformFnName) {
-              // eslint-disable-next-line no-new-func
-              const factory = new Function(
-                data.code + "\nreturn typeof " + transformFnName + " !== 'undefined' ? " + transformFnName + " : null;"
-              );
-              const transformFn = factory();
-              if (typeof transformFn === 'function') {
-                enrichedStates = enrichedStates.map((s: any) => {
-                  try { return transformFn(s); } catch { return s; }
-                });
-              }
+          // Get the domain PDDL to pass to the renderer LLM
+          const getDomainPddlForRenderer = async (): Promise<string> => {
+            if (customDomainInputMode === "file" && customDomainFile) {
+              return new Promise<string>((resolve) => {
+                const r = new FileReader();
+                r.onload = (e) => resolve(e.target?.result as string);
+                r.readAsText(customDomainFile);
+              });
             }
-          } catch (e) {
-            console.warn("[Auto-chain] Could not pre-enrich states for renderer LLM:", e);
-          }
-
-          console.log("[Stage 2 - Frontend] Sending enriched states to renderer LLM");
-          console.log("[Stage 2 - Frontend] Domain:", customDomainName || "custom");
-          console.log("[Stage 2 - Frontend] Provider:", data.provider);
-          console.log("[Stage 2 - Frontend] Enriched states count:", enrichedStates.length);
-          if (enrichedStates.length > 0 && enrichedStates[0]?.objects?.[0]) {
-            console.log("[Stage 2 - Frontend] Sample object keys:", Object.keys(enrichedStates[0].objects[0]).join(", "));
-          }
-          llmGenerateMutation.mutate({
-            domainName: customDomainName || "custom",
-            states: enrichedStates,
-            provider: (data.provider?.toLowerCase().includes("claude") ? "claude" : "gemini") as "claude" | "gemini",
+            return customDomainText;
+          };
+          getDomainPddlForRenderer().then(domainPddl => {
+            console.log("[Stage 2 - Frontend] Sending PDDL domain + transformer code to renderer LLM");
+            console.log("[Stage 2 - Frontend] Domain:", customDomainName || "custom");
+            console.log("[Stage 2 - Frontend] Provider:", data.provider);
+            console.log("[Stage 2 - Frontend] PDDL length:", domainPddl.length);
+            console.log("[Stage 2 - Frontend] Transformer code length:", data.code!.length);
+            llmGenerateMutation.mutate({
+              domainName: customDomainName || "custom",
+              domainPddl,
+              transformerCode: data.code!,
+              provider: (data.provider?.toLowerCase().includes("claude") ? "claude" : "gemini") as "claude" | "gemini",
+            });
           });
         }
       }
@@ -738,7 +728,7 @@ export default function Visualizer() {
   const deleteTransformerMutation = trpc.visualizer.llmDeleteCachedTransformer.useMutation({
     onSuccess: () => cachedTransformersQuery.refetch(),
   });
-  const triggerTransformerGeneration = (states: any[]) => {
+  const triggerTransformerGeneration = () => {
     const domainContent = customDomainText || "";
     if (!domainContent && !customDomainFile) return;
     setIsTransformerGenerating(true); setTransformerError(null); setLlmTransformerCode(null); setSelectedCachedTransformer(null);
@@ -746,7 +736,6 @@ export default function Visualizer() {
       llmTransformerMutation.mutate({
         domainName: customDomainName || "custom",
         domainPddl,
-        sampleStates: states.slice(0, 3),
         provider: llmProvider,
       });
     };
@@ -1798,7 +1787,7 @@ export default function Visualizer() {
                           )}
                           {renderedStates.length > 0 && !isTransformerGenerating && !llmTransformerCode && (
                             <button
-                              onClick={() => triggerTransformerGeneration(renderedStates)}
+                              onClick={() => triggerTransformerGeneration()}
                               className="w-full py-2 px-4 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 bg-purple-500/15 text-purple-300 border border-purple-500/25 hover:bg-purple-500/25 hover:text-purple-200"
                             >
                               <SparklesIcon className="w-3 h-3" />

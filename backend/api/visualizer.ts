@@ -546,14 +546,16 @@ export const visualizerRouter = router({
 
   /**
    * Generate a Canvas renderer using an LLM (Claude or Gemini).
-   * Accepts domain name, sample states, and the LLM provider to use.
+   * Accepts domain name, PDDL domain text, transformer code, and the LLM provider.
+   * No sample states needed — the LLM reads the transformer code to understand the enriched state structure.
    * Returns the generated TypeScript code.
    */
   llmGenerateRenderer: publicProcedure
     .input(
       z.object({
         domainName: z.string(),
-        states: z.array(z.any()),
+        domainPddl: z.string(),
+        transformerCode: z.string(),
         provider: z.enum(["claude", "gemini"]),
       })
     )
@@ -562,22 +564,13 @@ export const visualizerRouter = router({
       console.log("[Stage 2 - Renderer] Starting canvas renderer generation");
       console.log("[Stage 2 - Renderer] Domain:", input.domainName);
       console.log("[Stage 2 - Renderer] Provider:", input.provider);
-      console.log("[Stage 2 - Renderer] States count:", input.states.length);
-      // Log whether states appear to be enriched (have positions/properties)
-      if (input.states.length > 0) {
-        const firstState = input.states[0];
-        const hasObjects = firstState?.objects && Array.isArray(firstState.objects);
-        const firstObj = hasObjects ? firstState.objects[0] : null;
-        const isEnriched = firstObj && (firstObj.position || firstObj.properties);
-        console.log("[Stage 2 - Renderer] States enriched:", !!isEnriched);
-        if (firstObj) {
-          console.log("[Stage 2 - Renderer] Sample object keys:", Object.keys(firstObj).join(", "));
-        }
-      }
+      console.log("[Stage 2 - Renderer] PDDL domain length:", input.domainPddl.length);
+      console.log("[Stage 2 - Renderer] Transformer code length:", input.transformerCode.length);
 
       const result = await generateRenderer({
         domainName: input.domainName,
-        states: input.states,
+        domainPddl: input.domainPddl,
+        transformerCode: input.transformerCode,
         provider: input.provider as LLMProvider,
       });
 
@@ -641,8 +634,8 @@ export const visualizerRouter = router({
 
   /**
    * Generate a TypeScript state transformer for a custom PDDL domain.
-   * Accepts the domain name, full PDDL domain text, sample raw states,
-   * and the LLM provider to use.
+   * Accepts the domain name, full PDDL domain text, and the LLM provider.
+   * No sample states needed — the LLM generates generic code from the PDDL domain alone.
    * Returns the generated and transpiled JavaScript transformer code.
    */
   llmGenerateTransformer: publicProcedure
@@ -650,20 +643,17 @@ export const visualizerRouter = router({
       z.object({
         domainName: z.string(),
         domainPddl: z.string(),
-        sampleStates: z.array(z.any()),
         provider: z.enum(["claude", "gemini"]),
       })
     )
     .mutation(async ({ input }) => {
       console.log("[llmGenerateTransformer] Starting for domain:", input.domainName);
       console.log("[llmGenerateTransformer] Provider:", input.provider);
-      console.log("[llmGenerateTransformer] Sample states:", input.sampleStates.length);
       console.log("[llmGenerateTransformer] PDDL length:", input.domainPddl.length);
 
       const result = await generateTransformer({
         domainName: input.domainName,
         domainPddl: input.domainPddl,
-        sampleStates: input.sampleStates,
         provider: input.provider as LLMProvider,
       });
 

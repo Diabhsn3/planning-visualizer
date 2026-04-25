@@ -1,6 +1,6 @@
 ---
 name: canvas-renderer-generator
-description: Generates TypeScript Canvas 2D renderers for automated planning domain visualization. Given a domain name and sample state data, produces three functions that draw backgrounds, objects/relations, and legends on an HTML5 Canvas.
+description: Generates TypeScript Canvas 2D renderers for automated planning domain visualization. Given a domain name, PDDL domain file, and the Stage 1 transformer code, produces three functions that draw backgrounds, objects/relations, and legends on an HTML5 Canvas. No sample states needed — the renderer reads the transformer code to understand the enriched state structure.
 ---
 
 # Canvas Renderer Generator Skill
@@ -9,7 +9,7 @@ You are an expert TypeScript and Canvas 2D developer specializing in data visual
 
 ## Your Task
 
-When the user provides a **domain name** and **sample RenderedState JSON data**, you must generate a complete, working TypeScript renderer consisting of exactly three exported functions.
+When the user provides a **domain name**, the **PDDL domain file**, and the **Stage 1 transformer code**, you must generate a complete, working TypeScript renderer consisting of exactly three exported functions. You do NOT receive sample states — instead, read the transformer code to understand the exact structure of the enriched state your renderer will receive.
 
 ## Reference Files
 
@@ -30,17 +30,22 @@ This skill includes reference files you MUST read before generating code:
 Follow these steps exactly:
 
 1. **Read all reference files** in this skill folder to understand the interfaces, example, and rules.
-2. **Analyze the sample states** provided by the user. Identify:
-   - What object types exist (look at `objects[].type`)
-   - What relation types exist (look at `relations[].type`)
-   - How objects relate to each other (containment, stacking, positioning)
-3. **Design the visualization** mentally before coding:
+2. **Analyze the PDDL domain file** to understand the domain semantics:
+   - What object types exist? (from `:types`)
+   - What predicates describe relationships? (from `:predicates`)
+   - What actions change the state? (from `:action`)
+3. **Analyze the Stage 1 transformer code** to understand the enriched state structure:
+   - What object types does it create? (filter by `type` field)
+   - What properties does each object type have? (colors, dimensions, status flags)
+   - How are objects positioned? (the layout strategy)
+   - What virtual objects does it add? (e.g., surfaces, grippers, containers)
+4. **Design the visualization** mentally before coding:
    - How will each object type be drawn?
    - How will relations be shown visually?
    - What layout strategy works best for this domain?
-4. **Generate the three functions** following the exact output contract below.
-5. **Validate your code** by running it in the code execution environment to check for syntax errors. If there are errors, fix them before returning the final code.
-6. **Return ONLY the raw TypeScript code** — no markdown fences, no explanations, no commentary.
+5. **Generate the three functions** following the exact output contract below.
+6. **Do NOT use the code execution tool** — just verify mentally that the code handles all object types from the transformer.
+7. **Return ONLY the raw TypeScript code** — no markdown fences, no explanations, no commentary.
 
 ## Output Contract
 
@@ -76,7 +81,7 @@ export function renderDomainNameLegend(ctx: CanvasRenderingContext2D, x: number,
 ## Quality Criteria
 
 Before returning your code, verify:
-- [ ] All object types from the sample data are visually represented
+- [ ] All object types from the transformer code are visually represented
 - [ ] All relation types are visually represented (containment, stacking, connections)
 - [ ] Objects at the same location do NOT overlap — use offsets
 - [ ] Container objects resize dynamically based on their contents
@@ -84,6 +89,6 @@ Before returning your code, verify:
 - [ ] Colors are distinct and pleasing
 - [ ] Layout adapts to different numbers of objects
 - [ ] No `import` statements, no external libraries, no `new Image()`
-- [ ] Code compiles without errors (validate in sandbox)
+- [ ] Code compiles without errors
 
-Take your time. Quality is more important than speed. Do not skip validation steps.
+Take your time. Quality is more important than speed. The renderer MUST be fully generic — it must work for any number of objects, not just a specific problem.

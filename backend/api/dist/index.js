@@ -443,21 +443,43 @@ async function deleteCachedRenderer(filename) {
   }
 }
 async function generateRenderer(request) {
-  const { domainName, states, provider } = request;
+  const { domainName, domainPddl, transformerCode, provider } = request;
   const model = MODELS[provider];
   console.log(`[LLM Renderer] Starting generation for domain: ${domainName}`);
   console.log(`[LLM Renderer] Provider: ${provider} (${model.name})`);
-  console.log(`[LLM Renderer] Sample states: ${states.length}`);
+  console.log(`[LLM Renderer] PDDL domain length: ${domainPddl.length} chars`);
+  console.log(`[LLM Renderer] Transformer code length: ${transformerCode.length} chars`);
   try {
-    const sampleStates = states.slice(0, 3);
     const userMessage = `Generate a complete Canvas renderer for the "${domainName}" domain.
 
-Here are ${sampleStates.length} sample states showing the data structure you need to visualize:
+## PDDL Domain File
 
-${JSON.stringify(sampleStates, null, 2)}
+\`\`\`pddl
+${domainPddl}
+\`\`\`
 
-Analyze the objects, their types, positions, properties, and the relations between them.
+## Stage 1 Transformer Code (already generated)
+
+The following transformer function converts raw planner states into enriched \`RenderedState\` objects with positions, colors, labels, and layout. Read it carefully to understand the exact structure of the enriched state your renderer will receive:
+
+\`\`\`typescript
+${transformerCode}
+\`\`\`
+
+## What Your Renderer Receives
+
+Your renderer will receive the OUTPUT of the transformer above \u2014 a \`RenderedState\` with:
+- \`objects\`: array of \`VisualObject\` \u2014 each has \`id\`, \`type\`, \`label\`, \`position: [x, y]\`, and \`properties\` (including \`color\`, \`width\`, \`height\`, and domain-specific fields)
+- \`relations\`: array of \`VisualRelation\` \u2014 each has \`type\`, \`source\`, optional \`target\`
+
+Analyze the transformer code to understand:
+1. What object types it creates (filter by \`type\` field)
+2. What properties each object type has (colors, dimensions, status flags)
+3. How objects are positioned (the layout strategy)
+4. What virtual objects it adds (e.g., surfaces, grippers, containers)
+
 Then generate the three TypeScript functions as specified in the instructions.
+The renderer MUST be generic \u2014 it must work for any number of objects, not just a specific problem.
 Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code.`;
     let rawResponse;
     if (provider === "claude") {
@@ -860,14 +882,12 @@ async function deleteCachedTransformer(filename) {
   }
 }
 async function generateTransformer(request) {
-  const { domainName, domainPddl, sampleStates, provider } = request;
+  const { domainName, domainPddl, provider } = request;
   const model = MODELS2[provider];
   console.log(`[LLM Interpreter] Starting generation for domain: ${domainName}`);
   console.log(`[LLM Interpreter] Provider: ${provider} (${model.name})`);
-  console.log(`[LLM Interpreter] Sample states: ${sampleStates.length}`);
   console.log(`[LLM Interpreter] PDDL domain length: ${domainPddl.length} chars`);
   try {
-    const samples = sampleStates.slice(0, 3);
     const userMessage = `Generate a complete TypeScript state transformer for the "${domainName}" domain.
 
 ## PDDL Domain File
@@ -876,22 +896,37 @@ async function generateTransformer(request) {
 ${domainPddl}
 \`\`\`
 
-## Sample Raw States (from DefaultRenderer)
+## Raw State Format (from DefaultRenderer)
 
-Here are ${samples.length} sample state(s) showing the data structure you need to transform:
+The planner produces raw states with this structure (you do NOT receive sample states \u2014 generate code that works for ANY valid problem in this domain):
 
 \`\`\`json
-${JSON.stringify(samples, null, 2)}
+{
+  "domain": "${domainName}",
+  "objects": [
+    { "id": "<pddl-object-name>", "type": "<pddl-type>", "label": "<pddl-object-name>", "properties": { "status": "unknown" } }
+  ],
+  "relations": [
+    { "type": "<predicate-name>", "source": "<arg1>", "target": "<arg2>" },
+    { "type": "<unary-predicate>", "source": "<arg1>" },
+    { "type": "<nullary-predicate>", "source": "global", "properties": { "value": true } }
+  ],
+  "metadata": { "step": 0, "action": "(action-name args)" }
+}
 \`\`\`
+
+- Each PDDL object becomes an entry in \`objects\` with its PDDL type.
+- Each true predicate in the state becomes a \`relation\`. Binary predicates have \`source\` and \`target\`. Unary predicates have only \`source\`. Nullary predicates have \`source: "global"\`.
+- The object names and counts will vary between problems. Your code must handle ANY number of objects.
 
 ## Instructions
 
 1. Read all reference files in the skill folder (SKILL.md, interfaces.ts, example-blocks-world.ts, rules.md).
-2. Analyze the PDDL domain to understand the object types, predicates, and actions.
-3. Analyze the sample states to understand what data is available.
-4. Design a spatial layout strategy appropriate for this domain.
+2. Analyze the PDDL domain predicates, types, and actions to understand the domain semantics.
+3. From the predicates, infer what relationships exist (stacking, containment, location, connectivity, etc.).
+4. Design a spatial layout strategy appropriate for this domain that works for any number of objects.
 5. Generate the transformer function following the output contract in SKILL.md.
-6. Validate your code by running it with the sample states.
+6. The function MUST be fully generic \u2014 it must work for any valid problem in this domain, not just a specific set of objects.
 
 Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code, starting with the interface declarations.`;
     let rawResponse;
@@ -1454,13 +1489,15 @@ var visualizerRouter = router({
   // ==================== LLM RENDERER ENDPOINTS ====================
   /**
    * Generate a Canvas renderer using an LLM (Claude or Gemini).
-   * Accepts domain name, sample states, and the LLM provider to use.
+   * Accepts domain name, PDDL domain text, transformer code, and the LLM provider.
+   * No sample states needed — the LLM reads the transformer code to understand the enriched state structure.
    * Returns the generated TypeScript code.
    */
   llmGenerateRenderer: publicProcedure.input(
     z2.object({
       domainName: z2.string(),
-      states: z2.array(z2.any()),
+      domainPddl: z2.string(),
+      transformerCode: z2.string(),
       provider: z2.enum(["claude", "gemini"])
     })
   ).mutation(async ({ input }) => {
@@ -1468,20 +1505,12 @@ var visualizerRouter = router({
     console.log("[Stage 2 - Renderer] Starting canvas renderer generation");
     console.log("[Stage 2 - Renderer] Domain:", input.domainName);
     console.log("[Stage 2 - Renderer] Provider:", input.provider);
-    console.log("[Stage 2 - Renderer] States count:", input.states.length);
-    if (input.states.length > 0) {
-      const firstState = input.states[0];
-      const hasObjects = firstState?.objects && Array.isArray(firstState.objects);
-      const firstObj = hasObjects ? firstState.objects[0] : null;
-      const isEnriched = firstObj && (firstObj.position || firstObj.properties);
-      console.log("[Stage 2 - Renderer] States enriched:", !!isEnriched);
-      if (firstObj) {
-        console.log("[Stage 2 - Renderer] Sample object keys:", Object.keys(firstObj).join(", "));
-      }
-    }
+    console.log("[Stage 2 - Renderer] PDDL domain length:", input.domainPddl.length);
+    console.log("[Stage 2 - Renderer] Transformer code length:", input.transformerCode.length);
     const result = await generateRenderer({
       domainName: input.domainName,
-      states: input.states,
+      domainPddl: input.domainPddl,
+      transformerCode: input.transformerCode,
       provider: input.provider
     });
     if (!result.success) {
@@ -1532,26 +1561,23 @@ var visualizerRouter = router({
   // ==================== PDDL DOMAIN INTERPRETER ====================
   /**
    * Generate a TypeScript state transformer for a custom PDDL domain.
-   * Accepts the domain name, full PDDL domain text, sample raw states,
-   * and the LLM provider to use.
+   * Accepts the domain name, full PDDL domain text, and the LLM provider.
+   * No sample states needed — the LLM generates generic code from the PDDL domain alone.
    * Returns the generated and transpiled JavaScript transformer code.
    */
   llmGenerateTransformer: publicProcedure.input(
     z2.object({
       domainName: z2.string(),
       domainPddl: z2.string(),
-      sampleStates: z2.array(z2.any()),
       provider: z2.enum(["claude", "gemini"])
     })
   ).mutation(async ({ input }) => {
     console.log("[llmGenerateTransformer] Starting for domain:", input.domainName);
     console.log("[llmGenerateTransformer] Provider:", input.provider);
-    console.log("[llmGenerateTransformer] Sample states:", input.sampleStates.length);
     console.log("[llmGenerateTransformer] PDDL length:", input.domainPddl.length);
     const result = await generateTransformer({
       domainName: input.domainName,
       domainPddl: input.domainPddl,
-      sampleStates: input.sampleStates,
       provider: input.provider
     });
     if (!result.success) {

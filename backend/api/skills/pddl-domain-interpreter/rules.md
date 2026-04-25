@@ -65,7 +65,8 @@ Read the PDDL domain carefully and choose the layout that matches the domain's n
 - **Do NOT** use `Math.random()` — positions and colors must be deterministic
 - **Do NOT** hardcode positions like `[100, 200]` for specific objects — calculate from index
 - **Do NOT** forget to handle the case where `raw.objects` is empty
-- **Do NOT** assume the sample states show all possible object counts — the function must work for any valid state
+- **Do NOT** assume a specific number of objects — the function must work for any valid state with any number of objects
+- **Do NOT** hardcode object names — always iterate over `raw.objects` and `raw.relations` dynamically
 - **Do NOT** use `Array.prototype.sort()` without a comparator — it sorts lexicographically by default and may be inconsistent
 - **Do NOT** use `Object.keys()` on `raw.relations` — it's an array, not an object
 - **Do NOT** return objects without a `position` field — this will break the Canvas renderer
@@ -73,7 +74,7 @@ Read the PDDL domain carefully and choose the layout that matches the domain's n
 
 ## Validation Checklist
 
-Before returning your code, run it in the sandbox with the provided sample states and verify:
+Before returning your code, verify mentally that:
 
 - [ ] The function compiles without TypeScript errors
 - [ ] Every object in the output has `position: [x, y]`

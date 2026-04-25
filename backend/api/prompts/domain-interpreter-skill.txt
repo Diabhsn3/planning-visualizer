@@ -12,9 +12,9 @@ Your job is to write a TypeScript function that takes one of these flat raw stat
 
 The user will provide:
 1. **The PDDL domain file** (full text of `domain.pddl`)
-2. **2–3 sample raw states** in JSON format, produced by the DefaultRenderer
+2. **A description of the raw state format** (no sample states — you must generate fully generic code from the domain alone)
 
-Each raw state looks like this:
+Each raw state produced by the DefaultRenderer looks like this:
 ```json
 {
   "domain": "my-domain",
@@ -92,7 +92,8 @@ interface RenderedState {
 3. **Assign colors** — `properties.color` is REQUIRED on every VisualObject
 4. **Make labels human-readable** — replace raw PDDL IDs with readable names (e.g., `"block1"` → `"Block 1"`)
 5. **Preserve all relations** from the raw state in the output
-6. **Handle any valid state** for this domain — not just the sample states
+6. **Handle any valid state** for this domain — the function must work for ANY problem with ANY number of objects
+7. **Never hardcode object names or counts** — always iterate over `raw.objects` and `raw.relations` dynamically
 
 ## Layout Strategy
 
@@ -110,6 +111,7 @@ Canvas is **800 × 600** pixels. Origin at top-left. Y increases downward.
 - Colors must be **deterministic** — same object → same color across states
 - **Never use `Math.random()`**
 - Derive positions from object index in a sorted list, not from current state values
+- The function must work for problems with 2 objects or 200 objects — scale layout dynamically
 
 # EXAMPLE OUTPUT (Blocks World Domain)
 
