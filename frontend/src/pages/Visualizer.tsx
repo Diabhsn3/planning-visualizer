@@ -1309,6 +1309,23 @@ export default function Visualizer() {
                                 <span className="text-[11px] text-purple-300/80 leading-relaxed">
                                   LLM rendering is used automatically for custom domains.
                                 </span>
+              </div>
+              {/* LLM Provider selector */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-500 flex-shrink-0">LLM Model</span>
+                <div className="flex items-center gap-1 flex-1">
+                  {[
+                    { id: "claude", label: "Claude", active: "bg-orange-500/15 border-orange-500/30 text-orange-400" },
+                    { id: "gemini", label: "Gemini", active: "bg-blue-500/15 border-blue-500/30 text-blue-400" },
+                  ].map(m => (
+                    <button key={m.id} onClick={() => setLlmProvider(m.id as any)}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                        llmProvider === m.id ? m.active : "bg-white/[0.03] border-white/[0.07] text-slate-600 hover:text-slate-400 hover:border-white/[0.12]"
+                      }`}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
                               </div>
                               {/* Domain Name */}
                               <div>
