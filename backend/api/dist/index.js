@@ -988,16 +988,6 @@ async function getSavedDomain(id) {
 async function saveDomain(params) {
   const store = await loadStore();
   const pddlHash = hashPddl(params.domainPddl);
-  const existing = store.domains.find((d) => d.pddlHash === pddlHash);
-  if (existing) {
-    existing.transformerCode = params.transformerCode;
-    existing.rendererCode = params.rendererCode;
-    existing.provider = params.provider;
-    existing.createdAt = (/* @__PURE__ */ new Date()).toISOString();
-    await saveStore(store);
-    console.log(`[SavedDomains] Updated existing domain: ${existing.displayName} (id=${existing.id})`);
-    return existing;
-  }
   const existingNames = store.domains.map((d) => d.displayName);
   const displayName = generateDisplayName(params.domainName, existingNames);
   const newDomain = {

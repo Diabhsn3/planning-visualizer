@@ -135,18 +135,8 @@ export async function saveDomain(params: {
   const store = await loadStore();
   const pddlHash = hashPddl(params.domainPddl);
 
-  // Check if this exact PDDL already exists
-  const existing = store.domains.find(d => d.pddlHash === pddlHash);
-  if (existing) {
-    // Update the existing entry with new transformer/renderer code
-    existing.transformerCode = params.transformerCode;
-    existing.rendererCode = params.rendererCode;
-    existing.provider = params.provider;
-    existing.createdAt = new Date().toISOString();
-    await saveStore(store);
-    console.log(`[SavedDomains] Updated existing domain: ${existing.displayName} (id=${existing.id})`);
-    return existing;
-  }
+  // Always create a new entry (even for duplicate PDDL) so users can keep
+  // multiple transformer/renderer versions for the same domain.
 
   // Generate a unique display name
   const existingNames = store.domains.map(d => d.displayName);
