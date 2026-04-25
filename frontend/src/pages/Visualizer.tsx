@@ -454,9 +454,9 @@ export default function Visualizer() {
   const [selectedCachedTransformer, setSelectedCachedTransformer] = useState<string | null>(null);
 
   const strategiesQuery      = trpc.visualizer.listStrategies.useQuery();
-  const savedDomainsQuery    = trpc.visualizer.listSavedDomains.useQuery(undefined, { enabled: isCustomDomain });
+  const savedDomainsQuery    = trpc.visualizer.listSavedDomains.useQuery(undefined, { enabled: isCustomDomain, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: false, retry: 1 });
   const loadSavedDomainQuery = trpc.visualizer.loadSavedDomain.useQuery(
-    { id: selectedSavedDomainId! }, { enabled: !!selectedSavedDomainId }
+    { id: selectedSavedDomainId! }, { enabled: !!selectedSavedDomainId, staleTime: 60000, refetchOnWindowFocus: false, refetchOnMount: false, retry: 1 }
   );
   const saveDomainMutation   = trpc.visualizer.saveDomainToLibrary.useMutation({
     onSuccess: (data) => {
@@ -613,7 +613,7 @@ export default function Visualizer() {
   });
 
   const cachedRenderersQuery = trpc.visualizer.llmListCachedRenderers.useQuery(
-    { domain: selectedDomain }, { enabled: renderMode === "llm" }
+    { domain: selectedDomain }, { enabled: renderMode === "llm", staleTime: 30000, refetchOnWindowFocus: false, retry: 1 }
   );
 
   const deleteCachedMutation = trpc.visualizer.llmDeleteCachedRenderer.useMutation({
@@ -726,7 +726,7 @@ export default function Visualizer() {
     },
   });
   const cachedTransformersQuery = trpc.visualizer.llmListCachedTransformers.useQuery(
-    { domain: customDomainName || undefined }, { enabled: isCustomDomain }
+    { domain: customDomainName || undefined }, { enabled: isCustomDomain, staleTime: 30000, refetchOnWindowFocus: false, retry: 1 }
   );
   const deleteTransformerMutation = trpc.visualizer.llmDeleteCachedTransformer.useMutation({
     onSuccess: () => cachedTransformersQuery.refetch(),
