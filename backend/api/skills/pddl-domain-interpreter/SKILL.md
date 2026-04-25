@@ -65,6 +65,12 @@ This function must:
 4. **Compute spatial layout** — assign `[x, y]` positions to every object so the Canvas renderer can draw them without doing layout itself
 5. **Return a complete `RenderedState`** — with the same `domain`, enriched `objects`, enriched `relations`, and the original `metadata`
 
+## IMPORTANT RULES
+
+1. **Do not use the code execution tool.** (This stops the "testing" loops that cost money).
+2. **Do not explain anything.**
+3. **Output ONLY the code in a single block.**
+
 ## Workflow
 
 Follow these steps exactly:

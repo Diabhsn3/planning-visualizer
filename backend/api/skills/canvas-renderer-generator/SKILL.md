@@ -19,6 +19,12 @@ This skill includes reference files you MUST read before generating code:
 2. **`example-hanoi.ts`** — A complete, working renderer for the Tower of Hanoi domain. Study this carefully as a template for your output.
 3. **`rules.md`** — Visualization rules, best practices, and common mistakes to avoid.
 
+## IMPORTANT RULES
+
+1. **Do not use the code execution tool.** (This stops the "testing" loops that cost money).
+2. **Do not explain anything.**
+3. **Output ONLY the code in a single block.**
+
 ## Workflow
 
 Follow these steps exactly:
