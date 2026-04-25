@@ -169,18 +169,41 @@ async function getOrCreateClaudeSkill(client) {
       }
       console.log(`[LLM Renderer] Uploading new Claude skill "${SKILL_DISPLAY_TITLE_RENDERER}"...`);
       const skillDir = "canvas-renderer-generator";
-      const skill = await client.beta.skills.create({
-        display_title: SKILL_DISPLAY_TITLE_RENDERER,
-        files: [
-          await toFile(createReadStream(SKILL_MD_PATH), `${skillDir}/SKILL.md`, { type: "text/markdown" }),
-          await toFile(createReadStream(SKILL_INTERFACES_PATH), `${skillDir}/interfaces.ts`, { type: "text/plain" }),
-          await toFile(createReadStream(SKILL_EXAMPLE_PATH), `${skillDir}/example-hanoi.ts`, { type: "text/plain" }),
-          await toFile(createReadStream(SKILL_RULES_PATH), `${skillDir}/rules.md`, { type: "text/markdown" })
-        ],
-        betas: ["skills-2025-10-02"]
-      });
-      cachedSkillId = skill.id;
-      console.log(`[LLM Renderer] Created Claude skill: ${cachedSkillId} (version: ${skill.latest_version})`);
+      let newSkillId;
+      try {
+        const skill = await client.beta.skills.create({
+          display_title: SKILL_DISPLAY_TITLE_RENDERER,
+          files: [
+            await toFile(createReadStream(SKILL_MD_PATH), `${skillDir}/SKILL.md`, { type: "text/markdown" }),
+            await toFile(createReadStream(SKILL_INTERFACES_PATH), `${skillDir}/interfaces.ts`, { type: "text/plain" }),
+            await toFile(createReadStream(SKILL_EXAMPLE_PATH), `${skillDir}/example-hanoi.ts`, { type: "text/plain" }),
+            await toFile(createReadStream(SKILL_RULES_PATH), `${skillDir}/rules.md`, { type: "text/markdown" })
+          ],
+          betas: ["skills-2025-10-02"]
+        });
+        newSkillId = skill.id;
+        console.log(`[LLM Renderer] Created Claude skill: ${newSkillId} (version: ${skill.latest_version})`);
+      } catch (createErr) {
+        if (createErr?.status === 400 && createErr?.message?.includes("reuse an existing display_title")) {
+          console.log(`[LLM Renderer] Skill already exists on Anthropic \u2014 fetching existing skill ID...`);
+          const skillsList = await client.beta.skills.list({ betas: ["skills-2025-10-02"] });
+          let foundId = null;
+          for await (const s of skillsList) {
+            if (s.display_title === SKILL_DISPLAY_TITLE_RENDERER) {
+              foundId = s.id;
+              break;
+            }
+          }
+          if (!foundId) {
+            throw new Error(`[LLM Renderer] Could not find existing skill after duplicate-title error`);
+          }
+          newSkillId = foundId;
+          console.log(`[LLM Renderer] Recovered existing skill: ${newSkillId}`);
+        } else {
+          throw createErr;
+        }
+      }
+      cachedSkillId = newSkillId;
       await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
       await writeFile(SKILL_HASH_CACHE_PATH, currentHash, "utf-8");
       return cachedSkillId;
@@ -534,18 +557,41 @@ async function getOrCreateClaudeSkill2(client) {
       }
       console.log(`[LLM Interpreter] Uploading new Claude skill "${SKILL_DISPLAY_TITLE_INTERPRETER}"...`);
       const skillDir = "pddl-domain-interpreter";
-      const skill = await client.beta.skills.create({
-        display_title: SKILL_DISPLAY_TITLE_INTERPRETER,
-        files: [
-          await toFile2(createReadStream2(SKILL_MD_PATH2), `${skillDir}/SKILL.md`, { type: "text/markdown" }),
-          await toFile2(createReadStream2(SKILL_INTERFACES_PATH2), `${skillDir}/interfaces.ts`, { type: "text/plain" }),
-          await toFile2(createReadStream2(SKILL_EXAMPLE_PATH2), `${skillDir}/example-blocks-world.ts`, { type: "text/plain" }),
-          await toFile2(createReadStream2(SKILL_RULES_PATH2), `${skillDir}/rules.md`, { type: "text/markdown" })
-        ],
-        betas: ["skills-2025-10-02"]
-      });
-      cachedSkillId2 = skill.id;
-      console.log(`[LLM Interpreter] Created Claude skill: ${cachedSkillId2} (version: ${skill.latest_version})`);
+      let newSkillId;
+      try {
+        const skill = await client.beta.skills.create({
+          display_title: SKILL_DISPLAY_TITLE_INTERPRETER,
+          files: [
+            await toFile2(createReadStream2(SKILL_MD_PATH2), `${skillDir}/SKILL.md`, { type: "text/markdown" }),
+            await toFile2(createReadStream2(SKILL_INTERFACES_PATH2), `${skillDir}/interfaces.ts`, { type: "text/plain" }),
+            await toFile2(createReadStream2(SKILL_EXAMPLE_PATH2), `${skillDir}/example-blocks-world.ts`, { type: "text/plain" }),
+            await toFile2(createReadStream2(SKILL_RULES_PATH2), `${skillDir}/rules.md`, { type: "text/markdown" })
+          ],
+          betas: ["skills-2025-10-02"]
+        });
+        newSkillId = skill.id;
+        console.log(`[LLM Interpreter] Created Claude skill: ${newSkillId} (version: ${skill.latest_version})`);
+      } catch (createErr) {
+        if (createErr?.status === 400 && createErr?.message?.includes("reuse an existing display_title")) {
+          console.log(`[LLM Interpreter] Skill already exists on Anthropic \u2014 fetching existing skill ID...`);
+          const skillsList = await client.beta.skills.list({ betas: ["skills-2025-10-02"] });
+          let foundId = null;
+          for await (const s of skillsList) {
+            if (s.display_title === SKILL_DISPLAY_TITLE_INTERPRETER) {
+              foundId = s.id;
+              break;
+            }
+          }
+          if (!foundId) {
+            throw new Error(`[LLM Interpreter] Could not find existing skill after duplicate-title error`);
+          }
+          newSkillId = foundId;
+          console.log(`[LLM Interpreter] Recovered existing skill: ${newSkillId}`);
+        } else {
+          throw createErr;
+        }
+      }
+      cachedSkillId2 = newSkillId;
       await writeFile2(SKILL_ID_CACHE_PATH2, cachedSkillId2, "utf-8");
       await writeFile2(SKILL_HASH_CACHE_PATH2, currentHash, "utf-8");
       return cachedSkillId2;
