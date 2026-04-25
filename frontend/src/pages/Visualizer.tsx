@@ -462,6 +462,9 @@ export default function Visualizer() {
     onSuccess: (data) => {
       console.log("[SavedDomains] Domain saved to library:", data.displayName);
       savedDomainsQuery.refetch();
+      // Auto-switch to saved domains section and select the new domain
+      setCustomMode("saved");
+      setSelectedSavedDomainId(data.id);
     },
     onError: (err) => {
       console.error("[SavedDomains] Failed to save domain:", err.message);
