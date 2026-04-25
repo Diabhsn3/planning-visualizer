@@ -1714,7 +1714,8 @@ async function startServer() {
     "/api/trpc",
     createExpressMiddleware({
       router: appRouter,
-      createContext
+      createContext,
+      allowMethodOverride: true
     })
   );
   const preferredPort = parseInt(process.env.PORT || "4000");

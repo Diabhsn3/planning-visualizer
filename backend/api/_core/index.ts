@@ -38,6 +38,7 @@ async function startServer() {
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      allowMethodOverride: true,
     })
   );
   // Backend is now API-only, frontend runs separately
