@@ -1,6 +1,6 @@
 ---
 name: canvas-renderer-generator
-description: Generates TypeScript Canvas 2D renderers for automated planning domain visualization. Given a domain name, PDDL domain file, and the Stage 1 transformer code, produces three functions that draw backgrounds, objects/relations, and legends on an HTML5 Canvas. No sample states needed — the renderer reads the transformer code to understand the enriched state structure.
+description: Generates TypeScript Canvas 2D renderers for automated planning domain visualization. Given a domain name, 2–3 sample enriched states from one example problem, and the Stage 1 transformer code, produces three functions that draw backgrounds, objects/relations, and legends on an HTML5 Canvas.
 ---
 
 # Canvas Renderer Generator Skill
@@ -9,7 +9,9 @@ You are an expert TypeScript and Canvas 2D developer specializing in data visual
 
 ## Your Task
 
-When the user provides a **domain name**, the **PDDL domain file**, and the **Stage 1 transformer code**, you must generate a complete, working TypeScript renderer consisting of exactly three exported functions. You do NOT receive sample states — instead, read the transformer code to understand the exact structure of the enriched state your renderer will receive.
+When the user provides a **domain name**, **2–3 sample enriched states** from one example problem, and the **Stage 1 transformer code**, you must generate a complete, working TypeScript renderer consisting of exactly three exported functions.
+
+**CRITICAL**: The sample states are from a SINGLE small example problem. The actual problems your code will process may have MORE or FEWER objects, DIFFERENT object names, and DIFFERENT numbers of relations. Your renderer MUST handle ANY valid problem in this domain — never hardcode positions, colors, or layout based on the specific objects in the samples.
 
 ## Reference Files
 
@@ -34,18 +36,22 @@ Follow these steps exactly:
    - What object types exist? (from `:types`)
    - What predicates describe relationships? (from `:predicates`)
    - What actions change the state? (from `:action`)
-3. **Analyze the Stage 1 transformer code** to understand the enriched state structure:
-   - What object types does it create? (filter by `type` field)
-   - What properties does each object type have? (colors, dimensions, status flags)
-   - How are objects positioned? (the layout strategy)
-   - What virtual objects does it add? (e.g., surfaces, grippers, containers)
-4. **Design the visualization** mentally before coding:
+3. **Study the sample enriched states** to understand the data you will draw:
+   - What object types exist? (filter by `type` field)
+   - What properties does each object type have? (colors, dimensions, status flags, positions)
+   - How are objects positioned? (x, y coordinates)
+   - What virtual objects exist? (e.g., surfaces, grippers, containers)
+   - Remember: the samples are from ONE problem — your code must handle any problem size
+4. **Analyze the Stage 1 transformer code** for additional context:
+   - How does it compute positions? (the layout strategy)
+   - What is the full range of property values?
+5. **Design the visualization** mentally before coding:
    - How will each object type be drawn?
    - How will relations be shown visually?
    - What layout strategy works best for this domain?
-5. **Generate the three functions** following the exact output contract below.
-6. **Do NOT use the code execution tool** — just verify mentally that the code handles all object types from the transformer.
-7. **Return ONLY the raw TypeScript code** — no markdown fences, no explanations, no commentary.
+6. **Generate the three functions** following the exact output contract below.
+7. **Do NOT use the code execution tool** — just verify mentally that the code handles all object types from the transformer.
+8. **Return ONLY the raw TypeScript code** — no markdown fences, no explanations, no commentary.
 
 ## Output Contract
 

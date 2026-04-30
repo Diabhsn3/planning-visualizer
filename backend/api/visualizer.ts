@@ -555,6 +555,7 @@ export const visualizerRouter = router({
     .input(
       z.object({
         domainName: z.string(),
+        states: z.array(z.any()),
         domainPddl: z.string(),
         transformerCode: z.string(),
         provider: z.enum(["claude", "gemini"]),
@@ -565,11 +566,13 @@ export const visualizerRouter = router({
       console.log("[Stage 2 - Renderer] Starting canvas renderer generation");
       console.log("[Stage 2 - Renderer] Domain:", input.domainName);
       console.log("[Stage 2 - Renderer] Provider:", input.provider);
+      console.log("[Stage 2 - Renderer] Sample enriched states:", input.states.length);
       console.log("[Stage 2 - Renderer] PDDL domain length:", input.domainPddl.length);
       console.log("[Stage 2 - Renderer] Transformer code length:", input.transformerCode.length);
 
       const result = await generateRenderer({
         domainName: input.domainName,
+        states: input.states,
         domainPddl: input.domainPddl,
         transformerCode: input.transformerCode,
         provider: input.provider as LLMProvider,
@@ -637,7 +640,7 @@ export const visualizerRouter = router({
   /**
    * Generate a TypeScript state transformer for a custom PDDL domain.
    * Accepts the domain name, full PDDL domain text, and the LLM provider.
-   * No sample states needed — the LLM generates generic code from the PDDL domain alone.
+   * Accepts sample states from the example problem + PDDL domain text.
    * Returns the generated and transpiled JavaScript transformer code.
    */
   llmGenerateTransformer: publicProcedure
@@ -645,6 +648,7 @@ export const visualizerRouter = router({
       z.object({
         domainName: z.string(),
         domainPddl: z.string(),
+        sampleStates: z.array(z.any()),
         provider: z.enum(["claude", "gemini"]),
       })
     )
@@ -652,10 +656,12 @@ export const visualizerRouter = router({
       console.log("[llmGenerateTransformer] Starting for domain:", input.domainName);
       console.log("[llmGenerateTransformer] Provider:", input.provider);
       console.log("[llmGenerateTransformer] PDDL length:", input.domainPddl.length);
+      console.log("[llmGenerateTransformer] Sample states:", input.sampleStates.length);
 
       const result = await generateTransformer({
         domainName: input.domainName,
         domainPddl: input.domainPddl,
+        sampleStates: input.sampleStates,
         provider: input.provider as LLMProvider,
       });
 

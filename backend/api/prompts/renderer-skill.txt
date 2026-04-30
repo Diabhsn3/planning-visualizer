@@ -3,10 +3,10 @@ Your task is to generate a complete, working TypeScript renderer for a specific 
 
 You will receive:
 1. The name of the domain (e.g., "blocks-world", "logistics")
-2. The full PDDL domain file (domain.pddl)
-3. The Stage 1 transformer code that converts raw planner states into enriched `RenderedState` objects
+2. **2–3 sample enriched states** from ONE example problem (output of the Stage 1 transformer)
+3. The Stage 1 transformer code (for reference, to understand the full range of object types and properties)
 
-You do NOT receive sample states. Instead, read the transformer code to understand the exact structure of the enriched state your renderer will receive.
+**CRITICAL**: The sample states are from a SINGLE small example problem. The actual problems your code will process may have MORE or FEWER objects, DIFFERENT object names, and DIFFERENT numbers of relations. Your renderer MUST handle ANY valid problem in this domain — never hardcode positions, colors, or layout based on the specific objects in the samples.
 
 # THE DATA STRUCTURE
 The data you will visualize follows this exact TypeScript interface:

@@ -80,6 +80,8 @@ export interface GenerateTransformerRequest {
   domainName: string;
   /** Full text of the PDDL domain file (domain.pddl) */
   domainPddl: string;
+  /** 2-3 sample raw states from the DefaultRenderer (from the example problem) */
+  sampleStates: any[];
   /** Which LLM provider to use */
   provider: LLMProvider;
 }
@@ -466,15 +468,17 @@ async function generateWithGemini(userMessage: string): Promise<string> {
 export async function generateTransformer(
   request: GenerateTransformerRequest
 ): Promise<GenerateTransformerResponse> {
-  const { domainName, domainPddl, provider } = request;
+  const { domainName, domainPddl, sampleStates, provider } = request;
   const model = MODELS[provider];
 
   console.log(`[LLM Interpreter] Starting generation for domain: ${domainName}`);
   console.log(`[LLM Interpreter] Provider: ${provider} (${model.name})`);
   console.log(`[LLM Interpreter] PDDL domain length: ${domainPddl.length} chars`);
+  console.log(`[LLM Interpreter] Sample states: ${sampleStates.length}`);
 
   try {
-    // 1. Build user message — PDDL domain only, no sample states
+    // 1. Build user message — PDDL domain + sample states
+    const sampleSlice = sampleStates.slice(0, 3);
     const userMessage = `Generate a complete TypeScript state transformer for the "${domainName}" domain.
 
 ## PDDL Domain File
@@ -483,37 +487,29 @@ export async function generateTransformer(
 ${domainPddl}
 \`\`\`
 
-## Raw State Format (from DefaultRenderer)
+## Sample Raw States (from DefaultRenderer)
 
-The planner produces raw states with this structure (you do NOT receive sample states — generate code that works for ANY valid problem in this domain):
+Below are ${sampleSlice.length} sample raw states from ONE example problem. Use them to understand the data format and structure:
 
 \`\`\`json
-{
-  "domain": "${domainName}",
-  "objects": [
-    { "id": "<pddl-object-name>", "type": "<pddl-type>", "label": "<pddl-object-name>", "properties": { "status": "unknown" } }
-  ],
-  "relations": [
-    { "type": "<predicate-name>", "source": "<arg1>", "target": "<arg2>" },
-    { "type": "<unary-predicate>", "source": "<arg1>" },
-    { "type": "<nullary-predicate>", "source": "global", "properties": { "value": true } }
-  ],
-  "metadata": { "step": 0, "action": "(action-name args)" }
-}
+${JSON.stringify(sampleSlice, null, 2)}
 \`\`\`
 
-- Each PDDL object becomes an entry in \`objects\` with its PDDL type.
-- Each true predicate in the state becomes a \`relation\`. Binary predicates have \`source\` and \`target\`. Unary predicates have only \`source\`. Nullary predicates have \`source: "global"\`.
-- The object names and counts will vary between problems. Your code must handle ANY number of objects.
+**CRITICAL**: These samples are from a SINGLE small example problem. The actual problems your code will process may have:
+- MORE or FEWER objects of each type (e.g., 10 locations instead of 3)
+- DIFFERENT object names (e.g., "harbor", "island" instead of "loca", "locb")
+- DIFFERENT numbers of relations
+
+Your transformer MUST dynamically handle ANY valid problem in this domain — never hardcode object names, counts, or positions for the sample above.
 
 ## Instructions
 
 1. Read all reference files in the skill folder (SKILL.md, interfaces.ts, example-blocks-world.ts, rules.md).
 2. Analyze the PDDL domain predicates, types, and actions to understand the domain semantics.
-3. From the predicates, infer what relationships exist (stacking, containment, location, connectivity, etc.).
+3. Study the sample states to understand the data format (object structure, relation structure, property names).
 4. Design a spatial layout strategy appropriate for this domain that works for any number of objects.
 5. Generate the transformer function following the output contract in SKILL.md.
-6. The function MUST be fully generic — it must work for any valid problem in this domain, not just a specific set of objects.
+6. The function MUST be fully generic — it must work for any valid problem in this domain, not just the sample objects shown above.
 
 Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code, starting with the interface declarations.`;
 

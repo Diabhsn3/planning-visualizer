@@ -75,6 +75,8 @@ export type LLMProvider = keyof typeof MODELS;
 
 export interface GenerateRendererRequest {
   domainName: string;
+  /** 2-3 sample enriched states (output of the transformer applied to sample raw states) */
+  states: any[];
   /** Full text of the PDDL domain file (domain.pddl) */
   domainPddl: string;
   /** The generated transformer code from Stage 1 — so the renderer knows the enriched state structure */
@@ -481,46 +483,46 @@ async function generateWithGemini(userMessage: string): Promise<string> {
 export async function generateRenderer(
   request: GenerateRendererRequest
 ): Promise<GenerateRendererResponse> {
-  const { domainName, domainPddl, transformerCode, provider } = request;
+  const { domainName, states, domainPddl, transformerCode, provider } = request;
   const model = MODELS[provider];
 
   console.log(`[LLM Renderer] Starting generation for domain: ${domainName}`);
   console.log(`[LLM Renderer] Provider: ${provider} (${model.name})`);
+  console.log(`[LLM Renderer] Sample enriched states: ${states.length}`);
   console.log(`[LLM Renderer] PDDL domain length: ${domainPddl.length} chars`);
   console.log(`[LLM Renderer] Transformer code length: ${transformerCode.length} chars`);
 
   try {
-    // 1. Build user message — PDDL domain + transformer code, no sample states
+    // 1. Build user message — sample enriched states + transformer code for context
+    const sampleStates = states.slice(0, 3);
     const userMessage = `Generate a complete Canvas renderer for the "${domainName}" domain.
 
-## PDDL Domain File
+## Sample Enriched States (output of the Stage 1 transformer)
 
-\`\`\`pddl
-${domainPddl}
+Below are ${sampleStates.length} sample enriched states from ONE example problem. Use them to understand the exact data structure your renderer will receive:
+
+\`\`\`json
+${JSON.stringify(sampleStates, null, 2)}
 \`\`\`
 
-## Stage 1 Transformer Code (already generated)
+**CRITICAL**: These samples are from a SINGLE small example problem. The actual problems may have:
+- MORE or FEWER objects of each type (e.g., 10 locations instead of 3)
+- DIFFERENT object names and labels
+- DIFFERENT numbers of relations
 
-The following transformer function converts raw planner states into enriched \`RenderedState\` objects with positions, colors, labels, and layout. Read it carefully to understand the exact structure of the enriched state your renderer will receive:
+Your renderer MUST dynamically handle ANY number of objects — never hardcode positions, colors, or layout for the specific objects shown above.
+
+## Stage 1 Transformer Code (for reference)
+
+The following transformer function produces the enriched states above. Read it to understand the full range of object types, properties, and layout logic:
 
 \`\`\`typescript
 ${transformerCode}
 \`\`\`
 
-## What Your Renderer Receives
-
-Your renderer will receive the OUTPUT of the transformer above — a \`RenderedState\` with:
-- \`objects\`: array of \`VisualObject\` — each has \`id\`, \`type\`, \`label\`, \`position: [x, y]\`, and \`properties\` (including \`color\`, \`width\`, \`height\`, and domain-specific fields)
-- \`relations\`: array of \`VisualRelation\` — each has \`type\`, \`source\`, optional \`target\`
-
-Analyze the transformer code to understand:
-1. What object types it creates (filter by \`type\` field)
-2. What properties each object type has (colors, dimensions, status flags)
-3. How objects are positioned (the layout strategy)
-4. What virtual objects it adds (e.g., surfaces, grippers, containers)
-
+Analyze the objects, their types, positions, properties, and the relations between them.
 Then generate the three TypeScript functions as specified in the instructions.
-The renderer MUST be generic — it must work for any number of objects, not just a specific problem.
+The renderer MUST be generic — it must work for any number of objects, not just the specific problem shown above.
 Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code.`;
 
     // 2. Call LLM

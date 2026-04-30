@@ -12,7 +12,9 @@ Your job is to write a TypeScript function that takes one of these flat raw stat
 
 The user will provide:
 1. **The PDDL domain file** (full text of `domain.pddl`)
-2. **A description of the raw state format** (no sample states — you must generate fully generic code from the domain alone)
+2. **2–3 sample raw states** from ONE example problem (to help you understand the data format)
+
+**CRITICAL**: The sample states are from a SINGLE small example problem. The actual problems your code will process may have MORE or FEWER objects, DIFFERENT object names, and DIFFERENT numbers of relations. Your code MUST handle ANY valid problem in this domain — never hardcode object names, counts, or positions based on the samples.
 
 Each raw state produced by the DefaultRenderer looks like this:
 ```json

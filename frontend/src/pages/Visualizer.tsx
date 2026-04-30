@@ -899,7 +899,7 @@ export default function Visualizer() {
       console.warn("[BasicRenderer] Lookup failed, proceeding with LLM:", err);
     }
 
-    llmGenerateMutation.mutate({ domainName: selectedDomain, domainPddl: "", transformerCode: "", provider: llmProvider });
+    llmGenerateMutation.mutate({ domainName: selectedDomain, states: renderedStates.slice(0, 3), domainPddl: "", transformerCode: "", provider: llmProvider });
   };
 
   useEffect(() => { setLlmRendererCode(null); setLlmError(null); setLlmModelInfo(null); }, [selectedDomain]);
@@ -933,13 +933,35 @@ export default function Visualizer() {
       if (data.code) {
         setLlmTransformerCode(data.code); setTransformerError(null);
         setTransformerModelInfo(`${data.provider} (${data.model})`);
-        // Auto-chain: trigger canvas renderer generation using PDDL domain + transformer code
-        // The renderer LLM reads the transformer code to understand the enriched state structure.
-        // No sample states needed — this makes the renderer fully domain-generic.
-        {
+        // Auto-chain: trigger canvas renderer generation using enriched sample states
+        // Apply transformer to sample states FIRST so renderer LLM sees enriched
+        // objects (with positions, colors, etc.) instead of raw predicate data.
+        if (renderedStates.length > 0) {
           setRenderMode("llm");
           setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null);
-          // Get the domain PDDL to pass to the renderer LLM
+
+          // Dynamically find and run the transform* function on sample states
+          let enrichedStates = renderedStates.slice(0, 3);
+          try {
+            const fnMatch = data.code.match(/function\s+(transform\w+)/);
+            const transformFnName = fnMatch ? fnMatch[1] : null;
+            if (transformFnName) {
+              // eslint-disable-next-line no-new-func
+              const factory = new Function(
+                data.code + "\nreturn typeof " + transformFnName + " !== 'undefined' ? " + transformFnName + " : null;"
+              );
+              const transformFn = factory();
+              if (typeof transformFn === 'function') {
+                enrichedStates = enrichedStates.map((s: any) => {
+                  try { return transformFn(s); } catch { return s; }
+                });
+              }
+            }
+          } catch (e) {
+            console.warn("[Auto-chain] Could not pre-enrich states for renderer LLM:", e);
+          }
+
+          // Get the domain PDDL to pass alongside enriched states
           const getDomainPddlForRenderer = async (): Promise<string> => {
             if (customDomainInputMode === "file" && customDomainFile) {
               return new Promise<string>((resolve) => {
@@ -951,13 +973,16 @@ export default function Visualizer() {
             return customDomainText;
           };
           getDomainPddlForRenderer().then(domainPddl => {
-            console.log("[Stage 2 - Frontend] Sending PDDL domain + transformer code to renderer LLM");
+            console.log("[Stage 2 - Frontend] Sending enriched states + transformer code to renderer LLM");
             console.log("[Stage 2 - Frontend] Domain:", customDomainName || "custom");
             console.log("[Stage 2 - Frontend] Provider:", data.provider);
-            console.log("[Stage 2 - Frontend] PDDL length:", domainPddl.length);
-            console.log("[Stage 2 - Frontend] Transformer code length:", data.code!.length);
+            console.log("[Stage 2 - Frontend] Enriched states count:", enrichedStates.length);
+            if (enrichedStates.length > 0 && enrichedStates[0]?.objects?.[0]) {
+              console.log("[Stage 2 - Frontend] Sample object keys:", Object.keys(enrichedStates[0].objects[0]).join(", "));
+            }
             llmGenerateMutation.mutate({
               domainName: customDomainName || "custom",
+              states: enrichedStates,
               domainPddl,
               transformerCode: data.code!,
               provider: (data.provider?.toLowerCase().includes("claude") ? "claude" : "gemini") as "claude" | "gemini",
@@ -1005,6 +1030,7 @@ export default function Visualizer() {
       llmTransformerMutation.mutate({
         domainName: customDomainName || "custom",
         domainPddl,
+        sampleStates: renderedStates.slice(0, 3),
         provider: llmProvider,
       });
     };
@@ -1063,6 +1089,7 @@ export default function Visualizer() {
     llmTransformerMutation.mutate({
       domainName: customDomainName || "custom",
       domainPddl: pendingPddl,
+      sampleStates: renderedStates.slice(0, 3),
       provider: llmProvider,
     });
   };

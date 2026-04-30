@@ -1,6 +1,6 @@
 ---
 name: pddl-domain-interpreter
-description: Generates a TypeScript state transformer function for any PDDL planning domain. Given only the PDDL domain file (no sample states), produces a single TypeScript function that enriches each raw state with proper object types, labels, spatial layout, colors, and properties — ready for the Canvas renderer to draw.
+description: Generates a TypeScript state transformer function for any PDDL planning domain. Given the PDDL domain file and 2–3 sample raw states from one example problem, produces a single TypeScript function that enriches each raw state with proper object types, labels, spatial layout, colors, and properties — ready for the Canvas renderer to draw.
 ---
 
 # PDDL Domain Interpreter Skill
@@ -31,7 +31,7 @@ The user will provide:
    - All predicates and their arities (`:predicates`)
    - All actions and their effects (`:action`)
 
-2. **A description of the raw state format** — you do NOT receive sample states. Instead, you must generate fully generic code based on the PDDL domain alone. The raw states produced by the Python `DefaultRenderer` follow this format:
+2. **2–3 sample raw states** from ONE example problem — these help you understand the data format and structure. The raw states produced by the Python `DefaultRenderer` follow this format:
    ```json
    {
      "domain": "my-domain",
@@ -48,7 +48,8 @@ The user will provide:
    ```
    - Each PDDL object becomes an entry in `objects` with its PDDL type.
    - Each true predicate in the state becomes a `relation`. Binary predicates have `source` and `target`. Unary predicates have only `source`. Nullary predicates have `source: "global"`.
-   - The object names and counts will vary between problems. Your code must handle ANY number of objects.
+
+   **CRITICAL**: The sample states are from a SINGLE small example problem. The actual problems your code will process may have MORE or FEWER objects, DIFFERENT object names, and DIFFERENT numbers of relations. Your code MUST handle ANY valid problem in this domain — never hardcode object names, counts, or positions based on the samples.
 
 ## What You Must Output
 
@@ -85,10 +86,11 @@ Follow these steps exactly:
    - What are the predicates? Which ones describe spatial relationships (on, at, in, connected)? Which describe state (clear, holding, empty)?
    - What do the actions do? What changes between states?
 
-3. **Infer the raw state structure from the PDDL domain**:
-   - What object types will appear? (from `:types`)
-   - What relations will be active? (from `:predicates`)
-   - How should objects be laid out spatially? (infer from predicate semantics: stacks, grids, rooms, pegs, graph nodes, etc.)
+3. **Study the sample states** to understand the data format:
+   - What do the `objects` entries look like? (id, type, label, properties)
+   - What do the `relations` entries look like? (type, source, target)
+   - How do the predicates from the PDDL domain map to relations?
+   - Remember: the samples are from ONE problem — your code must handle any problem size
 
 4. **Design the layout strategy** before coding:
    - What is the natural visual metaphor for this domain? (blocks stacking, robots in rooms, trucks at depots, pegs with disks, etc.)
