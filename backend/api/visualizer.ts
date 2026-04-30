@@ -3,7 +3,7 @@ import { z } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { generateRenderer, type LLMProvider } from "./llm-renderer";
 import { generateTransformer } from "./llm-domain-interpreter";
-import { listSavedDomains, getSavedDomain, saveDomain, findSavedDomainByPddl } from "./saved-domains";
+import { listSavedDomains, getSavedDomain, saveDomain, findSavedDomainByPddl, findAllSavedDomainsByPddl } from "./saved-domains";
 import { saveBasicRenderer, findBasicRenderer } from "./basic-renderer-cache";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -699,12 +699,16 @@ export const visualizerRouter = router({
     }),
 
   /**
-   * Look up a saved domain by the hash of its PDDL text.
-   * Returns the existing entry (with hydrated transformer + renderer code)
-   * if one was previously generated for this exact PDDL, or null otherwise.
+   * Look up saved domains by the hash of an uploaded PDDL.
    *
-   * The frontend calls this BEFORE Stage 1 to skip both LLM calls when the
-   * same domain has already been processed.
+   * Returns:
+   *   - `matches`: lightweight metadata for ALL saved entries with the same
+   *     pddlHash, newest-first. The frontend uses this to render rows in
+   *     the "duplicate detected" modal so the user can pick a specific
+   *     version to reuse.
+   *   - `latest`: the newest match with code hydrated, or null. Provided
+   *     for callers that just want the most-recent version without an
+   *     extra round-trip through getSavedDomain.
    */
   lookupSavedDomainByPddl: publicProcedure
     .input(
@@ -713,15 +717,18 @@ export const visualizerRouter = router({
       })
     )
     .query(async ({ input }) => {
-      const hit = await findSavedDomainByPddl(input.domainPddl);
-      if (hit) {
+      const matches = await findAllSavedDomainsByPddl(input.domainPddl);
+      const latest = matches.length > 0
+        ? await findSavedDomainByPddl(input.domainPddl)
+        : null;
+      if (matches.length > 0) {
         console.log(
-          `[lookupSavedDomainByPddl] HIT — returning "${hit.displayName}" (id=${hit.id})`
+          `[lookupSavedDomainByPddl] HIT — ${matches.length} match(es); latest "${matches[0].displayName}" (id=${matches[0].id})`
         );
       } else {
         console.log("[lookupSavedDomainByPddl] MISS — no cached domain");
       }
-      return hit;
+      return { matches, latest };
     }),
 
   /**

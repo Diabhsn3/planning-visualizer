@@ -285,12 +285,260 @@ const FloatingParticles = () => {
   );
 };
 
+// ── Stage 1 icon: an animated PDDL document being parsed ────────────────────
+const AnalyzingIcon = () => {
+  // code lines, each with width + syntax-coloured tint
+  const lines = [
+    { y: 30, w: 56, color: "#c4b5fd" }, // (define
+    { y: 42, w: 38, color: "#a5e3ff" }, //   (domain
+    { y: 54, w: 64, color: "#d8b4fe" }, //   (:predicates
+    { y: 66, w: 30, color: "#fbcfe8" }, //     (on ?x ?y)
+    { y: 78, w: 50, color: "#a5e3ff" }, //     (clear ?x)
+    { y: 90, w: 44, color: "#c4b5fd" }, //   (:action pick-up
+  ];
+
+  return (
+    <svg viewBox="0 0 128 128" className="absolute inset-0 w-full h-full" overflow="visible">
+      <defs>
+        <linearGradient id="anaScan" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stopColor="#a78bfa" stopOpacity="0" />
+          <stop offset="50%"  stopColor="#a78bfa" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="anaPaper" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#1a1f3a" />
+          <stop offset="100%" stopColor="#0f1428" />
+        </linearGradient>
+      </defs>
+
+      {/* document body with folded corner */}
+      <motion.g
+        animate={{ y: [0, -1.5, 0] }}
+        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <path
+          d="M 28 14 L 88 14 L 100 26 L 100 110 L 28 110 Z"
+          fill="url(#anaPaper)"
+          stroke="rgba(167,139,250,0.4)"
+          strokeWidth="1"
+        />
+        <path
+          d="M 88 14 L 88 26 L 100 26"
+          fill="rgba(167,139,250,0.12)"
+          stroke="rgba(167,139,250,0.4)"
+          strokeWidth="1"
+        />
+
+        {/* code lines that pulse as the scan crosses */}
+        {lines.map((ln, i) => {
+          const phase = (ln.y - 22) / 92; // 0..1
+          return (
+            <motion.rect
+              key={i}
+              x="36" y={ln.y} width={ln.w} height="3" rx="1.5"
+              fill={ln.color}
+              animate={{ opacity: [0.18, 0.95, 0.35, 0.18] }}
+              transition={{
+                duration: 2.6,
+                repeat: Infinity,
+                ease: "easeInOut",
+                times: [0, Math.max(0.05, phase), Math.min(0.95, phase + 0.2), 1],
+              }}
+            />
+          );
+        })}
+
+        {/* scanning beam */}
+        <motion.g
+          animate={{ y: [22, 100, 22] }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <rect x="30" y="-10" width="68" height="16" fill="url(#anaScan)" opacity="0.55" />
+          <line x1="30" y1="0" x2="98" y2="0"
+            stroke="#c4b5fd" strokeWidth="1.2" strokeLinecap="round" />
+          <circle cx="30" cy="0" r="1.6" fill="#a78bfa" />
+          <circle cx="98" cy="0" r="1.6" fill="#a78bfa" />
+        </motion.g>
+      </motion.g>
+
+      {/* extracted tokens floating upward out of the document */}
+      {[
+        { x: 46, delay: 0,   color: "#c4b5fd" },
+        { x: 64, delay: 0.7, color: "#a5e3ff" },
+        { x: 80, delay: 1.4, color: "#d8b4fe" },
+        { x: 56, delay: 2.1, color: "#fbcfe8" },
+      ].map((t, i) => (
+        <motion.circle
+          key={i}
+          cx={t.x} r="1.8"
+          fill={t.color}
+          initial={{ cy: 80, opacity: 0 }}
+          animate={{ cy: [80, 8], opacity: [0, 0.9, 0] }}
+          transition={{ duration: 2.8, repeat: Infinity, ease: "easeOut", delay: t.delay }}
+        />
+      ))}
+
+      {/* magnifying-glass annotation in the upper-right */}
+      <motion.g
+        animate={{ x: [0, 4, 0], y: [0, -3, 0], rotate: [-4, 6, -4] }}
+        transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
+        style={{ transformOrigin: "108px 24px" }}
+      >
+        <circle cx="108" cy="24" r="9"
+          fill="rgba(167,139,250,0.08)"
+          stroke="#c4b5fd" strokeWidth="1.4" />
+        <line x1="115" y1="31" x2="122" y2="38"
+          stroke="#c4b5fd" strokeWidth="1.6" strokeLinecap="round" />
+      </motion.g>
+    </svg>
+  );
+};
+
+// ── Stage 2 icon: an animated canvas being painted ──────────────────────────
+const RenderingIcon = () => {
+  const cycle = 4.6;
+  // Each shape draws in, holds, then fades as the cycle restarts
+  const drawAnim = (begin: number) => ({
+    duration: cycle,
+    repeat: Infinity,
+    ease: "easeInOut" as const,
+    times: [0, begin, begin + 0.12, 0.88, 1],
+  });
+
+  return (
+    <svg viewBox="0 0 128 128" className="absolute inset-0 w-full h-full" overflow="visible">
+      <defs>
+        <linearGradient id="renCanvas" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#11172e" />
+          <stop offset="100%" stopColor="#0a1024" />
+        </linearGradient>
+      </defs>
+
+      {/* canvas surface */}
+      <rect x="20" y="22" width="88" height="84" rx="3"
+        fill="url(#renCanvas)"
+        stroke="rgba(125,211,252,0.32)" strokeWidth="1" />
+
+      {/* corner crop marks */}
+      {[
+        { x: 14, y: 16, d: "M 6 0 L 0 0 L 0 6" },
+        { x: 114, y: 16, d: "M -6 0 L 0 0 L 0 6" },
+        { x: 14, y: 112, d: "M 6 0 L 0 0 L 0 -6" },
+        { x: 114, y: 112, d: "M -6 0 L 0 0 L 0 -6" },
+      ].map((c, i) => (
+        <motion.path key={i}
+          d={c.d}
+          stroke="#7dd3fc" strokeWidth="1" strokeLinecap="round" fill="none"
+          transform={`translate(${c.x} ${c.y})`}
+          animate={{ opacity: [0.3, 0.8, 0.3] }}
+          transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut", delay: i * 0.18 }}
+        />
+      ))}
+
+      {/* baseline grid that breathes */}
+      <motion.g
+        animate={{ opacity: [0.05, 0.14, 0.05] }}
+        transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
+      >
+        {[36, 50, 64, 78, 92].map(y => (
+          <line key={y} x1="24" y1={y} x2="104" y2={y}
+            stroke="#7dd3fc" strokeWidth="0.4" />
+        ))}
+      </motion.g>
+
+      {/* shape 1: rectangle */}
+      <motion.rect
+        x="32" y="40" width="22" height="22" rx="2"
+        fill="rgba(167,139,250,0.18)"
+        stroke="#a78bfa" strokeWidth="1.4"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{
+          pathLength: [0, 0, 1, 1, 0],
+          opacity:    [0, 0, 1, 1, 0],
+        }}
+        transition={drawAnim(0.04)}
+      />
+
+      {/* shape 2: circle */}
+      <motion.circle
+        cx="84" cy="50" r="11"
+        fill="rgba(125,211,252,0.18)"
+        stroke="#7dd3fc" strokeWidth="1.4"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{
+          pathLength: [0, 0, 1, 1, 0],
+          opacity:    [0, 0, 1, 1, 0],
+        }}
+        transition={drawAnim(0.22)}
+      />
+
+      {/* shape 3: triangle */}
+      <motion.path
+        d="M 56 90 L 72 70 L 88 90 Z"
+        fill="rgba(216,180,254,0.18)"
+        stroke="#d8b4fe" strokeWidth="1.4" strokeLinejoin="round"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{
+          pathLength: [0, 0, 1, 1, 0],
+          opacity:    [0, 0, 1, 1, 0],
+        }}
+        transition={drawAnim(0.42)}
+      />
+
+      {/* shape 4: connector line between rect and circle */}
+      <motion.line
+        x1="54" y1="51" x2="73" y2="50"
+        stroke="#fbcfe8" strokeWidth="1.4" strokeLinecap="round"
+        initial={{ pathLength: 0, opacity: 0 }}
+        animate={{
+          pathLength: [0, 0, 1, 1, 0],
+          opacity:    [0, 0, 0.9, 0.9, 0],
+        }}
+        transition={drawAnim(0.62)}
+      />
+
+      {/* pen cursor that hops between shape anchors on the same cycle */}
+      <motion.g
+        animate={{
+          x: [32,  32, 84, 72,  64, 32],
+          y: [40,  40, 50, 70,  50, 40],
+          rotate: [-12, -12, -4, -18, -8, -12],
+        }}
+        transition={{
+          duration: cycle, repeat: Infinity, ease: "easeInOut",
+          times: [0, 0.04, 0.22, 0.42, 0.62, 1],
+        }}
+      >
+        {/* pen body */}
+        <path d="M 0 0 L 10 -3 L 14 1 L 4 4 Z" fill="#c4b5fd" />
+        <path d="M 0 0 L -3 4 L 1 5 L 4 4 Z" fill="#a78bfa" />
+        <circle cx="-2.5" cy="4.5" r="1.4" fill="#fbcfe8" />
+        {/* tiny ink tick that pulses each time the pen lands */}
+        <motion.circle
+          cx="-2.5" cy="6" r="2"
+          fill="#fbcfe8"
+          animate={{ opacity: [0, 0.8, 0], scale: [0.6, 1.6, 0.6] }}
+          transition={{
+            duration: cycle, repeat: Infinity, ease: "easeOut",
+            times: [0, 0.06, 0.18],
+          }}
+        />
+      </motion.g>
+    </svg>
+  );
+};
+
 const CustomDomainLoading = ({
   stage, domainName,
 }: { stage: LoadingStage; domainName: string }) => {
   const copy = stage === "transformer"
     ? { title: "Reading domain structure", desc: "Identifying objects, predicates, and how they relate" }
     : { title: "Composing visualization",   desc: "Drawing the visual primitives that match your domain" };
+
+  // glow tint shifts with the active stage — purple for analyze, sky for render
+  const glow = stage === "transformer"
+    ? "rgba(167,139,250,0.28)"
+    : "rgba(125,211,252,0.26)";
 
   return (
     <div className="relative w-full h-[420px] flex items-center justify-center overflow-hidden rounded-xl"
@@ -307,46 +555,25 @@ const CustomDomainLoading = ({
       <FloatingParticles />
 
       <div className="relative flex flex-col items-center px-6 text-center">
-        {/* Pulsing graph emblem (matches the brand eye icon) */}
+        {/* Animated stage emblem — crossfades between Analyze and Render */}
         <div className="relative w-32 h-32 mb-7">
           <motion.div
             className="absolute inset-[-14px] rounded-full"
-            style={{ background: "radial-gradient(circle, rgba(167,139,250,0.22) 0%, transparent 70%)" }}
-            animate={{ scale: [1, 1.18, 1], opacity: [0.55, 1, 0.55] }}
+            style={{ background: `radial-gradient(circle, ${glow} 0%, transparent 70%)` }}
+            animate={{ scale: [1, 1.18, 1], opacity: [0.5, 1, 0.5] }}
             transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
           />
-          <svg viewBox="0 0 128 128" className="absolute inset-0 w-full h-full">
-            <motion.line x1="48" y1="56" x2="80" y2="56"
-              stroke="#a78bfa" strokeWidth="1.4" strokeLinecap="round"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: [0, 1, 1, 0], opacity: [0, 1, 1, 0] }}
-              transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut", times: [0, 0.25, 0.7, 1] }}
-            />
-            <motion.line x1="48" y1="56" x2="64" y2="80"
-              stroke="#7dd3fc" strokeWidth="1.4" strokeLinecap="round"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: [0, 1, 1, 0], opacity: [0, 1, 1, 0] }}
-              transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut", delay: 0.25, times: [0, 0.25, 0.7, 1] }}
-            />
-            <motion.line x1="80" y1="56" x2="64" y2="80"
-              stroke="#d8b4fe" strokeWidth="1.4" strokeLinecap="round"
-              initial={{ pathLength: 0, opacity: 0 }}
-              animate={{ pathLength: [0, 1, 1, 0], opacity: [0, 1, 1, 0] }}
-              transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut", delay: 0.5, times: [0, 0.25, 0.7, 1] }}
-            />
-            <motion.circle cx="48" cy="56" r="5.5" fill="#c4b5fd"
-              animate={{ r: [4.5, 7, 4.5], opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.circle cx="80" cy="56" r="5.5" fill="#a5e3ff"
-              animate={{ r: [4.5, 7, 4.5], opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
-            />
-            <motion.circle cx="64" cy="80" r="5.5" fill="#d8b4fe"
-              animate={{ r: [4.5, 7, 4.5], opacity: [0.7, 1, 0.7] }}
-              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
-            />
-          </svg>
+          <AnimatePresence mode="wait">
+            <motion.div key={stage}
+              className="absolute inset-0"
+              initial={{ opacity: 0, scale: 0.92, rotate: -3 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 0.92, rotate: 3 }}
+              transition={{ duration: 0.42, ease: easeOut }}
+            >
+              {stage === "transformer" ? <AnalyzingIcon /> : <RenderingIcon />}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         {/* Stage text crossfades when stage flips */}
@@ -386,7 +613,7 @@ const CustomDomainLoading = ({
         </div>
 
         <p className="text-[10px] text-slate-600 mt-6 uppercase tracking-[0.22em]">
-          The AI is working · this usually takes a few seconds
+          The AI is working · this usually takes 2–3 minutes
         </p>
       </div>
     </div>
@@ -432,6 +659,25 @@ export default function Visualizer() {
     show: boolean; title: string; message: string;
     errorType?: string; suggestedDomain?: string; suggestedDomainName?: string;
   }>({ show: false, title: "", message: "" });
+
+  // "Domain already exists" modal — surfaces when an upload's PDDL hash
+  // matches one or more entries in the saved-domains library. Lets the
+  // user pick a specific existing version to reuse, or proceed with a
+  // fresh LLM generation that creates a new versioned entry.
+  const [duplicateModal, setDuplicateModal] = useState<{
+    show: boolean;
+    matches: Array<{
+      id: number;
+      displayName: string;
+      domainName: string;
+      provider: string;
+      createdAt: string;
+      transformerHash: string;
+      rendererHash: string;
+    }>;
+    /** PDDL the user just submitted — used if they pick "Create new". */
+    pendingDomainPddl: string;
+  }>({ show: false, matches: [], pendingDomainPddl: "" });
   // Custom Domain state
   const [isCustomDomain, setIsCustomDomain]         = useState(false);
   const [customDomainName, setCustomDomainName]     = useState("");
@@ -731,8 +977,9 @@ export default function Visualizer() {
     setIsTransformerGenerating(true); setTransformerError(null); setLlmTransformerCode(null);
 
     // Look up the saved-domains library by PDDL hash BEFORE calling the LLM.
-    // If we've previously generated for this exact PDDL, skip both Stage 1
-    // and Stage 2 — just reuse the cached transformer + renderer.
+    // If matches exist, surface the duplicate-detection modal so the user
+    // can choose: reuse a specific existing version, or proceed with a
+    // fresh LLM generation that becomes a new versioned entry.
     const tryCacheThenGenerate = async (domainPddl: string) => {
       try {
         const url = `/api/trpc/visualizer.lookupSavedDomainByPddl?input=${encodeURIComponent(
@@ -740,17 +987,13 @@ export default function Visualizer() {
         )}`;
         const res = await fetch(url);
         const json = await res.json();
-        const hit = json?.result?.data?.json;
-        if (hit && hit.transformerCode && hit.rendererCode) {
-          console.log(`[Cache] HIT — reusing saved domain "${hit.displayName}" (id=${hit.id}) — skipping both LLM calls`);
+        const data = json?.result?.data?.json;
+        const matches: typeof duplicateModal.matches = data?.matches || [];
+        if (matches.length > 0) {
+          console.log(`[Cache] HIT — ${matches.length} existing version(s); prompting user`);
+          // Pause the spinner; the modal owns what happens next.
           setIsTransformerGenerating(false);
-          setLlmTransformerCode(hit.transformerCode);
-          setLlmRendererCode(hit.rendererCode);
-          setRenderMode("llm");
-          setTransformerModelInfo(`Cached (${hit.provider})`);
-          setLlmModelInfo(`Cached (${hit.provider})`);
-          setTransformerError(null);
-          setLlmError(null);
+          setDuplicateModal({ show: true, matches, pendingDomainPddl: domainPddl });
           return;
         }
         console.log("[Cache] MISS — proceeding with LLM generation");
@@ -773,6 +1016,63 @@ export default function Visualizer() {
     } else {
       tryCacheThenGenerate(customDomainText);
     }
+  };
+
+  // ─── Duplicate-modal action handlers ────────────────────────────────────
+  // Picked an existing version — load its code and apply it as if it were
+  // a saved-domain selection. This mirrors the silent cache-hit path that
+  // existed before the modal was introduced.
+  const handleReuseExistingVersion = async (id: number) => {
+    try {
+      const url = `/api/trpc/visualizer.loadSavedDomain?input=${encodeURIComponent(
+        JSON.stringify({ json: { id } })
+      )}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      const sd = json?.result?.data?.json;
+      if (!sd?.transformerCode || !sd?.rendererCode) {
+        setTransformerError("Failed to load the selected version.");
+        setDuplicateModal({ show: false, matches: [], pendingDomainPddl: "" });
+        return;
+      }
+      setLlmTransformerCode(sd.transformerCode);
+      setLlmRendererCode(sd.rendererCode);
+      setRenderMode("llm");
+      setTransformerModelInfo(`Cached (${sd.provider})`);
+      setLlmModelInfo(`Cached (${sd.provider})`);
+      setTransformerError(null);
+      setLlmError(null);
+      // Flip the UI so the user sees their choice highlighted in Saved Domains.
+      setCustomMode("saved");
+      setSelectedSavedDomainId(id);
+      setDuplicateModal({ show: false, matches: [], pendingDomainPddl: "" });
+    } catch (err) {
+      console.error("[DuplicateModal] Failed to load existing version:", err);
+      setTransformerError("Failed to load the selected version.");
+      setDuplicateModal({ show: false, matches: [], pendingDomainPddl: "" });
+    }
+  };
+
+  // Picked "Create new version" — proceed exactly as the cache-miss path
+  // would have. Backend `saveDomain` now allows multiple entries per
+  // pddlHash and `generateDisplayName` will append (2), (3), etc.
+  const handleCreateNewVersion = () => {
+    const pendingPddl = duplicateModal.pendingDomainPddl;
+    setDuplicateModal({ show: false, matches: [], pendingDomainPddl: "" });
+    setIsTransformerGenerating(true);
+    llmTransformerMutation.mutate({
+      domainName: customDomainName || "custom",
+      domainPddl: pendingPddl,
+      provider: llmProvider,
+    });
+  };
+
+  // Cancel / dismiss — back out cleanly. No LLM call, no save, the whole
+  // generate button becomes ready again.
+  const handleDismissDuplicateModal = () => {
+    setDuplicateModal({ show: false, matches: [], pendingDomainPddl: "" });
+    setIsTransformerGenerating(false);
+    setIsProcessing(false);
   };
   // Reset custom domain state when switching away
   useEffect(() => {
@@ -2196,6 +2496,100 @@ export default function Visualizer() {
                 <button onClick={() => setErrorModal({ show: false, title: "", message: "" })}
                   className="px-5 py-2.5 text-sm text-slate-400 hover:text-slate-200 font-medium transition-all duration-150 rounded-xl hover:bg-white/[0.08]">
                   Close
+                </button>
+              </div>
+            </div>
+          </ModalBackdrop>
+        )}
+      </AnimatePresence>
+
+      {/* "Domain already exists" — surfaces when an upload's PDDL hash
+          matches one or more entries in the saved-domains library. The
+          user picks a specific existing version to reuse, or generates a
+          new versioned entry. Dismissing the modal cancels the action. */}
+      <AnimatePresence>
+        {duplicateModal.show && (
+          <ModalBackdrop onClose={handleDismissDuplicateModal}>
+            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-lg w-full overflow-hidden"
+              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
+              <div className="px-6 py-4 border-b border-purple-500/20 bg-purple-500/[0.06]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-500/15">
+                      <SparklesIcon className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-purple-300"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                      Domain already exists
+                    </h3>
+                  </div>
+                  <button onClick={handleDismissDuplicateModal}
+                    className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
+                    <CloseIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="px-6 py-5">
+                <p className="text-sm text-slate-400 leading-relaxed mb-4">
+                  Found <span className="text-slate-200 font-semibold">{duplicateModal.matches.length}</span>{" "}
+                  existing version{duplicateModal.matches.length === 1 ? "" : "s"} of this PDDL in your library.
+                  Pick one to reuse, or generate a new version.
+                </p>
+                <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                  {duplicateModal.matches.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => handleReuseExistingVersion(m.id)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border border-transparent hover:border-purple-500/30 hover:bg-purple-500/[0.08]"
+                    >
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.06]">
+                        <FileCodeIcon className="w-5 h-5 text-slate-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium leading-none text-slate-200"
+                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                          {m.displayName}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {m.provider} &middot; {new Date(m.createdAt).toLocaleDateString()}
+                        </div>
+                        {(m.transformerHash || m.rendererHash) && (
+                          <div className="flex gap-1 mt-1">
+                            {m.transformerHash && (
+                              <span
+                                title={`Transformer hash: ${m.transformerHash}`}
+                                className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
+                              >
+                                T:{m.transformerHash.slice(0, 8)}
+                              </span>
+                            )}
+                            {m.rendererHash && (
+                              <span
+                                title={`Renderer hash: ${m.rendererHash}`}
+                                className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
+                              >
+                                R:{m.rendererHash.slice(0, 8)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-between gap-3">
+                <button
+                  onClick={handleDismissDuplicateModal}
+                  className="px-5 py-2.5 text-sm text-slate-400 hover:text-slate-200 font-medium transition-all duration-150 rounded-xl hover:bg-white/[0.08]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateNewVersion}
+                  className="px-5 py-2.5 text-sm font-semibold transition-all duration-150 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30"
+                >
+                  Create new version
                 </button>
               </div>
             </div>

@@ -1,5 +1,5 @@
 {
-  "nextId": 2,
+  "nextId": 4,
   "domains": [
     {
       "id": 1,
@@ -11,6 +11,28 @@
       "rendererHash": "bf732ebf18f98b21e6bf0d1a03ed29b1feb2a1b2521341b6901c4a78a0d1b726",
       "provider": "Gemini 2.5 Pro",
       "createdAt": "2026-04-30T18:17:15.036Z"
+    },
+    {
+      "id": 2,
+      "displayName": "Miconic",
+      "domainName": "miconic",
+      "pddlHash": "1fa47fd8197c",
+      "domainPddl": "(define (domain miconic)\n  (:requirements :typing)\n  (:types\n    passenger floor\n  )\n  (:predicates\n    (origin ?p - passenger ?f - floor)\n    (destin ?p - passenger ?f - floor)\n    (above ?f1 - floor ?f2 - floor)\n    (boarded ?p - passenger)\n    (served ?p - passenger)\n    (lift-at ?f - floor)\n  )\n\n  (:action board\n    :parameters (?f - floor ?p - passenger)\n    :precondition (and\n      (lift-at ?f)\n      (origin ?p ?f)\n    )\n    :effect (and\n      (boarded ?p)\n    )\n  )\n\n  (:action depart\n    :parameters (?f - floor ?p - passenger)\n    :precondition (and\n      (lift-at ?f)\n      (destin ?p ?f)\n      (boarded ?p)\n    )\n    :effect (and\n      (not (boarded ?p))\n      (served ?p)\n    )\n  )\n\n  (:action up\n    :parameters (?f1 - floor ?f2 - floor)\n    :precondition (and\n      (lift-at ?f1)\n      (above ?f1 ?f2)\n    )\n    :effect (and\n      (lift-at ?f2)\n      (not (lift-at ?f1))\n    )\n  )\n\n  (:action down\n    :parameters (?f1 - floor ?f2 - floor)\n    :precondition (and\n      (lift-at ?f1)\n      (above ?f2 ?f1)\n    )\n    :effect (and\n      (lift-at ?f2)\n      (not (lift-at ?f1))\n    )\n  )\n)\n",
+      "transformerHash": "5faef826e30a63f0dd4b164e876ff46f3bc48bc48fffaa3a37043e06719c2449",
+      "rendererHash": "b75f3ead722f10033b4984a1b90e86c2b5816d06d6b3545f33d26cc3a5ec1d76",
+      "provider": "Gemini 2.5 Pro",
+      "createdAt": "2026-04-30T19:33:54.221Z"
+    },
+    {
+      "id": 3,
+      "displayName": "Zeno",
+      "domainName": "zeno",
+      "pddlHash": "21fdf7a74f81",
+      "domainPddl": "(define (domain zenotravel)\n  (:requirements :typing)\n  (:types\n    person city aircraft\n  )\n  (:predicates\n    (at ?x - (either person aircraft) ?c - city)\n    (in ?p - person ?a - aircraft)\n  )\n\n  (:action board\n    :parameters (?p - person ?a - aircraft ?c - city)\n    :precondition (and\n      (at ?p ?c)\n      (at ?a ?c)\n    )\n    :effect (and\n      (not (at ?p ?c))\n      (in ?p ?a)\n    )\n  )\n\n  (:action debark\n    :parameters (?p - person ?a - aircraft ?c - city)\n    :precondition (and\n      (in ?p ?a)\n      (at ?a ?c)\n    )\n    :effect (and\n      (not (in ?p ?a))\n      (at ?p ?c)\n    )\n  )\n\n  (:action fly\n    :parameters (?a - aircraft ?c1 - city ?c2 - city)\n    :precondition (and\n      (at ?a ?c1)\n    )\n    :effect (and\n      (not (at ?a ?c1))\n      (at ?a ?c2)\n    )\n  )\n)\n",
+      "transformerHash": "044a6c7a2c7d9d812b5c03813170d1e3ae62ef249808bb1d46accfc5df69c86e",
+      "rendererHash": "85e1edc2928d7c0881e380ccaf13f1e1531f262ec0e8e3140d0b06c33528151a",
+      "provider": "Claude Sonnet 4.6",
+      "createdAt": "2026-04-30T19:37:53.022Z"
     }
   ]
 }

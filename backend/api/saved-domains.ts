@@ -236,13 +236,47 @@ export async function findSavedDomainByPddl(
 }
 
 /**
- * Save a new domain to the library.
+ * Light-weight metadata listing of every saved domain whose pddlHash
+ * matches `domainPddl`. Newest-first. Code is NOT hydrated — used by the
+ * "duplicate detected" modal which only needs to render rows, then loads
+ * the full code for the chosen one separately via getSavedDomain().
+ */
+export async function findAllSavedDomainsByPddl(
+  domainPddl: string
+): Promise<
+  Array<{
+    id: number;
+    displayName: string;
+    domainName: string;
+    provider: string;
+    createdAt: string;
+    transformerHash: string;
+    rendererHash: string;
+  }>
+> {
+  const targetHash = hashPddl(domainPddl);
+  const store = await loadStore();
+  const matches = store.domains.filter((d) => d.pddlHash === targetHash);
+  matches.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return matches.map((d) => ({
+    id: d.id,
+    displayName: d.displayName,
+    domainName: d.domainName,
+    provider: d.provider,
+    createdAt: d.createdAt,
+    transformerHash: d.transformerHash || "",
+    rendererHash: d.rendererHash || "",
+  }));
+}
+
+/**
+ * Save a new domain to the library. Always creates a new entry — multiple
+ * versions of the same PDDL are allowed (Ferry, Ferry (2), Ferry (3) …).
+ * Collision UX (offer to reuse vs. create new) is handled by the frontend
+ * before this is called.
  *
- * Dedup behavior:
- *   - If an entry with the same pddlHash already exists, return it
- *     unchanged. (No duplicate entries; LLM cost was already paid.)
- *   - Otherwise create a new entry. Code is written to the content-
- *     addressed artifact store; only hashes are stored in the index.
+ * Code is written to the content-addressed artifact store, so identical
+ * generated code across versions still occupies a single file on disk.
  */
 export async function saveDomain(params: {
   domainName: string;
@@ -253,15 +287,6 @@ export async function saveDomain(params: {
 }): Promise<SavedDomain> {
   const store = await loadStore();
   const pddlHash = hashPddl(params.domainPddl);
-
-  // PDDL-level dedup
-  const existing = store.domains.find((d) => d.pddlHash === pddlHash);
-  if (existing) {
-    console.log(
-      `[SavedDomains] Skipping save — pddlHash ${pddlHash} already exists as "${existing.displayName}" (id=${existing.id})`
-    );
-    return hydrate(existing);
-  }
 
   // Write code to artifacts (deduped by content hash)
   const transformerHash = await writeArtifact(params.transformerCode);
