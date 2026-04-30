@@ -15,28 +15,22 @@ from .blocks_world_renderer import BlocksWorldRenderer
 from .gripper_renderer import GripperRenderer
 from .satellite_renderer import SatelliteRenderer
 
-# TODO: Uncomment these imports when renderers are implemented
 from .depot_renderer import DepotRenderer
-# from .hanoi_renderer import HanoiRenderer
-# from .logistics_renderer import LogisticsRenderer
-# from .rovers_renderer import RoversRenderer
-# from .satellite_renderer import SatelliteRenderer
 
 
 class RendererFactory:
     """
     Factory for creating domain-specific renderers.
     """
-    
-    # Registry of domain renderers
+
+    # Registry of domain renderers. Domains not listed here fall through to
+    # DefaultRenderer (raw predicate JSON), which is what the frontend's
+    # hand-written renderers (Hanoi, Rovers) and the LLM custom-domain
+    # pipeline both consume.
     _renderers = {
         'blocks-world': BlocksWorldRenderer,
         'gripper': GripperRenderer,
-        # TODO: Add these renderers when implemented:
         'depot': DepotRenderer,
-        # 'hanoi': HanoiRenderer,
-        # 'logistics': LogisticsRenderer,
-        # 'rovers': RoversRenderer,
         'satellite': SatelliteRenderer,
     }
     

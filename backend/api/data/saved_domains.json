@@ -1,0 +1,16 @@
+{
+  "nextId": 2,
+  "domains": [
+    {
+      "id": 1,
+      "displayName": "Ferry",
+      "domainName": "ferry",
+      "pddlHash": "e34fb4c19d5c",
+      "domainPddl": "(define (domain ferry)\n  (:requirements :typing)\n  (:types\n    location car ferry\n  )\n  (:predicates\n    (at ?obj - (either car ferry) ?loc - location)\n    (on ?c - car ?f - ferry)\n    (empty ?f - ferry)\n  )\n\n  (:action board\n    :parameters (?c - car ?f - ferry ?loc - location)\n    :precondition (and\n      (at ?c ?loc)\n      (at ?f ?loc)\n      (empty ?f)\n    )\n    :effect (and\n      (not (at ?c ?loc))\n      (not (empty ?f))\n      (on ?c ?f)\n    )\n  )\n\n  (:action debark\n    :parameters (?c - car ?f - ferry ?loc - location)\n    :precondition (and\n      (on ?c ?f)\n      (at ?f ?loc)\n    )\n    :effect (and\n      (not (on ?c ?f))\n      (empty ?f)\n      (at ?c ?loc)\n    )\n  )\n\n  (:action sail\n    :parameters (?f - ferry ?from - location ?to - location)\n    :precondition (and\n      (at ?f ?from)\n    )\n    :effect (and\n      (not (at ?f ?from))\n      (at ?f ?to)\n    )\n  )\n)\n",
+      "transformerHash": "d9f53b51eb904e7faeb05de1fd96fe2594b6d05683a7ac1c3381594c7ad54e24",
+      "rendererHash": "bf732ebf18f98b21e6bf0d1a03ed29b1feb2a1b2521341b6901c4a78a0d1b726",
+      "provider": "Gemini 2.5 Pro",
+      "createdAt": "2026-04-30T18:17:15.036Z"
+    }
+  ]
+}

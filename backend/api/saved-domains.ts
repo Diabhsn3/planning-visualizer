@@ -1,25 +1,32 @@
 /**
  * Saved Domains Library
- * 
- * Manages a persistent library of custom PDDL domains that have been
- * successfully processed by the LLM pipeline. Each saved domain stores:
- * - The domain PDDL text
- * - The generated transformer code
- * - The generated renderer code
- * - A content hash to detect duplicate uploads
- * 
- * Stored in a JSON file on disk for simplicity.
+ *
+ * Persistent library of custom PDDL domains. Each entry now stores hash
+ * references to content-addressed artifacts (transformer + renderer code)
+ * instead of inlining the code, so two domains with identical generated
+ * code share one artifact file.
+ *
+ * Two layers of caching/dedup:
+ *   1. pddlHash → if the same domain PDDL is saved twice, return the
+ *      existing entry instead of creating a duplicate.
+ *   2. transformerHash / rendererHash → if two different PDDLs happen to
+ *      produce the same code, the artifact is shared on disk.
+ *
+ * Backward compatibility: legacy entries that still have inline
+ * `transformerCode` / `rendererCode` are auto-migrated on first load —
+ * the code is hashed, written to the artifact store, and the entry is
+ * rewritten to reference hashes only.
  */
 
 import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
+import { writeArtifact, readArtifact } from "./artifacts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Storage location: backend/api/data/saved_domains.json
 const DATA_DIR = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", "data")
   : path.join(__dirname, "data");
@@ -28,102 +35,214 @@ const SAVED_DOMAINS_FILE = path.join(DATA_DIR, "saved_domains.json");
 
 // ==================== Types ====================
 
-export interface SavedDomain {
-  /** Unique ID (auto-incremented) */
+/**
+ * On-disk shape. New entries store only hash references. Legacy entries
+ * may still carry inline code — those are migrated on load.
+ */
+export interface SavedDomainRecord {
   id: number;
-  /** Display name, e.g. "Ferry", "Ferry (2)" */
   displayName: string;
-  /** Raw domain name parsed from PDDL */
   domainName: string;
-  /** SHA-256 hash of the domain PDDL text (first 12 chars) */
+  /** SHA-256 (first 12 chars) of the trimmed domain PDDL — dedup key. */
   pddlHash: string;
-  /** Full domain PDDL text */
   domainPddl: string;
-  /** Generated transformer JS code */
-  transformerCode: string;
-  /** Generated renderer JS code */
-  rendererCode: string;
-  /** LLM provider used (claude / gemini) */
+  /** SHA-256 hex of the generated transformer JS. */
+  transformerHash: string;
+  /** SHA-256 hex of the generated renderer JS. */
+  rendererHash: string;
   provider: string;
-  /** ISO timestamp of when it was saved */
+  createdAt: string;
+
+  // ---- Legacy fields (only present in pre-migration entries) ----
+  transformerCode?: string;
+  rendererCode?: string;
+}
+
+/** Public shape returned by getSavedDomain — code is loaded from artifacts. */
+export interface SavedDomain {
+  id: number;
+  displayName: string;
+  domainName: string;
+  pddlHash: string;
+  domainPddl: string;
+  transformerCode: string;
+  rendererCode: string;
+  transformerHash: string;
+  rendererHash: string;
+  provider: string;
   createdAt: string;
 }
 
 interface SavedDomainsStore {
   nextId: number;
-  domains: SavedDomain[];
+  domains: SavedDomainRecord[];
 }
 
 // ==================== Helpers ====================
 
-/** Compute a short hash of the PDDL text */
 function hashPddl(pddlText: string): string {
-  return crypto.createHash("sha256").update(pddlText.trim()).digest("hex").slice(0, 12);
+  return crypto
+    .createHash("sha256")
+    .update(pddlText.trim())
+    .digest("hex")
+    .slice(0, 12);
 }
 
-/** Load the store from disk */
-async function loadStore(): Promise<SavedDomainsStore> {
+async function loadStoreRaw(): Promise<SavedDomainsStore> {
   try {
     const raw = await readFile(SAVED_DOMAINS_FILE, "utf-8");
     return JSON.parse(raw) as SavedDomainsStore;
   } catch {
-    // File doesn't exist yet — return empty store
     return { nextId: 1, domains: [] };
   }
 }
 
-/** Save the store to disk */
 async function saveStore(store: SavedDomainsStore): Promise<void> {
   await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(SAVED_DOMAINS_FILE, JSON.stringify(store, null, 2), "utf-8");
+  await writeFile(
+    SAVED_DOMAINS_FILE,
+    JSON.stringify(store, null, 2),
+    "utf-8"
+  );
 }
 
-/** Generate a unique display name, appending (2), (3), etc. if needed */
-function generateDisplayName(baseName: string, existingNames: string[]): string {
-  // Capitalize first letter
+/**
+ * Migrate any legacy entries that still have inline code. Writes the code
+ * to the artifact store, replaces the inline fields with hash references,
+ * and persists. Idempotent — entries already migrated are left alone.
+ */
+async function migrateLegacy(store: SavedDomainsStore): Promise<boolean> {
+  let changed = false;
+  for (const entry of store.domains) {
+    if (!entry.transformerHash && entry.transformerCode) {
+      entry.transformerHash = await writeArtifact(entry.transformerCode);
+      delete entry.transformerCode;
+      changed = true;
+    }
+    if (!entry.rendererHash && entry.rendererCode) {
+      entry.rendererHash = await writeArtifact(entry.rendererCode);
+      delete entry.rendererCode;
+      changed = true;
+    }
+  }
+  if (changed) {
+    console.log(
+      "[SavedDomains] Migrated legacy inline code to content-addressed artifacts"
+    );
+    await saveStore(store);
+  }
+  return changed;
+}
+
+async function loadStore(): Promise<SavedDomainsStore> {
+  const store = await loadStoreRaw();
+  await migrateLegacy(store);
+  return store;
+}
+
+function generateDisplayName(
+  baseName: string,
+  existingNames: string[]
+): string {
   const capitalized = baseName.charAt(0).toUpperCase() + baseName.slice(1);
-  
-  if (!existingNames.includes(capitalized)) {
-    return capitalized;
-  }
-  
-  // Find the next available number
+  if (!existingNames.includes(capitalized)) return capitalized;
   let counter = 2;
-  while (existingNames.includes(`${capitalized} (${counter})`)) {
-    counter++;
-  }
+  while (existingNames.includes(`${capitalized} (${counter})`)) counter++;
   return `${capitalized} (${counter})`;
+}
+
+/**
+ * Hydrate a record into a full SavedDomain by loading the referenced
+ * artifacts. Falls back to legacy inline code if the artifact is missing
+ * (defensive — shouldn't normally happen post-migration).
+ */
+async function hydrate(record: SavedDomainRecord): Promise<SavedDomain> {
+  const transformerCode =
+    (record.transformerHash && (await readArtifact(record.transformerHash))) ||
+    record.transformerCode ||
+    "";
+  const rendererCode =
+    (record.rendererHash && (await readArtifact(record.rendererHash))) ||
+    record.rendererCode ||
+    "";
+  return {
+    id: record.id,
+    displayName: record.displayName,
+    domainName: record.domainName,
+    pddlHash: record.pddlHash,
+    domainPddl: record.domainPddl,
+    transformerCode,
+    rendererCode,
+    transformerHash: record.transformerHash || "",
+    rendererHash: record.rendererHash || "",
+    provider: record.provider,
+    createdAt: record.createdAt,
+  };
 }
 
 // ==================== Public API ====================
 
 /**
- * List all saved domains (returns metadata only, no code).
+ * List all saved domains (metadata only — no code, no PDDL body).
  */
-export async function listSavedDomains(): Promise<Array<Omit<SavedDomain, "transformerCode" | "rendererCode" | "domainPddl"> & { domainPddlPreview: string }>> {
+export async function listSavedDomains(): Promise<
+  Array<
+    Omit<SavedDomain, "transformerCode" | "rendererCode" | "domainPddl"> & {
+      domainPddlPreview: string;
+    }
+  >
+> {
   const store = await loadStore();
-  return store.domains.map(d => ({
+  return store.domains.map((d) => ({
     id: d.id,
     displayName: d.displayName,
     domainName: d.domainName,
     pddlHash: d.pddlHash,
-    domainPddlPreview: d.domainPddl.slice(0, 200) + (d.domainPddl.length > 200 ? "..." : ""),
+    domainPddlPreview:
+      d.domainPddl.slice(0, 200) + (d.domainPddl.length > 200 ? "..." : ""),
+    transformerHash: d.transformerHash || "",
+    rendererHash: d.rendererHash || "",
     provider: d.provider,
     createdAt: d.createdAt,
   }));
 }
 
 /**
- * Get a saved domain by ID (full data including code).
+ * Get a saved domain by ID, with code hydrated from artifacts.
  */
 export async function getSavedDomain(id: number): Promise<SavedDomain | null> {
   const store = await loadStore();
-  return store.domains.find(d => d.id === id) || null;
+  const record = store.domains.find((d) => d.id === id);
+  return record ? hydrate(record) : null;
+}
+
+/**
+ * Look up a saved domain by the hash of its PDDL text. Returns the latest
+ * matching entry (sorted by createdAt) or null.
+ *
+ * This is the cache-hit path: if a user re-submits the same PDDL, we can
+ * skip both LLM calls entirely.
+ */
+export async function findSavedDomainByPddl(
+  domainPddl: string
+): Promise<SavedDomain | null> {
+  const targetHash = hashPddl(domainPddl);
+  const store = await loadStore();
+  const matches = store.domains.filter((d) => d.pddlHash === targetHash);
+  if (matches.length === 0) return null;
+  // Newest first
+  matches.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return hydrate(matches[0]);
 }
 
 /**
  * Save a new domain to the library.
- * Returns the saved domain entry.
+ *
+ * Dedup behavior:
+ *   - If an entry with the same pddlHash already exists, return it
+ *     unchanged. (No duplicate entries; LLM cost was already paid.)
+ *   - Otherwise create a new entry. Code is written to the content-
+ *     addressed artifact store; only hashes are stored in the index.
  */
 export async function saveDomain(params: {
   domainName: string;
@@ -135,43 +254,56 @@ export async function saveDomain(params: {
   const store = await loadStore();
   const pddlHash = hashPddl(params.domainPddl);
 
-  // Always create a new entry (even for duplicate PDDL) so users can keep
-  // multiple transformer/renderer versions for the same domain.
+  // PDDL-level dedup
+  const existing = store.domains.find((d) => d.pddlHash === pddlHash);
+  if (existing) {
+    console.log(
+      `[SavedDomains] Skipping save — pddlHash ${pddlHash} already exists as "${existing.displayName}" (id=${existing.id})`
+    );
+    return hydrate(existing);
+  }
 
-  // Generate a unique display name
-  const existingNames = store.domains.map(d => d.displayName);
+  // Write code to artifacts (deduped by content hash)
+  const transformerHash = await writeArtifact(params.transformerCode);
+  const rendererHash = await writeArtifact(params.rendererCode);
+
+  const existingNames = store.domains.map((d) => d.displayName);
   const displayName = generateDisplayName(params.domainName, existingNames);
 
-  const newDomain: SavedDomain = {
+  const record: SavedDomainRecord = {
     id: store.nextId,
     displayName,
     domainName: params.domainName,
     pddlHash,
     domainPddl: params.domainPddl,
-    transformerCode: params.transformerCode,
-    rendererCode: params.rendererCode,
+    transformerHash,
+    rendererHash,
     provider: params.provider,
     createdAt: new Date().toISOString(),
   };
 
-  store.domains.push(newDomain);
+  store.domains.push(record);
   store.nextId++;
   await saveStore(store);
 
-  console.log(`[SavedDomains] Saved new domain: ${displayName} (id=${newDomain.id}, hash=${pddlHash})`);
-  return newDomain;
+  console.log(
+    `[SavedDomains] Saved "${displayName}" (id=${record.id}, pddlHash=${pddlHash}, transformer=${transformerHash.slice(0, 8)}…, renderer=${rendererHash.slice(0, 8)}…)`
+  );
+  return hydrate(record);
 }
 
 /**
- * Delete a saved domain by ID (admin only — not exposed to users).
+ * Delete a saved domain entry. Note: we do NOT garbage-collect the
+ * underlying artifacts because they may be shared with other entries.
  */
 export async function deleteSavedDomain(id: number): Promise<boolean> {
   const store = await loadStore();
-  const idx = store.domains.findIndex(d => d.id === id);
+  const idx = store.domains.findIndex((d) => d.id === id);
   if (idx === -1) return false;
-  
   const removed = store.domains.splice(idx, 1)[0];
   await saveStore(store);
-  console.log(`[SavedDomains] Deleted domain: ${removed.displayName} (id=${id})`);
+  console.log(
+    `[SavedDomains] Deleted domain: ${removed.displayName} (id=${id})`
+  );
   return true;
 }

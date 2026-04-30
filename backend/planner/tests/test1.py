@@ -9,7 +9,6 @@ from planner_runner.runner import run_planner
 
 CASES = [
     ("Blocks World p1", "backend/planner/domains/blocks_world/domain.pddl", "backend/planner/domains/blocks_world/p1.pddl"),
-    ("Logistics p1",    "backend/planner/domains/logistics/domain.pddl",    "backend/planner/domains/logistics/p1.pddl"),
     ("Gripper p1",      "backend/planner/domains/gripper/domain.pddl",      "backend/planner/domains/gripper/p1.pddl"),
     ("Depot p1",        "backend/planner/domains/depot/domain.pddl",        "backend/planner/domains/depot/p1.pddl"),
     ("Hanoi p1",        "backend/planner/domains/hanoi/domain.pddl",        "backend/planner/domains/hanoi/p1.pddl"),

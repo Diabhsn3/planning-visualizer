@@ -18,16 +18,15 @@
  * - Google Gemini (gemini-2.5-pro) via system prompt
  *
  * Features:
- * - Disk-based caching of generated transformers per domain
  * - Automatic code extraction from LLM responses
  * - TypeScript to JavaScript transpilation via TS compiler API
- * - Separate cache and skill_id from the canvas-renderer-generator skill
+ * - Separate skill_id from the canvas-renderer-generator skill
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { toFile } from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ts from "typescript";
-import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createReadStream } from "fs";
@@ -52,11 +51,6 @@ const SKILL_RULES_PATH     = path.join(SKILLS_DIR, "rules.md");
 const GEMINI_PROMPT_PATH = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", "prompts", "domain-interpreter-skill.txt")
   : path.join(__dirname, "prompts", "domain-interpreter-skill.txt");
-
-// Separate cache directory from the canvas renderer cache
-const CACHE_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "llm_transformers")
-  : path.join(__dirname, "llm_transformers");
 
 // Separate skill_id cache file from the canvas renderer skill
 const SKILL_ID_CACHE_PATH = __dirname.endsWith("dist")
@@ -94,22 +88,12 @@ export interface GenerateTransformerResponse {
   success: boolean;
   /** The generated and transpiled JavaScript transformer code */
   code?: string;
-  /** Filename of the cached transformer on disk */
-  savedFile?: string;
   /** Human-readable provider name */
   provider: string;
   /** Model ID used */
   model: string;
   /** Error message if success is false */
   error?: string;
-}
-
-export interface CachedTransformer {
-  filename: string;
-  domain: string;
-  provider: string;
-  timestamp: string;
-  size: number;
 }
 
 // ==================== CLAUDE SKILLS API ====================
@@ -285,13 +269,6 @@ function validateCode(
 }
 
 // ==================== TYPESCRIPT TRANSPILATION ====================
-
-/**
- * Transpile TypeScript code to JavaScript using the TypeScript compiler API.
- */
-export function transpileCachedTransformer(code: string): string {
-  return transpileToJS(code);
-}
 
 function transpileToJS(tsCode: string): string {
   // Strip 'export' keywords before transpilation
@@ -471,133 +448,6 @@ async function generateWithGemini(userMessage: string): Promise<string> {
   return text;
 }
 
-// ==================== CACHING ====================
-
-/**
- * Save generated transformer code to disk cache.
- */
-async function saveToCache(
-  code: string,
-  domainName: string,
-  provider: LLMProvider
-): Promise<string> {
-  await mkdir(CACHE_DIR, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const filename = `${domainName}_${provider}_${timestamp}.ts`;
-  const filepath = path.join(CACHE_DIR, filename);
-  await writeFile(filepath, code, "utf-8");
-  console.log(`[LLM Interpreter] Cached transformer saved: ${filename}`);
-  return filename;
-}
-
-/**
- * List all cached transformers, optionally filtered by domain.
- */
-export async function listCachedTransformers(
-  domain?: string
-): Promise<CachedTransformer[]> {
-  try {
-    await mkdir(CACHE_DIR, { recursive: true });
-    const files = await readdir(CACHE_DIR);
-    const transformers: CachedTransformer[] = [];
-
-    for (const file of files) {
-      if (!file.endsWith(".ts") || file === ".gitkeep") continue;
-      // Parse filename: {domain}_{provider}_{timestamp}.ts
-      const match = file.match(/^(.+?)_(claude|gemini)_(.+)\.ts$/);
-      if (!match) continue;
-      const [, fileDomain, fileProvider, fileTimestamp] = match;
-      if (domain && fileDomain !== domain) continue;
-
-      const filepath = path.join(CACHE_DIR, file);
-      const content = await readFile(filepath, "utf-8");
-
-      // Restore ISO timestamp from filename format
-      const tIdx = fileTimestamp.indexOf("T");
-      let parsedTimestamp = fileTimestamp;
-      if (tIdx !== -1) {
-        const datePart = fileTimestamp.substring(0, tIdx);
-        const timePart = fileTimestamp.substring(tIdx);
-        const timeFixed = timePart
-          .replace(/-(\d{3}Z)$/, ".$1")
-          .replace(/-/g, ":");
-        parsedTimestamp = datePart + timeFixed;
-      }
-
-      transformers.push({
-        filename: file,
-        domain: fileDomain,
-        provider: fileProvider,
-        timestamp: parsedTimestamp,
-        size: content.length,
-      });
-    }
-
-    // Sort by timestamp descending (newest first)
-    transformers.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-    return transformers;
-  } catch (error) {
-    console.error("[LLM Interpreter] Error listing cache:", error);
-    return [];
-  }
-}
-
-/**
- * Load a cached transformer by filename.
- */
-export async function loadCachedTransformer(
-  filename: string
-): Promise<string | null> {
-  try {
-    const filepath = path.join(CACHE_DIR, filename);
-    const code = await readFile(filepath, "utf-8");
-    console.log(`[LLM Interpreter] Loaded cached transformer: ${filename}`);
-    return code;
-  } catch (error) {
-    console.error(`[LLM Interpreter] Cache file not found: ${filename}`);
-    return null;
-  }
-}
-
-/**
- * Delete a cached transformer by filename.
- */
-export async function deleteCachedTransformer(
-  filename: string
-): Promise<boolean> {
-  try {
-    const filepath = path.join(CACHE_DIR, filename);
-    await unlink(filepath);
-    console.log(`[LLM Interpreter] Deleted cached transformer: ${filename}`);
-    return true;
-  } catch (error) {
-    console.error(`[LLM Interpreter] Failed to delete: ${filename}`);
-    return false;
-  }
-}
-
-/**
- * Clear all cached transformers for a domain (or all domains).
- */
-export async function clearTransformerCache(domain?: string): Promise<number> {
-  try {
-    await mkdir(CACHE_DIR, { recursive: true });
-    const files = await readdir(CACHE_DIR);
-    let deleted = 0;
-    for (const file of files) {
-      if (!file.endsWith(".ts") || file === ".gitkeep") continue;
-      if (domain && !file.startsWith(`${domain}_`)) continue;
-      await unlink(path.join(CACHE_DIR, file));
-      deleted++;
-    }
-    console.log(`[LLM Interpreter] Cleared ${deleted} cached transformers`);
-    return deleted;
-  } catch (error) {
-    console.error("[LLM Interpreter] Error clearing cache:", error);
-    return 0;
-  }
-}
-
 // ==================== MAIN GENERATION FUNCTION ====================
 
 /**
@@ -692,13 +542,9 @@ Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do 
       `[LLM Interpreter] Transpiled TS (${tsCode.length} chars) -> JS (${transpiled.length} chars)`
     );
 
-    // 6. Cache
-    const savedFile = await saveToCache(transpiled, domainName, provider);
-
     return {
       success: true,
       code: transpiled,
-      savedFile,
       provider: model.name,
       model: model.id,
     };

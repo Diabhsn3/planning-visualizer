@@ -1,9 +1,10 @@
 import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
-import { generateRenderer, listCachedRenderers, loadCachedRenderer, deleteCachedRenderer, transpileCachedCode, type LLMProvider } from "./llm-renderer";
-import { generateTransformer, listCachedTransformers, loadCachedTransformer, deleteCachedTransformer, transpileCachedTransformer } from "./llm-domain-interpreter";
-import { listSavedDomains, getSavedDomain, saveDomain } from "./saved-domains";
+import { generateRenderer, type LLMProvider } from "./llm-renderer";
+import { generateTransformer } from "./llm-domain-interpreter";
+import { listSavedDomains, getSavedDomain, saveDomain, findSavedDomainByPddl } from "./saved-domains";
+import { saveBasicRenderer, findBasicRenderer } from "./basic-renderer-cache";
 import path from "path";
 import { fileURLToPath } from "url";
 import { exec } from "child_process";
@@ -579,55 +580,56 @@ export const visualizerRouter = router({
         throw new Error(result.error || "LLM generation failed");
       }
       console.log("[Stage 2 - Renderer] SUCCESS - Code length:", result.code?.length || 0);
+
+      // Persist basic-domain LLM renderers in the shared artifact store so
+      // they can be recalled later. The custom-domain flow has its own
+      // persistence path (saveDomainToLibrary), which is signaled by a
+      // non-empty transformerCode — we skip the basic cache in that case
+      // to avoid double-bookkeeping.
+      if (result.code && input.transformerCode === "") {
+        try {
+          const persisted = await saveBasicRenderer(
+            input.domainName,
+            input.provider,
+            result.code
+          );
+          console.log(
+            `[Stage 2 - Renderer] Cached as basic renderer (hash=${persisted.artifactHash.slice(0, 12)}…, reused=${persisted.reused})`
+          );
+        } catch (err) {
+          console.warn("[Stage 2 - Renderer] Failed to persist basic renderer:", err);
+        }
+      }
+
       console.log("[Stage 2 - Renderer] ========================================");
       return result;
     }),
 
   /**
-   * List cached LLM-generated renderers, optionally filtered by domain.
+   * Look up a cached LLM-generated renderer for a basic (built-in) domain
+   * by (domain, provider). Returns the hydrated code if one was previously
+   * generated, or null. The frontend calls this BEFORE invoking the LLM
+   * so a cache hit short-circuits the call.
    */
-  llmListCachedRenderers: publicProcedure
+  lookupBasicRenderer: publicProcedure
     .input(
       z.object({
-        domain: z.string().optional(),
-      }).optional()
-    )
-    .query(async ({ input }) => {
-      const renderers = await listCachedRenderers(input?.domain);
-      return renderers;
-    }),
-
-  /**
-   * Load a specific cached renderer by filename.
-   */
-  llmLoadCachedRenderer: publicProcedure
-    .input(
-      z.object({
-        filename: z.string(),
+        domain: z.string(),
+        provider: z.enum(["claude", "gemini"]),
       })
     )
     .query(async ({ input }) => {
-      const code = await loadCachedRenderer(input.filename);
-      if (!code) {
-        throw new Error(`Cached renderer not found: ${input.filename}`);
+      const hit = await findBasicRenderer(input.domain, input.provider);
+      if (hit) {
+        console.log(
+          `[lookupBasicRenderer] HIT — (${input.domain}, ${input.provider}) → ${hit.artifactHash.slice(0, 12)}…`
+        );
+      } else {
+        console.log(
+          `[lookupBasicRenderer] MISS — no cached renderer for (${input.domain}, ${input.provider})`
+        );
       }
-      // Transpile the cached code to clean JS (handles old files with CommonJS exports)
-      const cleanCode = transpileCachedCode(code);
-      return { filename: input.filename, code: cleanCode };
-    }),
-
-  /**
-   * Delete a specific cached renderer by filename.
-   */
-  llmDeleteCachedRenderer: publicProcedure
-    .input(
-      z.object({
-        filename: z.string(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const success = await deleteCachedRenderer(input.filename);
-      return { success, filename: input.filename };
+      return hit;
     }),
 
   // ==================== PDDL DOMAIN INTERPRETER ====================
@@ -663,53 +665,6 @@ export const visualizerRouter = router({
       return result;
     }),
 
-  /**
-   * List cached LLM-generated state transformers, optionally filtered by domain.
-   */
-  llmListCachedTransformers: publicProcedure
-    .input(
-      z.object({
-        domain: z.string().optional(),
-      }).optional()
-    )
-    .query(async ({ input }) => {
-      const transformers = await listCachedTransformers(input?.domain);
-      return transformers;
-    }),
-
-  /**
-   * Load a specific cached transformer by filename.
-   */
-  llmLoadCachedTransformer: publicProcedure
-    .input(
-      z.object({
-        filename: z.string(),
-      })
-    )
-    .query(async ({ input }) => {
-      const code = await loadCachedTransformer(input.filename);
-      if (!code) {
-        throw new Error(`Cached transformer not found: ${input.filename}`);
-      }
-      // Transpile the cached code to clean JS
-      const cleanCode = transpileCachedTransformer(code);
-      return { filename: input.filename, code: cleanCode };
-    }),
-
-  /**
-   * Delete a specific cached transformer by filename.
-   */
-  llmDeleteCachedTransformer: publicProcedure
-    .input(
-      z.object({
-        filename: z.string(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const success = await deleteCachedTransformer(input.filename);
-      return { success, filename: input.filename };
-    }),
-
 
   // ==================== SAVED DOMAINS LIBRARY ====================
 
@@ -741,6 +696,32 @@ export const visualizerRouter = router({
       }
       console.log(`[loadSavedDomain] Loaded: ${domain.displayName}`);
       return domain;
+    }),
+
+  /**
+   * Look up a saved domain by the hash of its PDDL text.
+   * Returns the existing entry (with hydrated transformer + renderer code)
+   * if one was previously generated for this exact PDDL, or null otherwise.
+   *
+   * The frontend calls this BEFORE Stage 1 to skip both LLM calls when the
+   * same domain has already been processed.
+   */
+  lookupSavedDomainByPddl: publicProcedure
+    .input(
+      z.object({
+        domainPddl: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const hit = await findSavedDomainByPddl(input.domainPddl);
+      if (hit) {
+        console.log(
+          `[lookupSavedDomainByPddl] HIT — returning "${hit.displayName}" (id=${hit.id})`
+        );
+      } else {
+        console.log("[lookupSavedDomainByPddl] MISS — no cached domain");
+      }
+      return hit;
     }),
 
   /**

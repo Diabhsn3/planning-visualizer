@@ -9,7 +9,7 @@ import {
   UploadIcon, FileCodeIcon, AlertIcon, ClockIcon, ZapIcon,
   CheckCircleIcon,
   ChevronDownIcon, WandIcon, RefreshIcon, BrainIcon,
-  TrashIcon, HistoryIcon, MenuIcon, CloseIcon, TerminalIcon,
+  MenuIcon, CloseIcon, TerminalIcon,
   BlocksWorldIcon, GripperIcon, DepotIcon, HanoiIcon, RoverIcon, SatelliteIcon,
   SparklesIcon,
 } from "@/components/Icons";
@@ -428,9 +428,6 @@ export default function Visualizer() {
   const [isLlmGenerating, setIsLlmGenerating] = useState(false);
   const [llmError, setLlmError]               = useState<string | null>(null);
   const [llmModelInfo, setLlmModelInfo]       = useState<string | null>(null);
-  const [showCachedRenderers, setShowCachedRenderers] = useState(false);
-  const [selectedCachedFile, setSelectedCachedFile]   = useState<string | null>(null);
-
   const [errorModal, setErrorModal] = useState<{
     show: boolean; title: string; message: string;
     errorType?: string; suggestedDomain?: string; suggestedDomainName?: string;
@@ -451,8 +448,15 @@ export default function Visualizer() {
   const [isTransformerGenerating, setIsTransformerGenerating] = useState(false);
   const [transformerError, setTransformerError]         = useState<string | null>(null);
   const [transformerModelInfo, setTransformerModelInfo] = useState<string | null>(null);
-  const [showCachedTransformers, setShowCachedTransformers] = useState(false);
-  const [selectedCachedTransformer, setSelectedCachedTransformer] = useState<string | null>(null);
+  const [showGeneratedCode, setShowGeneratedCode] = useState(false);
+
+  // Format a byte count like "1234" -> "1.2 KB" / "768 B"
+  const formatBytes = (n: number): string => {
+    if (!n || n < 1024) return `${n} B`;
+    const kb = n / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    return `${(kb / 1024).toFixed(2)} MB`;
+  };
 
   const strategiesQuery      = trpc.visualizer.listStrategies.useQuery();
   const savedDomainsQuery    = trpc.visualizer.listSavedDomains.useQuery(undefined, { enabled: isCustomDomain, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: false, retry: 1 });
@@ -584,8 +588,6 @@ export default function Visualizer() {
       if (data.code) {
         setLlmRendererCode(data.code); setLlmError(null);
         setLlmModelInfo(`${data.provider} (${data.model})`);
-        setSelectedCachedFile(data.savedFile || null);
-        cachedRenderersQuery.refetch();
 
         // Auto-save to Saved Domains Library (only for new custom domains)
         if (isCustomDomain && customMode === "new" && llmTransformerCode) {
@@ -616,42 +618,35 @@ export default function Visualizer() {
     onError: (error: any) => { setIsLlmGenerating(false); setLlmError(error.message || "Failed to generate LLM renderer"); },
   });
 
-  const cachedRenderersQuery = trpc.visualizer.llmListCachedRenderers.useQuery(
-    { domain: selectedDomain }, { enabled: renderMode === "llm", staleTime: 30000, refetchOnWindowFocus: false, retry: 1 }
-  );
-
-  const deleteCachedMutation = trpc.visualizer.llmDeleteCachedRenderer.useMutation({
-    onSuccess: () => cachedRenderersQuery.refetch(),
-  });
-
-  const handleLlmGenerate = () => {
+  const handleLlmGenerate = async () => {
     if (renderedStates.length === 0) { setLlmError("Generate states first, then switch to LLM mode."); return; }
-    setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null); setSelectedCachedFile(null);
+    setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null);
+
+    // Cache-first: if we've previously generated this (domain, provider)
+    // pair, reuse it and skip the LLM call.
+    try {
+      const url = `/api/trpc/visualizer.lookupBasicRenderer?input=${encodeURIComponent(
+        JSON.stringify({ json: { domain: selectedDomain, provider: llmProvider } })
+      )}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      const hit = json?.result?.data?.json;
+      if (hit && hit.code) {
+        console.log(`[BasicRenderer] HIT — (${selectedDomain}, ${llmProvider}) → reusing cached artifact ${hit.artifactHash.slice(0, 12)}…`);
+        setIsLlmGenerating(false);
+        setLlmRendererCode(hit.code);
+        setLlmModelInfo(`Cached (${hit.provider})`);
+        return;
+      }
+      console.log(`[BasicRenderer] MISS — no cached renderer for (${selectedDomain}, ${llmProvider}); calling LLM`);
+    } catch (err) {
+      console.warn("[BasicRenderer] Lookup failed, proceeding with LLM:", err);
+    }
+
     llmGenerateMutation.mutate({ domainName: selectedDomain, domainPddl: "", transformerCode: "", provider: llmProvider });
   };
 
-  const handleLoadCachedRenderer = async (filename: string) => {
-    try {
-      setLlmError(null);
-      const res  = await fetch(`/api/trpc/visualizer.llmLoadCachedRenderer?input=${encodeURIComponent(JSON.stringify({ json: { filename } }))}`);
-      const json = await res.json();
-      const data = json?.result?.data?.json;
-      if (data?.code) {
-        setLlmRendererCode(data.code); setSelectedCachedFile(filename);
-        const parts = filename.replace('.ts','').split('_');
-        setLlmModelInfo(`Cached (${parts.length >= 2 ? parts[parts.length - 2] : 'unknown'})`);
-      } else setLlmError("Failed to load cached renderer");
-    } catch (e: any) { setLlmError(e.message || "Failed to load cached renderer"); }
-  };
-
-  const handleDeleteCachedRenderer = (filename: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (selectedCachedFile === filename) { setLlmRendererCode(null); setSelectedCachedFile(null); setLlmModelInfo(null); }
-    deleteCachedMutation.mutate({ filename });
-  };
-
-  useEffect(() => { setLlmRendererCode(null); setLlmError(null); setLlmModelInfo(null); setSelectedCachedFile(null); }, [selectedDomain]);
-  useEffect(() => { if (renderMode === "llm") cachedRenderersQuery.refetch(); }, [renderMode, selectedDomain]);
+  useEffect(() => { setLlmRendererCode(null); setLlmError(null); setLlmModelInfo(null); }, [selectedDomain]);
   // Custom domain upload mutation
   const uploadCustomMutation = trpc.visualizer.uploadAndGenerateCustom.useMutation({
     onSuccess: (data) => {
@@ -682,14 +677,12 @@ export default function Visualizer() {
       if (data.code) {
         setLlmTransformerCode(data.code); setTransformerError(null);
         setTransformerModelInfo(`${data.provider} (${data.model})`);
-        setSelectedCachedTransformer(data.savedFile || null);
-        cachedTransformersQuery.refetch();
         // Auto-chain: trigger canvas renderer generation using PDDL domain + transformer code
         // The renderer LLM reads the transformer code to understand the enriched state structure.
         // No sample states needed — this makes the renderer fully domain-generic.
         {
           setRenderMode("llm");
-          setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null); setSelectedCachedFile(null);
+          setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null);
           // Get the domain PDDL to pass to the renderer LLM
           const getDomainPddlForRenderer = async (): Promise<string> => {
             if (customDomainInputMode === "file" && customDomainFile) {
@@ -722,54 +715,59 @@ export default function Visualizer() {
       setTransformerError(error.message || "Failed to generate state transformer");
     },
   });
-  const cachedTransformersQuery = trpc.visualizer.llmListCachedTransformers.useQuery(
-    { domain: customDomainName || undefined }, { enabled: isCustomDomain, staleTime: 30000, refetchOnWindowFocus: false, retry: 1 }
-  );
-  const deleteTransformerMutation = trpc.visualizer.llmDeleteCachedTransformer.useMutation({
-    onSuccess: () => cachedTransformersQuery.refetch(),
-  });
   const triggerTransformerGeneration = () => {
     const domainContent = customDomainText || "";
     if (!domainContent && !customDomainFile) return;
-    setIsTransformerGenerating(true); setTransformerError(null); setLlmTransformerCode(null); setSelectedCachedTransformer(null);
-    const readAndGenerate = (domainPddl: string) => {
+    setIsTransformerGenerating(true); setTransformerError(null); setLlmTransformerCode(null);
+
+    // Look up the saved-domains library by PDDL hash BEFORE calling the LLM.
+    // If we've previously generated for this exact PDDL, skip both Stage 1
+    // and Stage 2 — just reuse the cached transformer + renderer.
+    const tryCacheThenGenerate = async (domainPddl: string) => {
+      try {
+        const url = `/api/trpc/visualizer.lookupSavedDomainByPddl?input=${encodeURIComponent(
+          JSON.stringify({ json: { domainPddl } })
+        )}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        const hit = json?.result?.data?.json;
+        if (hit && hit.transformerCode && hit.rendererCode) {
+          console.log(`[Cache] HIT — reusing saved domain "${hit.displayName}" (id=${hit.id}) — skipping both LLM calls`);
+          setIsTransformerGenerating(false);
+          setLlmTransformerCode(hit.transformerCode);
+          setLlmRendererCode(hit.rendererCode);
+          setRenderMode("llm");
+          setTransformerModelInfo(`Cached (${hit.provider})`);
+          setLlmModelInfo(`Cached (${hit.provider})`);
+          setTransformerError(null);
+          setLlmError(null);
+          return;
+        }
+        console.log("[Cache] MISS — proceeding with LLM generation");
+      } catch (err) {
+        console.warn("[Cache] Lookup failed, proceeding with LLM generation:", err);
+      }
+
+      // Cache miss → run Stage 1 (which auto-chains Stage 2)
       llmTransformerMutation.mutate({
         domainName: customDomainName || "custom",
         domainPddl,
         provider: llmProvider,
       });
     };
+
     if (customDomainFile) {
       const reader = new FileReader();
-      reader.onload = (e) => readAndGenerate(e.target?.result as string);
+      reader.onload = (e) => tryCacheThenGenerate(e.target?.result as string);
       reader.readAsText(customDomainFile);
     } else {
-      readAndGenerate(customDomainText);
+      tryCacheThenGenerate(customDomainText);
     }
-  };
-  const handleLoadCachedTransformer = async (filename: string) => {
-    try {
-      setTransformerError(null);
-      const res  = await fetch(`/api/trpc/visualizer.llmLoadCachedTransformer?input=${encodeURIComponent(JSON.stringify({ json: { filename } }))}`);
-      const json = await res.json();
-      const data = json?.result?.data?.json;
-      if (data?.code) {
-        setLlmTransformerCode(data.code); setSelectedCachedTransformer(filename);
-        const parts = filename.replace('.ts','').split('_');
-        setTransformerModelInfo(`Cached (${parts.length >= 2 ? parts[parts.length - 2] : 'unknown'})`);
-      } else setTransformerError("Failed to load cached transformer");
-    } catch (e: any) { setTransformerError(e.message || "Failed to load cached transformer"); }
-  };
-  const handleDeleteCachedTransformer = (filename: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (selectedCachedTransformer === filename) { setLlmTransformerCode(null); setSelectedCachedTransformer(null); setTransformerModelInfo(null); }
-    deleteTransformerMutation.mutate({ filename });
   };
   // Reset custom domain state when switching away
   useEffect(() => {
     if (!isCustomDomain) {
       setLlmTransformerCode(null); setTransformerError(null); setTransformerModelInfo(null);
-      setSelectedCachedTransformer(null);
     }
   }, [isCustomDomain]);
 
@@ -1239,6 +1237,26 @@ export default function Visualizer() {
                                             <div className="text-xs text-slate-500 mt-0.5">
                                               {sd.provider} &middot; {new Date(sd.createdAt).toLocaleDateString()}
                                             </div>
+                                            {(sd.transformerHash || sd.rendererHash) && (
+                                              <div className="flex gap-1 mt-1">
+                                                {sd.transformerHash && (
+                                                  <span
+                                                    title={`Transformer hash: ${sd.transformerHash}`}
+                                                    className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
+                                                  >
+                                                    T:{sd.transformerHash.slice(0, 8)}
+                                                  </span>
+                                                )}
+                                                {sd.rendererHash && (
+                                                  <span
+                                                    title={`Renderer hash: ${sd.rendererHash}`}
+                                                    className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
+                                                  >
+                                                    R:{sd.rendererHash.slice(0, 8)}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            )}
                                           </div>
                                           {isSel && (
                                             <motion.div
@@ -1267,6 +1285,66 @@ export default function Visualizer() {
                                             <div className="w-full h-28 text-xs font-mono bg-white/[0.04] border border-white/[0.08] rounded-lg p-2 overflow-auto text-slate-400">
                                               <pre className="whitespace-pre-wrap">{loadSavedDomainQuery.data.domainPddl}</pre>
                                             </div>
+                                          </div>
+                                          {/* Generated Code (transformer + renderer artifacts) */}
+                                          <div>
+                                            <button
+                                              type="button"
+                                              onClick={() => setShowGeneratedCode(v => !v)}
+                                              className="flex items-center justify-between w-full text-xs font-medium text-slate-400 hover:text-slate-300 mb-1.5"
+                                            >
+                                              <span>Generated Code</span>
+                                              <span className="font-mono text-[10px] text-slate-500">
+                                                {showGeneratedCode ? "▾ hide" : "▸ show"}
+                                              </span>
+                                            </button>
+                                            <AnimatePresence>
+                                              {showGeneratedCode && (
+                                                <motion.div
+                                                  initial={{ opacity: 0, height: 0 }}
+                                                  animate={{ opacity: 1, height: "auto" }}
+                                                  exit={{ opacity: 0, height: 0 }}
+                                                  transition={{ duration: 0.18, ease: easeOut }}
+                                                  className="overflow-hidden space-y-2"
+                                                >
+                                                  {(["transformer", "renderer"] as const).map(kind => {
+                                                    const code = kind === "transformer"
+                                                      ? loadSavedDomainQuery.data.transformerCode
+                                                      : loadSavedDomainQuery.data.rendererCode;
+                                                    const hash = kind === "transformer"
+                                                      ? loadSavedDomainQuery.data.transformerHash
+                                                      : loadSavedDomainQuery.data.rendererHash;
+                                                    return (
+                                                      <div key={kind} className="bg-white/[0.04] border border-white/[0.08] rounded-lg p-2">
+                                                        <div className="flex items-center gap-2 mb-1.5">
+                                                          <span className="text-xs font-medium text-slate-300 capitalize">{kind}</span>
+                                                          <span
+                                                            title={hash || "(no hash)"}
+                                                            className="font-mono text-[10px] text-slate-500 truncate flex-1 min-w-0"
+                                                          >
+                                                            {hash ? hash.slice(0, 16) + "…" : "(legacy, no hash)"}
+                                                          </span>
+                                                          <span className="font-mono text-[10px] text-slate-500 flex-shrink-0">
+                                                            {formatBytes(code?.length || 0)}
+                                                          </span>
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => { if (code) navigator.clipboard.writeText(code); }}
+                                                            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-400 hover:text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08]"
+                                                            title="Copy code to clipboard"
+                                                          >
+                                                            copy
+                                                          </button>
+                                                        </div>
+                                                        <pre className="text-[10px] font-mono text-slate-400 whitespace-pre overflow-auto max-h-48 leading-relaxed">
+                                                          {code || "(no code)"}
+                                                        </pre>
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </motion.div>
+                                              )}
+                                            </AnimatePresence>
                                           </div>
                                           {/* Problem PDDL */}
                                           <div>
@@ -1684,59 +1762,6 @@ export default function Visualizer() {
                               <span className="leading-relaxed">{llmError}</span>
                             </div>
                           )}
-                          {/* Cached Renderers */}
-                          <div className="border border-white/[0.06] rounded-lg overflow-hidden">
-                            <button onClick={() => setShowCachedRenderers(!showCachedRenderers)}
-                              className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
-                              <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                                <HistoryIcon className="w-3.5 h-3.5" />
-                                Cached Renderers
-                                {(cachedRenderersQuery.data?.length ?? 0) > 0 && (
-                                  <span className="bg-white/[0.08] text-slate-400 px-2 py-0.5 rounded-full text-[11px]">
-                                    {cachedRenderersQuery.data?.length}
-                                  </span>
-                                )}
-                              </div>
-                              <motion.div animate={{ rotate: showCachedRenderers ? 0 : -90 }} transition={{ duration: 0.16 }}>
-                                <ChevronDownIcon className="w-3.5 h-3.5 text-slate-600" />
-                              </motion.div>
-                            </button>
-                            <CollapseSection open={showCachedRenderers}>
-                              <div className="max-h-48 overflow-y-auto">
-                                {cachedRenderersQuery.isLoading ? (
-                                  <div className="px-3 py-4 text-center text-xs text-slate-500">Loading cached renderers...</div>
-                                ) : !cachedRenderersQuery.data?.length ? (
-                                  <div className="px-3 py-4 text-center text-xs text-slate-500 leading-relaxed">No cached renderers for this domain.</div>
-                                ) : (
-                                  <div className="divide-y divide-white/[0.04]">
-                                    {cachedRenderersQuery.data.map((r: any) => (
-                                      <div key={r.filename} onClick={() => handleLoadCachedRenderer(r.filename)}
-                                        className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors ${
-                                          selectedCachedFile === r.filename
-                                            ? "bg-green-500/8 border-l-2 border-green-500"
-                                            : "hover:bg-white/[0.03] border-l-2 border-transparent"
-                                        }`}>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-1.5">
-                                            <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${r.provider === 'claude' ? 'bg-orange-500/15 text-orange-400' : 'bg-blue-500/15 text-blue-400'}`}>
-                                              {r.provider}
-                                            </span>
-                                            <span className="text-[11px] text-slate-500">
-                                              {new Date(r.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                          </div>
-                                        </div>
-                                        <button onClick={e => handleDeleteCachedRenderer(r.filename, e)}
-                                          className="p-1.5 rounded-md hover:bg-red-500/15 text-slate-600 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
-                                          <TrashIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </CollapseSection>
-                          </div>
                         </div>
                       </CollapseSection>
                     </div>
@@ -1793,51 +1818,6 @@ export default function Visualizer() {
                               <SparklesIcon className="w-3 h-3" />
                               Generate State Transformer
                             </button>
-                          )}
-                          {/* Cached Transformers */}
-                          {(cachedTransformersQuery.data?.length ?? 0) > 0 && (
-                            <div className="border border-white/[0.06] rounded-lg overflow-hidden">
-                              <button onClick={() => setShowCachedTransformers(!showCachedTransformers)}
-                                className="w-full flex items-center justify-between px-3 py-2 bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
-                                <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                                  <HistoryIcon className="w-3.5 h-3.5" />
-                                  Cached Transformers
-                                  <span className="bg-white/[0.08] text-slate-400 px-2 py-0.5 rounded-full text-[11px]">
-                                    {cachedTransformersQuery.data?.length}
-                                  </span>
-                                </div>
-                                <motion.div animate={{ rotate: showCachedTransformers ? 0 : -90 }} transition={{ duration: 0.16 }}>
-                                  <ChevronDownIcon className="w-3.5 h-3.5 text-slate-600" />
-                                </motion.div>
-                              </button>
-                              <CollapseSection open={showCachedTransformers}>
-                                <div className="max-h-40 overflow-y-auto divide-y divide-white/[0.04]">
-                                  {cachedTransformersQuery.data?.map((t: any) => (
-                                    <div key={t.filename} onClick={() => handleLoadCachedTransformer(t.filename)}
-                                      className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-colors ${
-                                        selectedCachedTransformer === t.filename
-                                          ? "bg-purple-500/10 border-l-2 border-purple-400"
-                                          : "hover:bg-white/[0.03] border-l-2 border-transparent"
-                                      }`}>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="inline-block px-2 py-0.5 rounded text-[11px] font-medium bg-purple-500/15 text-purple-400">
-                                            {t.provider}
-                                          </span>
-                                          <span className="text-[11px] text-slate-500">
-                                            {new Date(t.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                          </span>
-                                        </div>
-                                      </div>
-                                      <button onClick={e => handleDeleteCachedTransformer(t.filename, e)}
-                                        className="p-1.5 rounded-md hover:bg-red-500/15 text-slate-600 hover:text-red-400 transition-colors ml-2 flex-shrink-0">
-                                        <TrashIcon className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              </CollapseSection>
-                            </div>
                           )}
                         </div>
                       </div>

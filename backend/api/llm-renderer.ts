@@ -24,7 +24,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { toFile } from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ts from "typescript";
-import { readFile, writeFile, mkdir, readdir, unlink } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createReadStream } from "fs";
@@ -49,10 +49,6 @@ const SKILL_RULES_PATH = path.join(SKILLS_DIR, "rules.md");
 const GEMINI_PROMPT_PATH = __dirname.endsWith("dist") 
   ? path.join(__dirname, "..", "prompts", "renderer-skill.txt")
   : path.join(__dirname, "prompts", "renderer-skill.txt");
-
-const CACHE_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "llm_renderers")
-  : path.join(__dirname, "llm_renderers");
 
 // File to persist the skill_id after first upload
 const SKILL_ID_CACHE_PATH = __dirname.endsWith("dist")
@@ -89,18 +85,9 @@ export interface GenerateRendererRequest {
 export interface GenerateRendererResponse {
   success: boolean;
   code?: string;
-  savedFile?: string;
   provider: string;
   model: string;
   error?: string;
-}
-
-export interface CachedRenderer {
-  filename: string;
-  domain: string;
-  provider: string;
-  timestamp: string;
-  size: number;
 }
 
 // ==================== CLAUDE SKILLS API ====================
@@ -287,15 +274,6 @@ function validateCode(code: string, domainName: string): { valid: boolean; issue
 }
 
 // ==================== TYPESCRIPT TRANSPILATION ====================
-
-/**
- * Transpile TypeScript code to JavaScript using the TypeScript compiler API.
- * This handles all TS syntax correctly: interfaces, type annotations, generics,
- * callback types, union types, etc. — unlike fragile regex-based stripping.
- */
-export function transpileCachedCode(code: string): string {
-  return transpileToJS(code);
-}
 
 function transpileToJS(tsCode: string): string {
   // Step 1: Strip 'export' keywords before transpilation.
@@ -486,140 +464,6 @@ async function generateWithGemini(userMessage: string): Promise<string> {
   return text;
 }
 
-// ==================== CACHING ====================
-
-/**
- * Save generated renderer code to disk cache.
- */
-async function saveToCache(
-  code: string,
-  domainName: string,
-  provider: LLMProvider
-): Promise<string> {
-  await mkdir(CACHE_DIR, { recursive: true });
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const filename = `${domainName}_${provider}_${timestamp}.ts`;
-  const filepath = path.join(CACHE_DIR, filename);
-
-  await writeFile(filepath, code, "utf-8");
-  console.log(`[LLM Renderer] Cached renderer saved: ${filename}`);
-
-  return filename;
-}
-
-/**
- * List all cached renderers, optionally filtered by domain.
- */
-export async function listCachedRenderers(domain?: string): Promise<CachedRenderer[]> {
-  try {
-    await mkdir(CACHE_DIR, { recursive: true });
-    const files = await readdir(CACHE_DIR);
-
-    const renderers: CachedRenderer[] = [];
-
-    for (const file of files) {
-      if (!file.endsWith(".ts") || file === ".gitkeep") continue;
-
-      // Parse filename: {domain}_{provider}_{timestamp}.ts
-      const match = file.match(/^(.+?)_(claude|gemini)_(.+)\.ts$/);
-      if (!match) continue;
-
-      const [, fileDomain, fileProvider, fileTimestamp] = match;
-
-      if (domain && fileDomain !== domain) continue;
-
-      const filepath = path.join(CACHE_DIR, file);
-      const content = await readFile(filepath, "utf-8");
-
-      // Restore ISO timestamp from filename format:
-      // Filename format: 2026-04-21T16-23-22-502Z
-      // Need to restore to: 2026-04-21T16:23:22.502Z
-      const tIdx = fileTimestamp.indexOf('T');
-      let parsedTimestamp = fileTimestamp;
-      if (tIdx !== -1) {
-        const datePart = fileTimestamp.substring(0, tIdx);
-        const timePart = fileTimestamp.substring(tIdx);
-        const timeFixed = timePart
-          .replace(/-(\d{3}Z)$/, '.$1')
-          .replace(/-/g, ':');
-        parsedTimestamp = datePart + timeFixed;
-      }
-
-      renderers.push({
-        filename: file,
-        domain: fileDomain,
-        provider: fileProvider,
-        timestamp: parsedTimestamp,
-        size: content.length,
-      });
-    }
-
-    // Sort by timestamp descending (newest first)
-    renderers.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-    return renderers;
-  } catch (error) {
-    console.error("[LLM Renderer] Error listing cache:", error);
-    return [];
-  }
-}
-
-/**
- * Load a cached renderer by filename.
- */
-export async function loadCachedRenderer(filename: string): Promise<string | null> {
-  try {
-    const filepath = path.join(CACHE_DIR, filename);
-    const code = await readFile(filepath, "utf-8");
-    console.log(`[LLM Renderer] Loaded cached renderer: ${filename}`);
-    return code;
-  } catch (error) {
-    console.error(`[LLM Renderer] Cache file not found: ${filename}`);
-    return null;
-  }
-}
-
-/**
- * Delete a cached renderer by filename.
- */
-export async function deleteCachedRenderer(filename: string): Promise<boolean> {
-  try {
-    const filepath = path.join(CACHE_DIR, filename);
-    await unlink(filepath);
-    console.log(`[LLM Renderer] Deleted cached renderer: ${filename}`);
-    return true;
-  } catch (error) {
-    console.error(`[LLM Renderer] Failed to delete: ${filename}`);
-    return false;
-  }
-}
-
-/**
- * Clear all cached renderers for a domain (or all domains).
- */
-export async function clearCache(domain?: string): Promise<number> {
-  try {
-    await mkdir(CACHE_DIR, { recursive: true });
-    const files = await readdir(CACHE_DIR);
-    let deleted = 0;
-
-    for (const file of files) {
-      if (!file.endsWith(".ts") || file === ".gitkeep") continue;
-      if (domain && !file.startsWith(`${domain}_`)) continue;
-
-      await unlink(path.join(CACHE_DIR, file));
-      deleted++;
-    }
-
-    console.log(`[LLM Renderer] Cleared ${deleted} cached renderers`);
-    return deleted;
-  } catch (error) {
-    console.error("[LLM Renderer] Error clearing cache:", error);
-    return 0;
-  }
-}
-
 // ==================== MAIN GENERATION FUNCTION ====================
 
 /**
@@ -632,8 +476,7 @@ export async function clearCache(domain?: string): Promise<number> {
  * 2. Calls the selected LLM provider
  * 3. Extracts and validates the generated code
  * 4. Transpiles TypeScript to JavaScript
- * 5. Caches the result to disk
- * 6. Returns the code
+ * 5. Returns the code (persistence is handled by saved-domains.ts → artifacts/)
  */
 export async function generateRenderer(
   request: GenerateRendererRequest
@@ -703,13 +546,9 @@ Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do 
     const transpiled = transpileToJS(tsCode);
     console.log(`[LLM Renderer] Transpiled TS (${tsCode.length} chars) -> JS (${transpiled.length} chars)`);
 
-    // 6. Cache
-    const savedFile = await saveToCache(transpiled, domainName, provider);
-
     return {
       success: true,
       code: transpiled,
-      savedFile,
       provider: model.name,
       model: model.id,
     };
