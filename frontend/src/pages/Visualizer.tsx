@@ -447,7 +447,10 @@ export default function Visualizer() {
   const [llmTransformerCode, setLlmTransformerCode]     = useState<string | null>(null);
   const [isTransformerGenerating, setIsTransformerGenerating] = useState(false);
   const [transformerError, setTransformerError]         = useState<string | null>(null);
-  const [transformerModelInfo, setTransformerModelInfo] = useState<string | null>(null);
+  // transformerModelInfo: kept as a no-op setter so callers that previously
+  // wrote it don't need to be touched. Read-side was removed when the
+  // State Transformer status box was deleted.
+  const setTransformerModelInfo = (_v: string | null) => {};
   const [showGeneratedCode, setShowGeneratedCode] = useState(false);
 
   // Format a byte count like "1234" -> "1.2 KB" / "768 B"
@@ -511,6 +514,13 @@ export default function Visualizer() {
   }, []);
 
   useEffect(() => {
+    // Only run when switching TO a real basic domain. An empty selectedDomain
+    // is the marker for "Custom mode" — handled by the Custom button itself.
+    // Without this guard, picking Custom would set selectedDomain="" → this
+    // effect fires → it sees isCustomDomain=true (just set in the same batch)
+    // → it resets isCustomDomain back to false, requiring a second click.
+    if (!selectedDomain) return;
+
     setProblemType("example"); setProblemFile(null); setProblemText(""); setInputMode("file");
     // Reset visualization state when switching domains
     setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null);
@@ -1768,61 +1778,6 @@ export default function Visualizer() {
                   </CollapseSection>
                 </motion.div>
                 )}
-                </AnimatePresence>
-                {/* ── Transformer Status (shown for custom domains) ── */}
-                <AnimatePresence>
-                  {isCustomDomain && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.22, ease: easeOut }}
-                      className="overflow-hidden"
-                    >
-                      <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 overflow-hidden mb-0">
-                        <div className="px-4 py-3 border-b border-purple-500/10 flex items-center gap-2">
-                          <SparklesIcon className="w-4 h-4 text-purple-400" />
-                          <span className="text-xs font-semibold text-slate-300" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                            State Transformer
-                          </span>
-                          {llmTransformerCode && (
-                            <span className="ml-auto text-[11px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/25">
-                              Active
-                            </span>
-                          )}
-                        </div>
-                        <div className="p-3 space-y-2">
-                          {isTransformerGenerating && (
-                            <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-500/8 px-3 py-2 rounded-lg border border-purple-500/20">
-                              <div className="w-3.5 h-3.5 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin flex-shrink-0" />
-                              Generating state transformer...
-                            </div>
-                          )}
-                          {llmTransformerCode && !isTransformerGenerating && (
-                            <div className="flex items-center gap-2 text-xs text-purple-300 bg-purple-500/8 px-3 py-2 rounded-lg border border-purple-500/20">
-                              <CheckCircleIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                              Transformer active{transformerModelInfo && ` — ${transformerModelInfo}`}
-                            </div>
-                          )}
-                          {transformerError && (
-                            <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/8 px-3 py-2 rounded-lg border border-red-500/20">
-                              <AlertIcon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                              <span className="leading-relaxed">{transformerError}</span>
-                            </div>
-                          )}
-                          {renderedStates.length > 0 && !isTransformerGenerating && !llmTransformerCode && (
-                            <button
-                              onClick={() => triggerTransformerGeneration()}
-                              className="w-full py-2 px-4 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 bg-purple-500/15 text-purple-300 border border-purple-500/25 hover:bg-purple-500/25 hover:text-purple-200"
-                            >
-                              <SparklesIcon className="w-3 h-3" />
-                              Generate State Transformer
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
                 </AnimatePresence>
                 {/* ── Step 4: Generate ── */}
                 <div>
