@@ -2365,12 +2365,18 @@ export default function Visualizer() {
                     )}
 
                   </div>
-                  {/* Canvas — replaced by a loading state while custom-domain LLM calls are in flight */}
+                  {/* Canvas — replaced by a loading state while ANY LLM call
+                      is in flight. Two flows trigger this:
+                        - Custom domain: Stage 1 (transformer) → Stage 2 (renderer)
+                        - Basic domain in LLM render mode: Stage 2 only
+                      The CustomDomainLoading component handles both via the
+                      `stage` prop; basic-mode generation is always renderer-only,
+                      so isTransformerGenerating === false there. */}
                   <div className="p-4" style={{ maxHeight: "500px", overflow: "auto" }}>
-                    {isCustomDomain && (isTransformerGenerating || isLlmGenerating) && !llmError && !transformerError ? (
+                    {(isTransformerGenerating || isLlmGenerating) && !llmError && !transformerError ? (
                       <CustomDomainLoading
                         stage={isTransformerGenerating ? "transformer" : "renderer"}
-                        domainName={customDomainName}
+                        domainName={isCustomDomain ? customDomainName : selectedDomain}
                       />
                     ) : (
                       <StateCanvas
@@ -2453,24 +2459,52 @@ export default function Visualizer() {
                     <div ref={planStepsRef}
                       className="p-3 space-y-0.5 max-h-[600px] overflow-y-auto overscroll-contain"
                       style={{ scrollBehavior: "smooth" }}>
-                      {plan.map((action, idx) => (
-                        <motion.div key={idx}
-                          initial={false}
-                          animate={idx === currentStateIndex - 1 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
-                          transition={{ duration: 0.2 }}
-                          className={`text-xs px-3 py-2 rounded-lg transition-colors font-mono ${
-                            idx === currentStateIndex - 1
-                              ? "text-green-300 font-medium border-l-[2px] border-green-500"
-                              : idx < currentStateIndex - 1
-                              ? "text-slate-700"
-                              : "text-slate-500 hover:bg-white/[0.03]"
-                          }`}>
-                          <span className={`mr-2 tabular-nums ${idx === currentStateIndex - 1 ? "text-green-600" : "text-slate-700"}`}>
-                            {String(idx + 1).padStart(2, "0")}.
-                          </span>
-                          {action}
-                        </motion.div>
-                      ))}
+                      {plan.map((action, idx) => {
+                        // Jump the canvas to the state PRODUCED by this action.
+                        // plan[idx] transitions state[idx] → state[idx+1], so to
+                        // see the result of the action we set currentStateIndex
+                        // to idx+1. We also pause autoplay so the user's
+                        // manual selection isn't immediately overridden by the
+                        // ticker.
+                        const handleJumpToAction = () => {
+                          setCurrentStateIndex(idx + 1);
+                          if (isPlaying) {
+                            setIsPlaying(false);
+                          }
+                          if (playbackIntervalRef.current) {
+                            clearInterval(playbackIntervalRef.current);
+                            playbackIntervalRef.current = null;
+                          }
+                        };
+                        return (
+                          <motion.div key={idx}
+                            initial={false}
+                            animate={idx === currentStateIndex - 1 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
+                            transition={{ duration: 0.2 }}
+                            onClick={handleJumpToAction}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleJumpToAction();
+                              }
+                            }}
+                            role="button"
+                            tabIndex={0}
+                            title={`Show state after this action`}
+                            className={`text-xs px-3 py-2 rounded-lg transition-colors font-mono cursor-pointer focus:outline-none focus:ring-1 focus:ring-green-500/40 ${
+                              idx === currentStateIndex - 1
+                                ? "text-green-300 font-medium border-l-[2px] border-green-500"
+                                : idx < currentStateIndex - 1
+                                ? "text-slate-700 hover:bg-white/[0.03] hover:text-slate-500"
+                                : "text-slate-500 hover:bg-white/[0.03] hover:text-slate-300"
+                            }`}>
+                            <span className={`mr-2 tabular-nums ${idx === currentStateIndex - 1 ? "text-green-600" : "text-slate-700"}`}>
+                              {String(idx + 1).padStart(2, "0")}.
+                            </span>
+                            {action}
+                          </motion.div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
