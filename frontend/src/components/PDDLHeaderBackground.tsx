@@ -182,10 +182,13 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
       return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
     }
 
+    // Slower, calmer movement — the arm glides so it doesn't pull the eye
+    // away from the heading. Roughly 1.7× the previous timings, with longer
+    // pauses between actions.
     const D = {
-      approach: 600, descend: 420, grab:    160, ascend:  420,
-      move:     760, place:   420, release: 160, retreat: 420,
-      idleGap:  800, doneGap: 1400,
+      approach: 1050, descend: 720, grab:    280, ascend:  720,
+      move:     1300, place:   720, release: 280, retreat: 720,
+      idleGap:  1300, doneGap: 2200,
     };
 
     function tick(now: number) {
@@ -340,9 +343,9 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
 
     function spawnParticle(now: number) {
       const li   = Math.floor(Math.random() * PDDL_LINES.length);
-      // dim this line gently — each spawn steals a tiny bit of opacity.
-      // Small value = slow, graceful vanish.
-      lineAlphas[li] = Math.max(0, lineAlphas[li] - 0.035);
+      // Dim this line gently — each spawn steals a tiny bit of opacity.
+      // Small value + a higher floor below keeps the code legibly bright.
+      lineAlphas[li] = Math.max(0.55, lineAlphas[li] - 0.022);
       const line = PDDL_LINES[li];
       const ci   = Math.floor(Math.random() * line.length);
       ctx!.font  = `${L.textSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
@@ -401,9 +404,10 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
     }
 
     function drawPDDL() {
-      // Slow, graceful recovery — keeps fades feeling elegant rather than snappy
+      // Faster recovery + gentler drain (above) keeps the code legibly bright
+      // most of the time, while still letting individual lines breathe.
       for (let i = 0; i < lineAlphas.length; i++) {
-        lineAlphas[i] = Math.min(1, lineAlphas[i] + 0.0018);
+        lineAlphas[i] = Math.min(1, lineAlphas[i] + 0.0035);
       }
 
       // No backdrop — the text sits directly on the header bg.
@@ -421,8 +425,8 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
 
         const y = L.textTop + li * L.lineH;
 
-        // ── Pass 1: base text (body colour) ──────────────────────────────────
-        ctx!.fillStyle = `rgba(180, 170, 235, ${0.52 * fade})`;
+        // ── Pass 1: base text (body colour) — boosted for readability ────────
+        ctx!.fillStyle = `rgba(196, 188, 240, ${0.78 * fade})`;
         ctx!.fillText(line, L.textX, y);
 
         // ── Pass 2: layer targeted token colours on top ───────────────────────
@@ -437,11 +441,11 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
           const before = line.slice(0, m.index);
           const x      = L.textX + ctx!.measureText(before).width;
           let color: string;
-          if      (m[1]) color = `rgba(210, 190, 255, ${0.88 * fade})`;  // :keyword — bright lavender
-          else if (m[2]) color = `rgba(253, 200, 120, ${0.80 * fade})`;  // and/or/not — amber
-          else if (m[3]) color = `rgba(150, 245, 185, ${0.75 * fade})`;  // predicate — green
-          else if (m[4]) color = `rgba(145, 220, 255, ${0.85 * fade})`;  // block label — sky
-          else           color = `rgba(160, 150, 210, ${0.42 * fade})`;  // paren — dim
+          if      (m[1]) color = `rgba(220, 200, 255, ${1.00 * fade})`;  // :keyword — bright lavender
+          else if (m[2]) color = `rgba(255, 210, 130, ${0.95 * fade})`;  // and/or/not — amber
+          else if (m[3]) color = `rgba(165, 250, 195, ${0.92 * fade})`;  // predicate — green
+          else if (m[4]) color = `rgba(165, 230, 255, ${1.00 * fade})`;  // block label — sky
+          else           color = `rgba(180, 170, 220, ${0.65 * fade})`;  // paren — dim
           ctx!.fillStyle = color;
           ctx!.fillText(m[0], x, y);
         }

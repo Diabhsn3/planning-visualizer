@@ -198,3 +198,18 @@ export const renderHanoiLegend = undefined;
 
 # FINAL INSTRUCTIONS
 Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code.
+
+# CRITICAL CHECKLIST — DO NOT STOP UNTIL ALL THREE EXIST
+
+Before you stop generating, make sure your output contains ALL THREE of these EXPORTED top-level functions. Helper functions are not enough — the runtime calls these three by name and falls back to a plain-text view if any are missing:
+
+  1. ✅ `export function render<DomainName>(ctx: CanvasRenderingContext2D, state: RenderedState): void`
+        ↑ THIS IS THE ENTRY POINT. Most-often-forgotten. The runtime invokes it on every state. Without it, NOTHING DRAWS.
+
+  2. ✅ `export function render<DomainName>Background(ctx: CanvasRenderingContext2D, width: number, height: number): void`
+
+  3. ✅ `export const render<DomainName>Legend = undefined;` (or a function with the same name)
+
+If you wrote helper functions like `drawCar`, `drawShip`, `roundRect`, etc., that's fine — but they are NOT enough on their own. The three functions above are mandatory. The entry point #1 should call your helpers to produce the final scene.
+
+Now output the complete code with all three exported functions present.

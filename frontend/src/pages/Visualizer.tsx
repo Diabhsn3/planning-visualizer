@@ -678,6 +678,13 @@ export default function Visualizer() {
     /** PDDL the user just submitted — used if they pick "Create new". */
     pendingDomainPddl: string;
   }>({ show: false, matches: [], pendingDomainPddl: "" });
+
+  // Delete-saved-domain confirmation modal.
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState<{
+    show: boolean;
+    id: number | null;
+    displayName: string;
+  }>({ show: false, id: null, displayName: "" });
   // Custom Domain state
   const [isCustomDomain, setIsCustomDomain]         = useState(false);
   const [customDomainName, setCustomDomainName]     = useState("");
@@ -724,6 +731,35 @@ export default function Visualizer() {
       console.error("[SavedDomains] Failed to save domain:", err.message);
     },
   });
+
+  const deleteSavedDomainMutation = trpc.visualizer.deleteSavedDomain.useMutation({
+    onSuccess: (data) => {
+      console.log("[SavedDomains] Deleted id=" + data.id);
+      savedDomainsQuery.refetch();
+      // If the user just deleted the currently-selected domain, clear
+      // the selection so the detail panel doesn't try to show a missing entry.
+      if (selectedSavedDomainId === data.id) {
+        setSelectedSavedDomainId(null);
+        setLlmTransformerCode(null);
+        setLlmRendererCode(null);
+      }
+    },
+    onError: (err) => {
+      console.error("[SavedDomains] Failed to delete:", err.message);
+      setErrorModal({
+        show: true,
+        title: "Delete failed",
+        message: err.message || "Could not delete the saved domain.",
+      });
+    },
+  });
+
+  const handleConfirmDeleteSavedDomain = () => {
+    if (deleteConfirmModal.id != null) {
+      deleteSavedDomainMutation.mutate({ id: deleteConfirmModal.id });
+    }
+    setDeleteConfirmModal({ show: false, id: null, displayName: "" });
+  };
   const domainDefinitionQuery = trpc.visualizer.getDomainDefinition.useQuery(
     { domainName: selectedDomain as any }, { enabled: showDomainDefinition }
   );
@@ -762,14 +798,15 @@ export default function Visualizer() {
   useEffect(() => {
     // Only run when switching TO a real basic domain. An empty selectedDomain
     // is the marker for "Custom mode" — handled by the Custom button itself.
-    // Without this guard, picking Custom would set selectedDomain="" → this
-    // effect fires → it sees isCustomDomain=true (just set in the same batch)
-    // → it resets isCustomDomain back to false, requiring a second click.
     if (!selectedDomain) return;
 
+    // Form-input resets are fine — these are UI inputs that need to match
+    // the new domain context. We DO NOT clear renderedStates / plan /
+    // currentStateIndex / plannerInfo here: per user request, the canvas
+    // should keep showing the previous run until they explicitly click
+    // Generate. Only the Generate handlers (uploadMutation /
+    // uploadCustomMutation onSuccess) replace those.
     setProblemType("example"); setProblemFile(null); setProblemText(""); setInputMode("file");
-    // Reset visualization state when switching domains
-    setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null);
     setIsPlaying(false); if (playbackIntervalRef.current) { clearInterval(playbackIntervalRef.current); playbackIntervalRef.current = null; }
     // Reset custom domain state when switching to a built-in domain
     if (isCustomDomain) {
@@ -1110,6 +1147,23 @@ export default function Visualizer() {
 
   const handleGenerate = () => {
     setIsProcessing(true);
+    // Always scroll the page to the top when the user hits Generate.
+    //
+    // Why two scrolls + instant behavior: the saved-domain branch (and
+    // others) fires several setState calls right after this point
+    // (setLlmTransformerCode, setLlmRendererCode, setRenderMode, plus
+    // the mutation kickoff). React re-renders during smooth-scroll
+    // animations cancel them in Chrome, so a single
+    // `behavior: "smooth"` call sometimes silently does nothing.
+    //
+    // - First call: instant, runs synchronously before the upcoming
+    //   state updates.
+    // - rAF call: re-asserts after the current render cycle commits, in
+    //   case the page height changed enough to leave us mid-scroll.
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
     // Custom domain flow
     if (isCustomDomain) {
       const hasProblem = customProblemInputMode === "file" ? !!customProblemFile : !!customProblemText.trim();
@@ -1395,17 +1449,19 @@ export default function Visualizer() {
                             <button
                               key={t.id}
                               onClick={() => {
+                                // Per user request: clicking Basic/Custom in the configure
+                                // panel must NOT wipe the current visualization. The canvas
+                                // keeps showing the previous run until the user clicks
+                                // Generate. So we only reset the form / mode state here.
                                 if (t.id === "custom") {
                                   setIsCustomDomain(true);
                                   setSelectedDomain("");
                                   setIsDomainOpen(true);
-                                  setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null);
                                 } else {
                                   setIsCustomDomain(false);
                                   setCustomDomainName(""); setCustomDomainFile(null);
                                   setCustomDomainText(""); setCustomProblemFile(null); setCustomProblemText("");
                                   setLlmTransformerCode(null); setTransformerError(null); setTransformerModelInfo(null);
-                                  setRenderedStates([]); setPlan([]); setCurrentStateIndex(0); setPlannerInfo(null);
                                   setIsDomainOpen(true);
                                 }
                               }}
@@ -1548,61 +1604,84 @@ export default function Visualizer() {
                                     {savedDomainsQuery.data?.map(sd => {
                                       const isSel = selectedSavedDomainId === sd.id;
                                       return (
-                                        <motion.button
+                                        <motion.div
                                           key={sd.id}
-                                          onClick={() => {
-                                            setSelectedSavedDomainId(sd.id);
-                                            setCustomDomainName(sd.domainName);
-                                          }}
                                           whileTap={{ scale: 0.98 }}
                                           whileHover={!isSel ? { x: 2 } : undefined}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border"
+                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border group"
                                           style={isSel
                                             ? { background: "rgba(168,85,247,0.1)", borderColor: "rgba(168,85,247,0.35)" }
                                             : { borderColor: "transparent" }
                                           }
                                         >
-                                          <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                                            style={{ background: isSel ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.06)" }}>
-                                            <FileCodeIcon className={`w-5 h-5 ${isSel ? "text-purple-400" : "text-slate-500"}`} />
-                                          </div>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-medium leading-none transition-colors"
-                                              style={{ fontFamily: "'JetBrains Mono', monospace", color: isSel ? "#E9D5FF" : "#CBD5E1" }}>
-                                              {sd.displayName}
+                                          {/* Main click region — selecting the saved domain. */}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedSavedDomainId(sd.id);
+                                              setCustomDomainName(sd.domainName);
+                                            }}
+                                            className="flex-1 flex items-center gap-3 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer"
+                                          >
+                                            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+                                              style={{ background: isSel ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.06)" }}>
+                                              <FileCodeIcon className={`w-5 h-5 ${isSel ? "text-purple-400" : "text-slate-500"}`} />
                                             </div>
-                                            <div className="text-xs text-slate-500 mt-0.5">
-                                              {sd.provider} &middot; {new Date(sd.createdAt).toLocaleDateString()}
-                                            </div>
-                                            {(sd.transformerHash || sd.rendererHash) && (
-                                              <div className="flex gap-1 mt-1">
-                                                {sd.transformerHash && (
-                                                  <span
-                                                    title={`Transformer hash: ${sd.transformerHash}`}
-                                                    className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
-                                                  >
-                                                    T:{sd.transformerHash.slice(0, 8)}
-                                                  </span>
-                                                )}
-                                                {sd.rendererHash && (
-                                                  <span
-                                                    title={`Renderer hash: ${sd.rendererHash}`}
-                                                    className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
-                                                  >
-                                                    R:{sd.rendererHash.slice(0, 8)}
-                                                  </span>
-                                                )}
+                                            <div className="flex-1 min-w-0">
+                                              <div className="text-sm font-medium leading-none transition-colors"
+                                                style={{ fontFamily: "'JetBrains Mono', monospace", color: isSel ? "#E9D5FF" : "#CBD5E1" }}>
+                                                {sd.displayName}
                                               </div>
+                                              <div className="text-xs text-slate-500 mt-0.5">
+                                                {sd.provider} &middot; {new Date(sd.createdAt).toLocaleDateString()}
+                                              </div>
+                                              {(sd.transformerHash || sd.rendererHash) && (
+                                                <div className="flex gap-1 mt-1">
+                                                  {sd.transformerHash && (
+                                                    <span
+                                                      title={`Transformer hash: ${sd.transformerHash}`}
+                                                      className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
+                                                    >
+                                                      T:{sd.transformerHash.slice(0, 8)}
+                                                    </span>
+                                                  )}
+                                                  {sd.rendererHash && (
+                                                    <span
+                                                      title={`Renderer hash: ${sd.rendererHash}`}
+                                                      className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
+                                                    >
+                                                      R:{sd.rendererHash.slice(0, 8)}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                            {isSel && (
+                                              <motion.div
+                                                layoutId="saved-domain-dot"
+                                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                                style={{ background: "#A855F7", boxShadow: "0 0 8px rgba(168,85,247,0.7)" }}
+                                              />
                                             )}
-                                          </div>
-                                          {isSel && (
-                                            <motion.div
-                                              layoutId="saved-domain-dot"
-                                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                              style={{ background: "#A855F7", boxShadow: "0 0 8px rgba(168,85,247,0.7)" }}
-                                            />
-                                          )}
-                                        </motion.button>
+                                          </button>
+                                          {/* Delete button — opens confirmation modal. Stop
+                                              propagation so it doesn't double-fire the row select. */}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDeleteConfirmModal({
+                                                show: true,
+                                                id: sd.id,
+                                                displayName: sd.displayName,
+                                              });
+                                            }}
+                                            title={`Delete ${sd.displayName}`}
+                                            className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-slate-600 hover:text-red-300 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                          >
+                                            <CloseIcon className="w-4 h-4" />
+                                          </button>
+                                        </motion.div>
                                       );
                                     })}
 
@@ -2617,6 +2696,64 @@ export default function Visualizer() {
                   className="px-5 py-2.5 text-sm font-semibold transition-all duration-150 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30"
                 >
                   Create new version
+                </button>
+              </div>
+            </div>
+          </ModalBackdrop>
+        )}
+      </AnimatePresence>
+
+      {/* Delete-saved-domain confirmation. Mirrors errorModal styling
+          but with a red action button — destructive operations should
+          look distinct from informational ones. */}
+      <AnimatePresence>
+        {deleteConfirmModal.show && (
+          <ModalBackdrop onClose={() => setDeleteConfirmModal({ show: false, id: null, displayName: "" })}>
+            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-md w-full overflow-hidden"
+              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
+              <div className="px-6 py-4 border-b border-red-500/20 bg-red-500/[0.06]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-500/15">
+                      <AlertIcon className="w-4 h-4 text-red-400" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-red-300"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                      Delete saved domain
+                    </h3>
+                  </div>
+                  <button onClick={() => setDeleteConfirmModal({ show: false, id: null, displayName: "" })}
+                    className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
+                    <CloseIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="px-6 py-5">
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  Are you sure you want to delete{" "}
+                  <span className="text-slate-200 font-semibold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                    {deleteConfirmModal.displayName}
+                  </span>
+                  {" "}from your library?
+                </p>
+                <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+                  The entry is removed from the saved-domains list. The underlying generated code stays on disk —
+                  it's content-addressed and may be shared with other entries.
+                </p>
+              </div>
+              <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-between gap-3">
+                <button
+                  onClick={() => setDeleteConfirmModal({ show: false, id: null, displayName: "" })}
+                  className="px-5 py-2.5 text-sm text-slate-400 hover:text-slate-200 font-medium transition-all duration-150 rounded-xl hover:bg-white/[0.08]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDeleteSavedDomain}
+                  disabled={deleteSavedDomainMutation.isPending}
+                  className="px-5 py-2.5 text-sm font-semibold transition-all duration-150 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleteSavedDomainMutation.isPending ? "Deleting…" : "Delete"}
                 </button>
               </div>
             </div>

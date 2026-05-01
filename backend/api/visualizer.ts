@@ -3,7 +3,7 @@ import { z } from "zod";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { generateRenderer, type LLMProvider } from "./llm-renderer";
 import { generateTransformer } from "./llm-domain-interpreter";
-import { listSavedDomains, getSavedDomain, saveDomain, findSavedDomainByPddl, findAllSavedDomainsByPddl } from "./saved-domains";
+import { listSavedDomains, getSavedDomain, saveDomain, findSavedDomainByPddl, findAllSavedDomainsByPddl, deleteSavedDomain } from "./saved-domains";
 import { saveBasicRenderer, findBasicRenderer } from "./basic-renderer-cache";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -762,5 +762,22 @@ export const visualizerRouter = router({
       });
       console.log(`[saveDomainToLibrary] Saved as: ${saved.displayName} (id=${saved.id})`);
       return saved;
+    }),
+
+  /**
+   * Remove a saved domain from the library by ID. Note that the
+   * underlying artifact files in `data/artifacts/` are intentionally
+   * left in place — they're content-addressed and may be shared with
+   * other entries (or with the basic-renderer cache).
+   */
+  deleteSavedDomain: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      console.log(`[deleteSavedDomain] Deleting domain id=${input.id}`);
+      const removed = await deleteSavedDomain(input.id);
+      if (!removed) {
+        throw new Error(`Saved domain not found: id=${input.id}`);
+      }
+      return { success: true, id: input.id };
     }),
 });

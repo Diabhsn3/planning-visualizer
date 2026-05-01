@@ -24,12 +24,14 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { toFile } from "@anthropic-ai/sdk";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import ts from "typescript";
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createReadStream } from "fs";
+import { hashSkillFiles, writeStoredHash, syncSkillVersionIfStale } from "./skill-sync";
+import { callClaudeWithSkill } from "./llm-claude";
+import { callGemini } from "./llm-gemini";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +58,25 @@ const GEMINI_PROMPT_PATH = __dirname.endsWith("dist")
 const SKILL_ID_CACHE_PATH = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", ".claude-transformer-skill-id")
   : path.join(__dirname, ".claude-transformer-skill-id");
+
+// Separate hash file from the canvas renderer skill — used to detect
+// edits to the local skill files and push a new version.
+const SKILL_HASH_CACHE_PATH = __dirname.endsWith("dist")
+  ? path.join(__dirname, "..", ".claude-transformer-skill-hash")
+  : path.join(__dirname, ".claude-transformer-skill-hash");
+
+// One place that lists every file the interpreter skill uploads.
+const INTERPRETER_SKILL_DIR = "pddl-domain-interpreter";
+const INTERPRETER_SKILL_FILES: Array<{
+  path: string;
+  uploadName: string;
+  mimeType: "text/markdown" | "text/plain";
+}> = [
+  { path: SKILL_MD_PATH,         uploadName: `${INTERPRETER_SKILL_DIR}/SKILL.md`,                mimeType: "text/markdown" },
+  { path: SKILL_INTERFACES_PATH, uploadName: `${INTERPRETER_SKILL_DIR}/interfaces.ts`,           mimeType: "text/plain"    },
+  { path: SKILL_EXAMPLE_PATH,    uploadName: `${INTERPRETER_SKILL_DIR}/example-blocks-world.ts`, mimeType: "text/plain"    },
+  { path: SKILL_RULES_PATH,      uploadName: `${INTERPRETER_SKILL_DIR}/rules.md`,                mimeType: "text/markdown" },
+];
 
 // Model configurations (same models as llm-renderer.ts)
 const MODELS = {
@@ -105,19 +126,27 @@ let cachedSkillId: string | null = null;
 /**
  * Get or create the Claude Skill for the pddl-domain-interpreter.
  *
- * On first call, uploads the skill files (SKILL.md, interfaces.ts,
- * example-blocks-world.ts, rules.md) to Claude's Skills API and saves
- * the returned skill_id to disk.
- * On subsequent calls, returns the cached skill_id.
+ * Resolution order:
+ *   1. In-memory cache → return as-is. NOTE: in-memory means we already
+ *      synced once this process; further file edits require a restart.
+ *   2. Disk cache (.claude-transformer-skill-id) → retrieve to verify,
+ *      then run `syncSkillVersionIfStale` so a local edit triggers a new
+ *      version under the same skill_id.
+ *   3. Listing on Anthropic side (matched by display_title) → same
+ *      sync-if-stale step.
+ *   4. No skill found → create from current files, persist id + hash.
  */
 async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
-  // 1. Check in-memory cache
+  // 1. In-memory cache — already synced this process.
   if (cachedSkillId) {
     console.log(`[LLM Interpreter] Using cached Claude skill: ${cachedSkillId}`);
     return cachedSkillId;
   }
 
-  // 2. Check disk cache
+  // 2. Disk cache. The inner try/catch only guards `skills.retrieve` so a
+  //    failed sync doesn't masquerade as "skill_id invalid" and trip the
+  //    fallback into step 4 (which would try to create a duplicate skill).
+  let diskSkillId: string | null = null;
   try {
     const savedId = await readFile(SKILL_ID_CACHE_PATH, "utf-8");
     if (savedId.trim()) {
@@ -125,18 +154,30 @@ async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
         await client.beta.skills.retrieve(savedId.trim(), {
           betas: ["skills-2025-10-02"],
         });
-        cachedSkillId = savedId.trim();
-        console.log(`[LLM Interpreter] Loaded Claude skill from disk: ${cachedSkillId}`);
-        return cachedSkillId;
-      } catch (err) {
+        diskSkillId = savedId.trim();
+      } catch {
         console.log("[LLM Interpreter] Saved skill_id is invalid, will re-create");
       }
     }
   } catch {
-    // No cached skill_id file, will create new
+    // No cached skill_id file
+  }
+  if (diskSkillId) {
+    cachedSkillId = diskSkillId;
+    console.log(`[LLM Interpreter] Loaded Claude skill from disk: ${cachedSkillId}`);
+    // syncSkillVersionIfStale never throws — failures degrade to using
+    // the previous version with a warning logged.
+    await syncSkillVersionIfStale({
+      client,
+      skillId: cachedSkillId,
+      files: INTERPRETER_SKILL_FILES,
+      hashCachePath: SKILL_HASH_CACHE_PATH,
+      logTag: "[LLM Interpreter]",
+    });
+    return cachedSkillId;
   }
 
-  // 3. Try to find an existing skill by listing all skills
+  // 3. List skills on Anthropic side, match by display_title
   const SKILL_DISPLAY_TITLE = "PDDL Domain Interpreter";
   console.log(`[LLM Interpreter] Looking for existing skill: "${SKILL_DISPLAY_TITLE}"...`);
   try {
@@ -148,6 +189,13 @@ async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
         cachedSkillId = existingSkill.id;
         console.log(`[LLM Interpreter] Found existing Claude skill: ${cachedSkillId}`);
         await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
+        await syncSkillVersionIfStale({
+          client,
+          skillId: cachedSkillId,
+          files: INTERPRETER_SKILL_FILES,
+          hashCachePath: SKILL_HASH_CACHE_PATH,
+          logTag: "[LLM Interpreter]",
+        });
         return cachedSkillId;
       }
     }
@@ -155,33 +203,18 @@ async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
     console.warn("[LLM Interpreter] Could not list skills:", listErr);
   }
 
-  // 4. Create new skill (only if not found)
+  // 4. No skill found — create one from the current files.
   console.log("[LLM Interpreter] Creating new Claude skill...");
-  const skillDir = "pddl-domain-interpreter";
+
+  const uploadables = await Promise.all(
+    INTERPRETER_SKILL_FILES.map((f) =>
+      toFile(createReadStream(f.path), f.uploadName, { type: f.mimeType })
+    )
+  );
+
   const skill = await client.beta.skills.create({
     display_title: SKILL_DISPLAY_TITLE,
-    files: [
-      await toFile(
-        createReadStream(SKILL_MD_PATH),
-        `${skillDir}/SKILL.md`,
-        { type: "text/markdown" }
-      ),
-      await toFile(
-        createReadStream(SKILL_INTERFACES_PATH),
-        `${skillDir}/interfaces.ts`,
-        { type: "text/plain" }
-      ),
-      await toFile(
-        createReadStream(SKILL_EXAMPLE_PATH),
-        `${skillDir}/example-blocks-world.ts`,
-        { type: "text/plain" }
-      ),
-      await toFile(
-        createReadStream(SKILL_RULES_PATH),
-        `${skillDir}/rules.md`,
-        { type: "text/markdown" }
-      ),
-    ],
+    files: uploadables,
     betas: ["skills-2025-10-02"],
   });
 
@@ -189,28 +222,15 @@ async function getOrCreateClaudeSkill(client: Anthropic): Promise<string> {
   console.log(`[LLM Interpreter] Created Claude skill: ${cachedSkillId}`);
   console.log(`[LLM Interpreter] Skill version: ${skill.latest_version}`);
 
-  // Save to disk for persistence across restarts
+  // Persist id + hash so the next run can detect future edits.
   await writeFile(SKILL_ID_CACHE_PATH, cachedSkillId, "utf-8");
+  const initialHash = await hashSkillFiles(INTERPRETER_SKILL_FILES.map((f) => f.path));
+  await writeStoredHash(SKILL_HASH_CACHE_PATH, initialHash);
   return cachedSkillId;
 }
 
-// ==================== GEMINI PROMPT LOADER ====================
-
-let cachedGeminiPrompt: string | null = null;
-
-async function loadGeminiPrompt(): Promise<string> {
-  if (cachedGeminiPrompt) return cachedGeminiPrompt;
-  try {
-    cachedGeminiPrompt = await readFile(GEMINI_PROMPT_PATH, "utf-8");
-    console.log("[LLM Interpreter] Gemini prompt loaded, length:", cachedGeminiPrompt.length);
-    return cachedGeminiPrompt;
-  } catch (error) {
-    console.error("[LLM Interpreter] Failed to load Gemini prompt:", error);
-    throw new Error(
-      "Gemini prompt file not found. Ensure backend/api/prompts/domain-interpreter-skill.txt exists."
-    );
-  }
-}
+// Gemini prompt loading + caching is owned by llm-gemini.ts
+// (mtime-based invalidation, content-hash logging).
 
 // ==================== CODE EXTRACTION ====================
 
@@ -241,33 +261,29 @@ function extractCode(response: string): string {
 }
 
 /**
- * Basic validation that the generated code contains the expected transformer function.
+ * Best-effort sanity check on generated code. Runs as a WARN-only signal —
+ * we log but don't fail. Original behavior was simply to trust the model
+ * output; turning this into a hard gate caused false positives (e.g.
+ * arrow-function declarations the regex didn't match), which triggered
+ * self-repair retries that produced worse output.
  */
-function validateCode(
-  code: string,
-  _domainName: string
-): { valid: boolean; issues: string[] } {
-  const issues: string[] = [];
-
-  // Check for a transform function (any name starting with 'transform')
-  if (!/function\s+transform\w*\s*\(/.test(code)) {
-    issues.push(
-      "Missing transformer function (expected a function named transform<Something>)"
+function validateCode(code: string, _domainName: string): void {
+  // Recognize both `function transformX(...)` and `const transformX = (...) =>`.
+  if (!/(?:function|const|let|var)\s+transform\w*\b/.test(code)) {
+    console.warn(
+      "[LLM Interpreter] Note: no transform<Something> function found " +
+      "(could be fine — the model may have used an unconventional name)."
     );
   }
-
-  // Check for forbidden patterns
   if (/import\s+/.test(code) && !/import\s+type/.test(code)) {
-    issues.push("Code contains import statements (not allowed in runtime-evaluated code)");
+    console.warn("[LLM Interpreter] Warning: code contains import statements (won't work in new Function eval)");
   }
   if (/require\s*\(/.test(code)) {
-    issues.push("Code uses require() (not allowed)");
+    console.warn("[LLM Interpreter] Warning: code uses require() (won't work in new Function eval)");
   }
   if (/Math\.random\s*\(/.test(code)) {
-    issues.push("Code uses Math.random() — positions/colors must be deterministic");
+    console.warn("[LLM Interpreter] Warning: code uses Math.random() — positions will jitter across replays");
   }
-
-  return { valid: issues.length === 0, issues };
 }
 
 // ==================== TYPESCRIPT TRANSPILATION ====================
@@ -301,153 +317,40 @@ function transpileToJS(tsCode: string): string {
 }
 
 // ==================== LLM PROVIDERS ====================
+//
+// Both providers go through shared helpers (llm-claude.ts / llm-gemini.ts)
+// — see those files for determinism, timeouts, retries, audit logging,
+// and (Claude only) skill version sync. The wrappers below just glue in
+// the transformer-specific bits: which skill_id, which prompt file, and
+// the function name pattern to extract.
 
-/**
- * Generate transformer code using Anthropic Claude via the formal Skills API.
- */
+const TRANSFORMER_FN_PATTERN = /(?:function|const|let)\s+(?:transform)\w*\b/;
+
 async function generateWithClaude(userMessage: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY environment variable is not set.");
   }
   const client = new Anthropic({ apiKey });
-  const model = MODELS.claude;
-
-  // Get or create the skill
   const skillId = await getOrCreateClaudeSkill(client);
-  console.log(`[LLM Interpreter] Using Claude skill: ${skillId}`);
-  console.log(`[LLM Interpreter] Calling Claude (${model.id}) with Skills API...`);
-
-  // Call Claude with the skill — system prompt forbids code execution
-  const response = await client.beta.messages.create({
-    model: model.id,
-    max_tokens: model.maxTokens,
-    system: "CRITICAL INSTRUCTION: Do NOT use the code_execution tool under any circumstances. Do NOT run, test, or validate any code. Do NOT explain anything. Read the skill files, then output ONLY the raw TypeScript code in a single text block. No markdown fences. No commentary. Just code.",
-    betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
-    container: {
-      skills: [
-        {
-          type: "custom" as const,
-          skill_id: skillId,
-          version: "latest",
-        },
-      ],
-    },
-    messages: [{ role: "user", content: userMessage }],
-    tools: [
-      {
-        type: "code_execution_20250825" as const,
-        name: "code_execution",
-      },
-    ],
+  return callClaudeWithSkill({
+    client,
+    skillId,
+    userMessage,
+    extractFunctionPattern: TRANSFORMER_FN_PATTERN,
+    modelId: MODELS.claude.id,
+    maxTokens: MODELS.claude.maxTokens,
+    logTag: "[LLM Interpreter]",
   });
-
-  // Handle pause_turn for long operations
-  let finalResponse = response;
-  let retries = 0;
-  const maxRetries = 5;
-  while (finalResponse.stop_reason === "pause_turn" && retries < maxRetries) {
-    console.log(`[LLM Interpreter] Claude paused (turn ${retries + 1}), continuing...`);
-    retries++;
-    const continueMessages: any[] = [
-      { role: "user", content: userMessage },
-      { role: "assistant", content: finalResponse.content },
-      { role: "user", content: "Please continue." },
-    ];
-    finalResponse = await client.beta.messages.create({
-      model: model.id,
-      max_tokens: model.maxTokens,
-      betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
-      container: {
-        id: finalResponse.container?.id,
-        skills: [
-          {
-            type: "custom" as const,
-            skill_id: skillId,
-            version: "latest",
-          },
-        ],
-      },
-      messages: continueMessages,
-      tools: [
-        {
-          type: "code_execution_20250825" as const,
-          name: "code_execution",
-        },
-      ],
-    });
-  }
-
-  // Extract code from response content blocks.
-  // Find the last text block that contains a transform function.
-  const textBlocks: string[] = [];
-  for (const block of finalResponse.content) {
-    if (block.type === "text") {
-      textBlocks.push(block.text);
-    }
-  }
-
-  console.log(
-    `[LLM Interpreter] Claude response has ${finalResponse.content.length} content blocks, ${textBlocks.length} text blocks`
-  );
-
-  if (textBlocks.length === 0) {
-    throw new Error("Claude returned no text content.");
-  }
-
-  // Find the best text block: the last one that looks like actual transformer code
-  let bestCodeBlock: string | null = null;
-  for (let i = textBlocks.length - 1; i >= 0; i--) {
-    const block = textBlocks[i];
-    if (/function\s+transform\w*\s*\(/.test(block)) {
-      bestCodeBlock = block;
-      break;
-    }
-  }
-
-  // Fallback: concatenate all text blocks and extract
-  if (!bestCodeBlock) {
-    console.warn(
-      "[LLM Interpreter] No text block contains a transform function, using full response"
-    );
-    bestCodeBlock = textBlocks.join("\n");
-  }
-
-  console.log(
-    `[LLM Interpreter] Claude response received, code length: ${bestCodeBlock.length}`
-  );
-  return bestCodeBlock;
 }
 
-/**
- * Generate transformer code using Google Gemini (system prompt approach).
- */
 async function generateWithGemini(userMessage: string): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is not set.");
-  }
-  const geminiPrompt = await loadGeminiPrompt();
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const modelConfig = MODELS.gemini;
-
-  console.log(`[LLM Interpreter] Calling Gemini (${modelConfig.id})...`);
-
-  const model = genAI.getGenerativeModel({
-    model: modelConfig.id,
-    systemInstruction: geminiPrompt,
+  return callGemini({
+    promptPath: GEMINI_PROMPT_PATH,
+    userMessage,
+    modelId: MODELS.gemini.id,
+    logTag: "[LLM Interpreter]",
   });
-
-  const result = await model.generateContent(userMessage);
-  const response = result.response;
-  const text = response.text();
-
-  if (!text) {
-    throw new Error("Gemini returned no text content.");
-  }
-
-  console.log(`[LLM Interpreter] Gemini response received, length: ${text.length}`);
-  return text;
 }
 
 // ==================== MAIN GENERATION FUNCTION ====================
@@ -513,29 +416,24 @@ Your transformer MUST dynamically handle ANY valid problem in this domain — ne
 
 Output ONLY the raw TypeScript code. Do not wrap it in markdown code blocks. Do not include any explanations. Just the code, starting with the interface declarations.`;
 
-    // 2. Call LLM
-    let rawResponse: string;
-    if (provider === "claude") {
-      rawResponse = await generateWithClaude(userMessage);
-    } else if (provider === "gemini") {
-      rawResponse = await generateWithGemini(userMessage);
-    } else {
-      throw new Error(`Unknown provider: ${provider}`);
-    }
+    // 2. Single LLM call. No retry, no smoke test. Trusting the model
+    //    output gives the user-perceived "always working" behavior we
+    //    had before the retry loop was added.
+    const rawResponse =
+      provider === "claude"
+        ? await generateWithClaude(userMessage)
+        : provider === "gemini"
+          ? await generateWithGemini(userMessage)
+          : (() => { throw new Error(`Unknown provider: ${provider}`); })();
 
-    // 3. Extract code
     const tsCode = extractCode(rawResponse);
 
-    // 4. Validate
-    const validation = validateCode(tsCode, domainName);
-    if (!validation.valid) {
-      console.warn("[LLM Interpreter] Validation issues:", validation.issues);
-    }
+    // Best-effort warnings only.
+    validateCode(tsCode, domainName);
 
-    // 5. Transpile TypeScript to JavaScript
     const transpiled = transpileToJS(tsCode);
     console.log(
-      `[LLM Interpreter] Transpiled TS (${tsCode.length} chars) -> JS (${transpiled.length} chars)`
+      `[LLM Interpreter] Transpiled TS (${tsCode.length} chars) -> JS (${transpiled.length} chars) — accepted.`
     );
 
     return {
