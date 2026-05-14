@@ -1,12 +1,65 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Hasan Abu Nasra — PDDL to visual plans">
   <title>Hasan Abu Nasra</title>
-  <desc>Eye with three-node graph iris, transparent background.</desc>
-  <path d="M18 50 Q50 22 82 50 Q50 78 18 50 Z" fill="none" stroke="#a89cee" stroke-width="2" stroke-linejoin="round"/>
-  <circle cx="50" cy="50" r="14" fill="#6d63b8"/>
-  <line x1="44" y1="46" x2="56" y2="46" stroke="#e8e6ff" stroke-width="0.9" opacity="0.9"/>
-  <line x1="44" y1="46" x2="50" y2="56" stroke="#e8e6ff" stroke-width="0.9" opacity="0.9"/>
-  <line x1="56" y1="46" x2="50" y2="56" stroke="#e8e6ff" stroke-width="0.9" opacity="0.9"/>
-  <circle cx="44" cy="46" r="2.8" fill="#a78bfa"/>
-  <circle cx="56" cy="46" r="2.8" fill="#7dd3fc"/>
-  <circle cx="50" cy="56" r="2.8" fill="#b794f4"/>
+  <desc>Blinking eye with upper eyelashes and a three-node graph iris. Transparent background.</desc>
+  <style><![CDATA[
+    /* Lid-based blink. Three coordinated animations on a 4.6s cycle so each
+       blink takes ~1.85s of visibly slow motion, with ~2.5s of open eye in
+       between. The eye outline path morphs from an almond to a thin line,
+       the iris is clipped by a shrinking lid rect, and the lashes scale +
+       translate downward to meet the closed lid — no more scrunched scaleY. */
+    @keyframes pv-lid {
+      0%, 55%, 100% { y: 14; height: 72; }
+      73%, 78%      { y: 49; height: 2; }
+    }
+    @keyframes pv-outline {
+      0%, 55%, 100% { d: path("M8 50 Q50 14 92 50 Q50 86 8 50 Z"); }
+      73%, 78%      { d: path("M8 50 Q50 49 92 50 Q50 51 8 50 Z"); }
+    }
+    @keyframes pv-lashes {
+      0%, 55%, 100% { transform: translateY(0) scaleY(1); }
+      73%, 78%      { transform: translateY(15px) scaleY(0.18); }
+    }
+    .pv-lid     { animation: pv-lid     4.6s ease-in-out infinite; }
+    .pv-outline { animation: pv-outline 4.6s ease-in-out infinite; }
+    .pv-lashes  {
+      animation: pv-lashes 4.6s ease-in-out infinite;
+      transform-origin: 50px 34px;
+      transform-box: view-box;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .pv-lid, .pv-outline, .pv-lashes { animation: none; }
+    }
+  ]]></style>
+
+  <defs>
+    <!-- Lid clip: rectangle that shrinks vertically to "hide" the iris. -->
+    <clipPath id="pv-lid-clip">
+      <rect class="pv-lid" x="0" y="14" width="100" height="72"/>
+    </clipPath>
+  </defs>
+
+  <!-- Upper eyelashes — scale + translate down to meet the closing lid -->
+  <g class="pv-lashes" stroke="#a89cee" stroke-width="1.9" stroke-linecap="round" fill="none">
+    <line x1="28" y1="36" x2="22" y2="20"/>
+    <line x1="40" y1="32" x2="38" y2="14"/>
+    <line x1="50" y1="30" x2="50" y2="10"/>
+    <line x1="60" y1="32" x2="62" y2="14"/>
+    <line x1="72" y1="36" x2="78" y2="20"/>
+  </g>
+
+  <!-- Iris + 3-node graph, clipped by the animating lid -->
+  <g clip-path="url(#pv-lid-clip)">
+    <circle cx="50" cy="50" r="18" fill="#6d63b8"/>
+    <line x1="42" y1="45" x2="58" y2="45" stroke="#e8e6ff" stroke-width="1.05" opacity="0.9"/>
+    <line x1="42" y1="45" x2="50" y2="59" stroke="#e8e6ff" stroke-width="1.05" opacity="0.9"/>
+    <line x1="58" y1="45" x2="50" y2="59" stroke="#e8e6ff" stroke-width="1.05" opacity="0.9"/>
+    <circle cx="42" cy="45" r="3.4" fill="#a78bfa"/>
+    <circle cx="58" cy="45" r="3.4" fill="#7dd3fc"/>
+    <circle cx="50" cy="59" r="3.4" fill="#b794f4"/>
+  </g>
+
+  <!-- Eye almond outline — d morphs from almond to near-flat line on close -->
+  <path class="pv-outline"
+        d="M8 50 Q50 14 92 50 Q50 86 8 50 Z"
+        fill="none" stroke="#a89cee" stroke-width="2.4" stroke-linejoin="round"/>
 </svg>

@@ -21,9 +21,21 @@ interface PDDLHeaderBackgroundProps {
   height?: number;
   /** CSS left offset — use to push the canvas away from the title area, e.g. "45%" */
   left?: string | number;
+  /**
+   * Which half of the scene to render:
+   * • "full"          — code + blocks + particles (default — matches old behavior)
+   * • "code"          — only the dissolving PDDL text, particles fly off the right edge
+   * • "scene"         — only the blocks-world stage, no code, no particles
+   * • "welcome-hero"  — code on the far left, blocks-world vertically centered
+   *                    on the far right, particles cross the whole canvas so
+   *                    they're visible through the centre column
+   */
+  view?: "full" | "code" | "scene" | "welcome-hero";
 }
 
-export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) => {
+export const PDDLHeaderBackground = ({
+  left = 0, view = "full",
+}: PDDLHeaderBackgroundProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -71,27 +83,55 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
 
     // ── Layout ───────────────────────────────────────────────────────────────
     function layout() {
-      const sceneX = W * 0.38;
-      const sceneW = W * 0.60;
-      const groundY = H * 0.82;
-      const bh = Math.max(20, Math.min(34, H * 0.22));
+      const isScene  = view === "scene";
+      const isCode   = view === "code";
+      const isWelcome = view === "welcome-hero";
+      const codeBig  = isCode || isWelcome;
+      const tallStage = isScene || isWelcome;
+
+      // Scene position. In welcome-hero we tuck the blocks into the right
+      // ~25% so they sit beside the centre summary column; in scene-only we
+      // expand to fill the canvas; otherwise we keep the original frame.
+      const sceneX = isScene   ? W * 0.04
+                   : isWelcome ? W * 0.72
+                   :             W * 0.38;
+      const sceneW = isScene   ? W * 0.92
+                   : isWelcome ? W * 0.25
+                   :             W * 0.60;
+
+      // Vertical anchors. tallStage centres the scene vertically inside the
+      // canvas (rail near 1/3 down, ground at 2/3) so blocks read as
+      // mid-height rather than glued to the bottom.
+      const railY   = tallStage ? H * 0.32 : Math.max(10, H * 0.10);
+      const groundY = tallStage ? H * 0.72 : H * 0.82;
+
+      // Block size — larger in the tall stages where we have vertical room.
+      const bh = tallStage
+        ? Math.max(28, Math.min(42, H * 0.055))
+        : Math.max(20, Math.min(34, H * 0.22));
       const bw = bh * 1.1;
       const slotXs = [
         sceneX + sceneW * 0.22,
         sceneX + sceneW * 0.50,
         sceneX + sceneW * 0.78,
       ];
-      // Text sizing: target the prototype's 12 px / 17 px feel regardless of H.
-      // At H=96 the old H*0.085 formula gave 9 px — unreadable.
-      const textSize = Math.max(11, Math.min(13, H * 0.135));
-      const lineH    = Math.max(16, Math.min(19, H * 0.18));
-      // Vertically center the 5-line block inside H with a bit of top bias.
-      const textTop  = Math.max(6, (H - lineH * 5) / 2 + 1);
+
+      // When we render code as a primary element (not just a header strip),
+      // use a bigger font and more line-height for readability.
+      const textSize = codeBig
+        ? Math.max(13, Math.min(18, H * 0.022))
+        : Math.max(11, Math.min(13, H * 0.135));
+      const lineH    = codeBig
+        ? Math.max(20, Math.min(30, H * 0.035))
+        : Math.max(16, Math.min(19, H * 0.18));
+      const textTop  = codeBig
+        ? Math.max(20, (H - lineH * 5) / 2)
+        : Math.max(6, (H - lineH * 5) / 2 + 1);
       return {
         sceneX, sceneW, groundY, bw, bh,
         slot: (i: number) => slotXs[i],
-        railY: Math.max(10, H * 0.10),
-        textX: 20,
+        railY,
+        textX: codeBig ? Math.max(24, W * 0.06) : 20,
         textTop,
         lineH,
         textSize,
@@ -337,34 +377,67 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
     let lastSpawn = 0;
     const SPAWN_INTERVAL  = 45; // ms between spawns
 
-    // Per-line dissolve alpha: dims when a particle spawns from that line,
-    // slowly recovers each frame — gives the "code vanishing into blocks" effect
-    const lineAlphas = PDDL_LINES.map(() => 1.0);
+    // Per-character dissolve alpha. Each character gets its own opacity that
+    // drops when a particle spawns from (or near) it, then slowly recovers.
+    // This produces a much more organic "being eaten" vanish than the older
+    // per-line dim, because individual letters disappear and re-emerge while
+    // their neighbours stay bright.
+    const charAlphas: number[][] = PDDL_LINES.map(line =>
+      Array.from({ length: line.length }, () => 1.0),
+    );
 
     function spawnParticle(now: number) {
       const li   = Math.floor(Math.random() * PDDL_LINES.length);
-      // Dim this line gently — each spawn steals a tiny bit of opacity.
-      // Small value + a higher floor below keeps the code legibly bright.
-      lineAlphas[li] = Math.max(0.55, lineAlphas[li] - 0.022);
       const line = PDDL_LINES[li];
       const ci   = Math.floor(Math.random() * line.length);
-      ctx!.font  = `${L.textSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-      const sx   = L.textX + ctx!.measureText(line.slice(0, ci)).width + 1;
-      const sy   = L.textTop + li * L.lineH;
 
-      const targets = ["A", "B", "C"];
-      const tgt     = targets[Math.floor(Math.random() * 3)];
-      let bp: { x: number; y: number };
-      if (state.carrying === tgt) {
-        bp = { x: state.gripperX, y: state.gripperY + 6 };
-      } else {
-        bp = blockPos(tgt);
+      // Drain a small window around the spawn point. The drain is stronger
+      // and the floor is lower in code-emphasising views so the text really
+      // looks like it vanishes; in the small Visualizer header we keep it
+      // gentle so the code stays legible.
+      const codePrimary = view === "code" || view === "welcome-hero";
+      const drain = codePrimary ? 0.40 : 0.18;
+      const floor = codePrimary ? 0.05 : 0.55;
+      const spread = 2;
+      for (let off = -spread; off <= spread; off++) {
+        const k = ci + off;
+        if (k < 0 || k >= charAlphas[li].length) continue;
+        // Triangular falloff so the centre char dims hardest.
+        const factor = 1 - Math.abs(off) / (spread + 1);
+        charAlphas[li][k] = Math.max(floor, charAlphas[li][k] - drain * factor);
       }
-      const jitter = L.bw * 0.5;
-      const tx = bp.x + (Math.random() - 0.5) * jitter;
-      const ty = bp.y + L.bh * (0.3 + Math.random() * 0.5);
-      const mx = (sx + tx) / 2 + (Math.random() - 0.5) * 30;
-      const my = Math.min(sy, ty) - (20 + Math.random() * 25);
+
+      // Source position: middle of the eaten character — particles look like
+      // they're being pulled directly out of that letter.
+      ctx!.font = `${L.textSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+      const prefix = ctx!.measureText(line.slice(0, ci)).width;
+      const chW    = ctx!.measureText(line[ci] ?? " ").width;
+      const sx = L.textX + prefix + chW / 2;
+      const sy = L.textTop + li * L.lineH;
+
+      // In code-only view, particles fly off the right edge instead of
+      // landing on the (non-existent) blocks.
+      let tx: number, ty: number, mx: number, my: number;
+      if (view === "code") {
+        tx = W + 60 + Math.random() * 40;
+        ty = sy + (Math.random() - 0.5) * 60;
+        mx = (sx + tx) / 2 + (Math.random() - 0.5) * 40;
+        my = sy - (15 + Math.random() * 35);
+      } else {
+        const targets = ["A", "B", "C"];
+        const tgt     = targets[Math.floor(Math.random() * 3)];
+        let bp: { x: number; y: number };
+        if (state.carrying === tgt) {
+          bp = { x: state.gripperX, y: state.gripperY + 6 };
+        } else {
+          bp = blockPos(tgt);
+        }
+        const jitter = L.bw * 0.5;
+        tx = bp.x + (Math.random() - 0.5) * jitter;
+        ty = bp.y + L.bh * (0.3 + Math.random() * 0.5);
+        mx = (sx + tx) / 2 + (Math.random() - 0.5) * 30;
+        my = Math.min(sy, ty) - (20 + Math.random() * 25);
+      }
 
       particles.push({
         sx, sy, tx, ty, mx, my,
@@ -404,52 +477,73 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
     }
 
     function drawPDDL() {
-      // Faster recovery + gentler drain (above) keeps the code legibly bright
-      // most of the time, while still letting individual lines breathe.
-      for (let i = 0; i < lineAlphas.length; i++) {
-        lineAlphas[i] = Math.min(1, lineAlphas[i] + 0.0035);
+      // Per-character recovery. Each character refills on its own clock so
+      // letters fade and re-emerge independently of their neighbours.
+      const codePrimary = view === "code" || view === "welcome-hero";
+      const recover = codePrimary ? 0.0028 : 0.0055;
+      for (let li = 0; li < charAlphas.length; li++) {
+        const row = charAlphas[li];
+        for (let ci = 0; ci < row.length; ci++) {
+          row[ci] = Math.min(1, row[ci] + recover);
+        }
       }
 
-      // No backdrop — the text sits directly on the header bg.
-      // This guarantees zero visible seam. Syntax colours carry the readability.
-
-      // ── Code text ──────────────────────────────────────────────────────────
       const font = `${L.textSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
       ctx!.font         = font;
       ctx!.textAlign    = "left";
       ctx!.textBaseline = "middle";
 
+      // ── Token coloring regex ────────────────────────────────────────────
+      //   1 = PDDL keywords  (:init :goal :objects :domain)
+      //   2 = logical ops    (and or not)
+      //   3 = predicates     (on-table on at clear handempty)
+      //   4 = block labels   (standalone A B C)
+      //   5 = parens
+      const TOKEN_RE = /(:[a-z][a-z\-]*)|(and|or|not)|(on-table|on|at|clear|handempty)|\b([ABC])\b|([()])/g;
+
       PDDL_LINES.forEach((line, li) => {
-        const fade = lineAlphas[li];
-        if (fade < 0.01) return; // fully dissolved — skip draw
-
         const y = L.textTop + li * L.lineH;
+        const row = charAlphas[li];
 
-        // ── Pass 1: base text (body colour) — boosted for readability ────────
-        ctx!.fillStyle = `rgba(196, 188, 240, ${0.78 * fade})`;
-        ctx!.fillText(line, L.textX, y);
+        // Build per-char x positions once per frame
+        const charX: number[] = new Array(line.length);
+        let runX = L.textX;
+        for (let ci = 0; ci < line.length; ci++) {
+          charX[ci] = runX;
+          runX += ctx!.measureText(line[ci]).width;
+        }
 
-        // ── Pass 2: layer targeted token colours on top ───────────────────────
-        // Regex capture groups:
-        //   1 = PDDL keywords  (:init :goal :objects :domain)
-        //   2 = logical ops    (and or not)
-        //   3 = predicates     (on-table on at clear)
-        //   4 = block labels   (standalone A B C)
-        //   5 = parens
-        const TOKEN_RE = /(:[a-z][a-z\-]*)|(and|or|not)|(on-table|on|at|clear|handempty)|\b([ABC])\b|([()])/g;
+        // Determine each char's token color, if any
+        const tokenColors: (string | null)[] = new Array(line.length).fill(null);
         for (const m of line.matchAll(TOKEN_RE)) {
-          const before = line.slice(0, m.index);
-          const x      = L.textX + ctx!.measureText(before).width;
-          let color: string;
-          if      (m[1]) color = `rgba(220, 200, 255, ${1.00 * fade})`;  // :keyword — bright lavender
-          else if (m[2]) color = `rgba(255, 210, 130, ${0.95 * fade})`;  // and/or/not — amber
-          else if (m[3]) color = `rgba(165, 250, 195, ${0.92 * fade})`;  // predicate — green
-          else if (m[4]) color = `rgba(165, 230, 255, ${1.00 * fade})`;  // block label — sky
-          else           color = `rgba(180, 170, 220, ${0.65 * fade})`;  // paren — dim
-          ctx!.fillStyle = color;
-          ctx!.fillText(m[0], x, y);
+          let c: string;
+          if      (m[1]) c = "rgba(220, 200, 255, 1.00)";  // :keyword — bright lavender
+          else if (m[2]) c = "rgba(255, 210, 130, 0.95)";  // and/or/not — amber
+          else if (m[3]) c = "rgba(165, 250, 195, 0.92)";  // predicate — green
+          else if (m[4]) c = "rgba(165, 230, 255, 1.00)";  // block label — sky
+          else           c = "rgba(180, 170, 220, 0.65)";  // paren — dim
+          const start = m.index!;
+          for (let k = start; k < start + m[0].length; k++) tokenColors[k] = c;
+        }
+
+        // Pass 1 — base body colour for every char
+        for (let ci = 0; ci < line.length; ci++) {
+          const a = row[ci];
+          if (a < 0.02) continue;
+          ctx!.globalAlpha = a;
+          ctx!.fillStyle = "rgba(196, 188, 240, 0.78)";
+          ctx!.fillText(line[ci], charX[ci], y);
+        }
+        // Pass 2 — token colour overlay
+        for (let ci = 0; ci < line.length; ci++) {
+          const a = row[ci];
+          if (a < 0.02 || !tokenColors[ci]) continue;
+          ctx!.globalAlpha = a;
+          ctx!.fillStyle = tokenColors[ci]!;
+          ctx!.fillText(line[ci], charX[ci], y);
         }
       });
+      ctx!.globalAlpha = 1;
     }
 
     function drawScene() {
@@ -500,12 +594,15 @@ export const PDDLHeaderBackground = ({ left = 0 }: PDDLHeaderBackgroundProps) =>
 
     function frame() {
       const now = performance.now();
-      tick(now);
+      // Only advance the scene state machine when the scene is visible.
+      if (view !== "code") tick(now);
       // Transparent clear — header's own dark bg shows through
       ctx!.clearRect(0, 0, W, H);
-      drawPDDL();
-      drawScene();
-      drawParticles(now); // on top so particles appear to land on blocks
+      if (view !== "scene") drawPDDL();
+      if (view !== "code")  drawScene();
+      // Particles connect text → blocks. In code-only they fly off-screen
+      // right; in scene-only they're suppressed entirely.
+      if (view !== "scene") drawParticles(now);
       rafId = requestAnimationFrame(frame);
     }
 
