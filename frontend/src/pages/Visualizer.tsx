@@ -3,6 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useMotionValueEvent, animate a
 import { trpc } from "@/lib/trpc";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
+import { FeedbackBox } from "@/components/FeedbackBox";
 import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
 import {
   PlayIcon, PauseIcon, SkipForwardIcon, SkipBackIcon,
@@ -631,6 +632,7 @@ export default function Visualizer() {
   const [renderedStates, setRenderedStates]     = useState<any[]>([]);
   const [plan, setPlan]                         = useState<string[]>([]);
   const [currentStateIndex, setCurrentStateIndex] = useState(0);
+  const canvasContainerRef                        = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying]               = useState(false);
   const [playbackSpeed, setPlaybackSpeed]       = useState(1000);
   const [plannerInfo, setPlannerInfo]           = useState<{ used_planner: boolean; info: string; strategy?: any } | null>(null);
@@ -2379,16 +2381,38 @@ export default function Visualizer() {
                         domainName={isCustomDomain ? customDomainName : selectedDomain}
                       />
                     ) : (
-                      <StateCanvas
-                        state={renderedStates[currentStateIndex]}
-                        isFirst={currentStateIndex === 0}
-                        isLast={currentStateIndex === renderedStates.length - 1}
-                        llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
-                        transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
-                        onLlmError={err => setLlmError(err)}
-                      />
+                      <div ref={canvasContainerRef}>
+                        <StateCanvas
+                          state={renderedStates[currentStateIndex]}
+                          isFirst={currentStateIndex === 0}
+                          isLast={currentStateIndex === renderedStates.length - 1}
+                          llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
+                          transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
+                          onLlmError={err => setLlmError(err)}
+                        />
+                      </div>
                     )}
                   </div>
+
+                  {renderedStates.length > 0 && !isTransformerGenerating && !isLlmGenerating && !llmError && !transformerError && (
+                    <FeedbackBox
+                      context={{
+                        domainName: isCustomDomain ? (customDomainName || "custom") : selectedDomain,
+                        isCustomDomain,
+                        savedDomainId: selectedSavedDomainId,
+                        transformerHash: loadSavedDomainQuery.data?.transformerHash ?? null,
+                        rendererHash: loadSavedDomainQuery.data?.rendererHash ?? null,
+                        llmProvider,
+                        stateIndex: currentStateIndex,
+                        totalStates: renderedStates.length,
+                        symbolicState: renderedStates[currentStateIndex],
+                      }}
+                      getImageDataUrl={() => {
+                        const canvas = canvasContainerRef.current?.querySelector("canvas");
+                        return canvas ? canvas.toDataURL("image/png") : null;
+                      }}
+                    />
+                  )}
 
                   {/* Controls */}
                   <div className="px-6 py-4 border-t border-white/[0.05] bg-black/[0.15] space-y-4">

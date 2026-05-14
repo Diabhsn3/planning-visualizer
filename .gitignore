@@ -31,3 +31,5 @@ backend/api/.claude-skill-id
 /backend/api/data/artifacts
 /backend/api/data
 /backend/api/data
+CLAUDE.md
+/graphify-out

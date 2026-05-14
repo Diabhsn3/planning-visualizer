@@ -1,5 +1,5 @@
 {
-  "nextId": 16,
+  "nextId": 17,
   "domains": [
     {
       "id": 1,
@@ -143,6 +143,17 @@
       "rendererHash": "275053d145b45484ad494c0dd22839196ad1252ad094608990101d67cbe3558f",
       "provider": "Claude Sonnet 4.6",
       "createdAt": "2026-04-30T23:22:12.528Z"
+    },
+    {
+      "id": 16,
+      "displayName": "Ferry (8)",
+      "domainName": "ferry",
+      "pddlHash": "e34fb4c19d5c",
+      "domainPddl": "(define (domain ferry)\n  (:requirements :typing)\n  (:types\n    location car ferry\n  )\n  (:predicates\n    (at ?obj - (either car ferry) ?loc - location)\n    (on ?c - car ?f - ferry)\n    (empty ?f - ferry)\n  )\n\n  (:action board\n    :parameters (?c - car ?f - ferry ?loc - location)\n    :precondition (and\n      (at ?c ?loc)\n      (at ?f ?loc)\n      (empty ?f)\n    )\n    :effect (and\n      (not (at ?c ?loc))\n      (not (empty ?f))\n      (on ?c ?f)\n    )\n  )\n\n  (:action debark\n    :parameters (?c - car ?f - ferry ?loc - location)\n    :precondition (and\n      (on ?c ?f)\n      (at ?f ?loc)\n    )\n    :effect (and\n      (not (on ?c ?f))\n      (empty ?f)\n      (at ?c ?loc)\n    )\n  )\n\n  (:action sail\n    :parameters (?f - ferry ?from - location ?to - location)\n    :precondition (and\n      (at ?f ?from)\n    )\n    :effect (and\n      (not (at ?f ?from))\n      (at ?f ?to)\n    )\n  )\n)\n",
+      "transformerHash": "d7cdf5dd734c9439232c89d407f7447c04e774e40f931ae0018fa7cd9b734aa7",
+      "rendererHash": "0df6c279a7c069b6c617b4ea0d28ca30804e8dd0f62ecdc6602eec7fed6fa740",
+      "provider": "Claude Sonnet 4.6",
+      "createdAt": "2026-05-14T17:57:31.201Z"
     }
   ]
 }
