@@ -2,14 +2,20 @@
   <title>Hasan Abu Nasra</title>
   <desc>Blinking eye with upper eyelashes and a three-node graph iris. Transparent background.</desc>
   <style><![CDATA[
-    /* Lid-based blink. Three coordinated animations on a 4.6s cycle so each
-       blink takes ~1.85s of visibly slow motion, with ~2.5s of open eye in
-       between. The eye outline path morphs from an almond to a thin line,
-       the iris is clipped by a shrinking lid rect, and the lashes scale +
-       translate downward to meet the closed lid — no more scrunched scaleY. */
+    /* The eye outline path morphs from almond to a near-flat line.
+       The lid clip is a tall rect whose top edge slides DOWN through the
+       iris — like a real upper eyelid descending. Only `y` is animated
+       (height stays fixed) so we never depend on browsers animating the
+       SVG geometry `height` attribute, which is flaky across engines and
+       was leaving the lower half of the iris visible. The lashes scale +
+       translate to meet the closed lid. 4.6s cycle, ~1.85s blink motion. */
     @keyframes pv-lid {
-      0%, 55%, 100% { y: 14; height: 72; }
-      73%, 78%      { y: 49; height: 2; }
+      0%, 55%, 100% { y: 14; }
+      73%, 78%      { y: 72; }
+    }
+    @keyframes pv-iris {
+      0%, 60%, 100% { opacity: 1; }
+      75%, 77%      { opacity: 0; }
     }
     @keyframes pv-outline {
       0%, 55%, 100% { d: path("M8 50 Q50 14 92 50 Q50 86 8 50 Z"); }
@@ -20,6 +26,7 @@
       73%, 78%      { transform: translateY(15px) scaleY(0.18); }
     }
     .pv-lid     { animation: pv-lid     4.6s ease-in-out infinite; }
+    .pv-iris    { animation: pv-iris    4.6s ease-in-out infinite; }
     .pv-outline { animation: pv-outline 4.6s ease-in-out infinite; }
     .pv-lashes  {
       animation: pv-lashes 4.6s ease-in-out infinite;
@@ -27,14 +34,14 @@
       transform-box: view-box;
     }
     @media (prefers-reduced-motion: reduce) {
-      .pv-lid, .pv-outline, .pv-lashes { animation: none; }
+      .pv-lid, .pv-iris, .pv-outline, .pv-lashes { animation: none; }
     }
   ]]></style>
 
   <defs>
-    <!-- Lid clip: rectangle that shrinks vertically to "hide" the iris. -->
+    <!-- Lid clip: tall rect whose top edge slides down past the iris. -->
     <clipPath id="pv-lid-clip">
-      <rect class="pv-lid" x="0" y="14" width="100" height="72"/>
+      <rect class="pv-lid" x="0" y="14" width="100" height="80"/>
     </clipPath>
   </defs>
 
@@ -47,8 +54,10 @@
     <line x1="72" y1="36" x2="78" y2="20"/>
   </g>
 
-  <!-- Iris + 3-node graph, clipped by the animating lid -->
-  <g clip-path="url(#pv-lid-clip)">
+  <!-- Iris + 3-node graph: clipped by the descending lid AND opacity-faded
+       during the closed phase, so even if a browser refuses to animate the
+       clip rect's `y` the iris still vanishes at the bottom of the blink. -->
+  <g class="pv-iris" clip-path="url(#pv-lid-clip)">
     <circle cx="50" cy="50" r="18" fill="#6d63b8"/>
     <line x1="42" y1="45" x2="58" y2="45" stroke="#e8e6ff" stroke-width="1.05" opacity="0.9"/>
     <line x1="42" y1="45" x2="50" y2="59" stroke="#e8e6ff" stroke-width="1.05" opacity="0.9"/>

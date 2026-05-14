@@ -4,7 +4,6 @@ import {
   useScroll,
   useSpring,
   useTransform,
-  useMotionValue,
   animate as motionAnimate,
 } from "framer-motion";
 import { useLocation } from "wouter";
@@ -62,53 +61,6 @@ const StickyNav = ({ onOpen }: { onOpen: () => void }) => {
         Open →
       </button>
     </motion.div>
-  );
-};
-
-// ─── Hero cursor-followed spotlight ──────────────────────────────────────────
-const MouseSpotlight = ({ disabled }: { disabled: boolean }) => {
-  const x = useMotionValue(0.5);
-  const y = useMotionValue(0.42);
-  const sx = useSpring(x, { stiffness: 90, damping: 20, mass: 0.6 });
-  const sy = useSpring(y, { stiffness: 90, damping: 20, mass: 0.6 });
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (disabled) return;
-    const el = ref.current;
-    if (!el) return;
-    const onMove = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect();
-      const px = (e.clientX - r.left) / r.width;
-      const py = (e.clientY - r.top) / r.height;
-      x.set(Math.max(0, Math.min(1, px)));
-      y.set(Math.max(0, Math.min(1, py)));
-    };
-    window.addEventListener("pointermove", onMove);
-    return () => window.removeEventListener("pointermove", onMove);
-  }, [disabled, x, y]);
-
-  // CSS variable-based positioning so the gradient updates without re-renders
-  const left = useTransform(sx, v => `${v * 100}%`);
-  const top = useTransform(sy, v => `${v * 100}%`);
-
-  return (
-    <div ref={ref} className="absolute inset-0 pointer-events-none">
-      <motion.div
-        style={{ left, top }}
-        className="absolute -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] rounded-full
-                   opacity-70"
-      >
-        <div
-          className="w-full h-full"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(167,139,250,0.18) 0%, rgba(125,211,252,0.08) 35%, transparent 65%)",
-            filter: "blur(2px)",
-          }}
-        />
-      </motion.div>
-    </div>
   );
 };
 
@@ -658,9 +610,6 @@ export default function Welcome() {
         <div className="absolute inset-0 pointer-events-none">
           <PDDLHeaderBackground view="welcome-hero" />
         </div>
-
-        {/* mouse-tracked spotlight sits over the whole hero */}
-        <MouseSpotlight disabled={reduceMotion} />
 
         {/* radial glow that anchors the centre column. Stops short before
             the side columns so particles, code, and blocks stay vivid. */}
