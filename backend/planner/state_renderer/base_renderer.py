@@ -87,7 +87,11 @@ class RenderedState:
     objects: List[VisualObject]
     relations: List[VisualRelation]
     metadata: Optional[Dict[str, Any]] = None
-    
+    # Raw PDDL atoms for this state, e.g. [{"name": "on", "params": ["b","a"]}, ...].
+    # Populated by render_sequence so the verifier has authoritative ground
+    # truth without having to reverse-engineer it from the visual relations.
+    pddl_atoms: Optional[List[Dict[str, Any]]] = None
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
         result = {
@@ -97,6 +101,8 @@ class RenderedState:
         }
         if self.metadata:
             result["metadata"] = self.metadata
+        if self.pddl_atoms is not None:
+            result["pddl_atoms"] = self.pddl_atoms
         return result
     
     def to_json(self, indent: int = 2) -> str:
@@ -149,16 +155,23 @@ class BaseStateRenderer(ABC):
             List of RenderedState objects
         """
         rendered_states = []
-        
+
         for i, state in enumerate(states):
             metadata = {"step": i}
-            
+
             if actions and i > 0:
                 metadata["action"] = actions[i - 1]
-            
+
             rendered = self.render(state, objects, metadata)
+            # Attach the raw PDDL atoms for this state. Each item in `state`
+            # is a Predicate(name, params); we serialize to plain dicts and
+            # sort for stability so the diff is deterministic.
+            rendered.pddl_atoms = sorted(
+                [{"name": p.name, "params": list(p.params)} for p in state],
+                key=lambda a: (a["name"], tuple(a["params"])),
+            )
             rendered_states.append(rendered)
-        
+
         return rendered_states
     
     def render_sequence_to_json(self, states: List[Set], objects: Dict[str, str],

@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import Verifier from "./pages/Verifier";
 import Visualizer from "./pages/Visualizer";
 import Welcome from "./pages/Welcome";
 
@@ -13,6 +14,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={Welcome} />
       <Route path={"/visualizer"} component={Visualizer} />
+      <Route path={"/verifier"} component={Verifier} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

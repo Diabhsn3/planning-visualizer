@@ -144,50 +144,6 @@ const VALID_STRATEGY_IDS = [
 
 export const visualizerRouter = router({
   /**
-   * Generate states for pre-built examples
-   */
-  generateStates: publicProcedure
-    .input(
-      z.object({
-        domain: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"]),
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        const dataFile = path.join(
-          DATA_DIR,
-          `${input.domain.replace("-", "_")}_rendered.json`
-        );
-        const data = JSON.parse(await readFile(dataFile, "utf-8"));
-
-        // Extract plan from states
-        const plan: string[] = [];
-        for (let i = 1; i < data.states.length; i++) {
-          const action = data.states[i].metadata?.action;
-          if (action) {
-            plan.push(action);
-          }
-        }
-
-        return {
-          success: true,
-          domain: input.domain,
-          problem: "example",
-          plan,
-          num_states: data.states.length,
-          states: data.states,
-        };
-      } catch (error) {
-        console.error("Error generating states:", error);
-        throw new Error(
-          error instanceof Error
-            ? error.message
-            : "Failed to generate states"
-        );
-      }
-    }),
-
-  /**
    * Upload custom problem file and solve with planner
    */
   uploadAndGenerate: publicProcedure
@@ -291,6 +247,10 @@ export const visualizerRouter = router({
           plan: data.plan,
           num_states: data.num_states,
           states: data.states,
+          raw_states: data.raw_states ?? null,
+          predicate_schema: data.predicate_schema ?? null,
+          objects: data.objects ?? null,
+          problem_hash: data.problem_hash ?? null,
           used_planner: data.used_planner,
           planner_info: data.planner_info,
           search_strategy: data.search_strategy,
@@ -388,6 +348,10 @@ export const visualizerRouter = router({
           plan: data.plan,
           num_states: data.num_states,
           states: data.states,
+          raw_states: data.raw_states ?? null,
+          predicate_schema: data.predicate_schema ?? null,
+          objects: data.objects ?? null,
+          problem_hash: data.problem_hash ?? null,
           used_planner: data.used_planner,
           planner_info: data.planner_info,
           search_strategy: data.search_strategy,

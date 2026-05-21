@@ -53,6 +53,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import crypto from "crypto";
+import { runClaudeAgentLoop } from "./llm-claude-kernel";
 
 export interface CallClaudeWithSkillOptions {
   client: Anthropic;
@@ -140,24 +141,6 @@ export async function callClaudeWithSkill(
     `pause_turn cap=${MAX_PAUSE_TURNS}, caching=ephemeral)`
   );
 
-  // 90s safety timeout — better to fail loudly than hang the request.
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), timeoutMs);
-
-  // Common request bits we re-use across the initial call and any
-  // pause_turn continuations.
-  const skillsContainer = {
-    skills: [
-      { type: "custom" as const, skill_id: skillId, version: "latest" },
-    ],
-  };
-  const codeExecutionTool = [
-    {
-      type: "code_execution_20250825" as const,
-      name: "code_execution" as const,
-    },
-  ];
-
   // System prompt + user message both get cache_control: "ephemeral" so
   // the (large) static portion is reused at 10% cost across continuations.
   const systemBlocks: any[] = [
@@ -172,75 +155,29 @@ export async function callClaudeWithSkill(
     },
   ];
 
-  let response;
-  let pauseTurns = 0;
-  let conversation: any[] = initialMessages;
-
-  try {
-    // Initial call.
-    response = await client.beta.messages.create(
+  const response = await runClaudeAgentLoop({
+    client,
+    modelId,
+    maxTokens,
+    temperature,
+    timeoutMs,
+    logTag: `${logTag} [provider=claude]`,
+    systemBlocks,
+    initialMessages,
+    betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+    container: {
+      skills: [
+        { type: "custom" as const, skill_id: skillId, version: "latest" },
+      ],
+    },
+    tools: [
       {
-        model: modelId,
-        max_tokens: maxTokens,
-        temperature,
-        system: systemBlocks as any,
-        betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
-        container: skillsContainer,
-        messages: conversation,
-        tools: codeExecutionTool,
-        // tool_choice: default ("auto") — Claude is allowed to invoke
-        // code_execution to read the skill files.
+        type: "code_execution_20250825" as const,
+        name: "code_execution" as const,
       },
-      { signal: ac.signal }
-    );
-
-    // Pause-turn continuation loop, hard-capped.
-    while (response.stop_reason === "pause_turn") {
-      pauseTurns++;
-      if (pauseTurns > MAX_PAUSE_TURNS) {
-        throw new Error(
-          `Claude exceeded ${MAX_PAUSE_TURNS} pause_turns. Aborting to ` +
-          `avoid runaway cost. Most likely cause: the model ignored the ` +
-          `"read all files in one call" instruction in the system prompt.`
-        );
-      }
-
-      const isFinalRetry = pauseTurns === MAX_PAUSE_TURNS;
-      console.log(
-        `${logTag} [provider=claude] pause_turn ${pauseTurns}/${MAX_PAUSE_TURNS}, ` +
-        `continuing${isFinalRetry ? " (final retry: forcing tool_choice=none to commit)" : ""}…`
-      );
-
-      // Append the assistant turn so far and continue.
-      conversation = [
-        ...conversation,
-        { role: "assistant", content: response.content },
-      ];
-
-      response = await client.beta.messages.create(
-        {
-          model: modelId,
-          max_tokens: maxTokens,
-          temperature,
-          system: systemBlocks as any,
-          betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
-          container: { id: response.container?.id, ...skillsContainer },
-          messages: conversation,
-          tools: codeExecutionTool,
-          // On the FINAL allowed retry, forbid further tool use so Claude
-          // is forced to emit a final text response. Without this it could
-          // try to run more code_execution calls and we'd hit the cap
-          // without ever getting code out.
-          ...(isFinalRetry
-            ? { tool_choice: { type: "none" as const } }
-            : {}),
-        },
-        { signal: ac.signal }
-      );
-    }
-  } finally {
-    clearTimeout(timer);
-  }
+    ],
+    maxPauseTurns: MAX_PAUSE_TURNS,
+  });
 
   // Extract code from text blocks. Skill-API responses contain a mix of
   //   - text blocks (any narration + the final code output)
@@ -254,8 +191,8 @@ export async function callClaudeWithSkill(
   }
 
   console.log(
-    `${logTag} [provider=claude] Final response: ${response.content.length} blocks ` +
-    `(${textBlocks.length} text), stop=${response.stop_reason}, pause_turns_used=${pauseTurns}`
+    `${logTag} [provider=claude] Extracted ${textBlocks.length} text blocks ` +
+    `from ${response.content.length} total, stop=${response.stop_reason}`
   );
 
   if (textBlocks.length === 0) {

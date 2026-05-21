@@ -13,6 +13,7 @@ warnings.filterwarnings('ignore')
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
 import json
+import hashlib
 import re
 from pathlib import Path
 
@@ -22,6 +23,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from state_generator import StateGenerator
 from state_renderer import RendererFactory
+from predicate_utils import serialize_state, serialize_predicate_schema, serialize_objects
 from run_planner import (
     solve_problem,
     PlannerError,
@@ -140,6 +142,16 @@ def visualize_plan(
         # Step 2: Generate states
         sg = StateGenerator(domain_path, problem_path)
         states = sg.apply_plan(plan)
+
+        # Compute a stable hash of the problem PDDL content. Used by the
+        # frontend to detect re-runs of the same problem and skip
+        # re-verification of states it has already graded.
+        try:
+            with open(problem_path, "r", encoding="utf-8") as _pf:
+                _problem_pddl_text = _pf.read().strip()
+            problem_hash = hashlib.sha256(_problem_pddl_text.encode("utf-8")).hexdigest()[:12]
+        except Exception:
+            problem_hash = None
         
         # Step 3: Render states
         renderer = RendererFactory.get_renderer(sg.parser.domain_name)
@@ -153,6 +165,14 @@ def visualize_plan(
             "plan": plan,
             "num_states": len(rendered_states),
             "states": [rs.to_dict() for rs in rendered_states],
+            # Raw symbolic states (PDDL predicates) for ground truth in the
+            # verification agent. One sorted list of S-expressions per state.
+            "raw_states": [serialize_state(s) for s in states],
+            # Predicate schema and object list so the verifier prompt can be
+            # built without re-parsing the PDDL on the TS side.
+            "predicate_schema": serialize_predicate_schema(sg.parser.predicates_schema),
+            "objects": serialize_objects(sg.parser.objects),
+            "problem_hash": problem_hash,
             "used_planner": used_planner,
             "planner_info": strategy_name,
             "search_strategy": {

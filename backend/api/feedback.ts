@@ -1,18 +1,27 @@
 /**
- * Human Feedback Store
+ * Human Feedback Store (NDJSON-backed).
  *
  * Append-only log of human ratings on visualized planning states. Records
- * are designed to be replayable by the future verification agent without
- * additional data — each entry carries the symbolic state `s`, a PNG of
- * the rendered image `vis(s)`, and identifiers for the artifacts that
- * produced the visualization.
+ * are designed to be replayable by the verification agent without any
+ * extra data — each entry carries the symbolic state `s`, a PNG of the
+ * rendered image, and identifiers for the artifacts that produced it.
  *
  * Layout:
- *   backend/api/data/feedback.json            — index { nextId, items }
+ *   backend/api/data/feedback.jsonl           — one record per line
  *   backend/api/data/feedback-images/<id>.png — one PNG per record
+ *
+ * Storage strategy: NDJSON for O(1) appends. Each row is one JSON object
+ * per line, no global wrapper. In-memory cache `items[]` is populated
+ * once on first access and kept in sync via append. `nextId` lives in a
+ * promise-cached counter; concurrent appends serialize by chaining off
+ * the same promise so duplicates can't be assigned.
+ *
+ * Migration: on first load, if the legacy `feedback.json` is present and
+ * `feedback.jsonl` is not, we re-emit each item as a line and `unlink`
+ * the old file.
  */
 
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, appendFile, mkdir, unlink, access } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -23,7 +32,8 @@ const DATA_DIR = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", "data")
   : path.join(__dirname, "data");
 
-const FEEDBACK_FILE = path.join(DATA_DIR, "feedback.json");
+const LEGACY_FILE = path.join(DATA_DIR, "feedback.json");
+const NDJSON_FILE = path.join(DATA_DIR, "feedback.jsonl");
 const IMAGES_DIR = path.join(DATA_DIR, "feedback-images");
 
 /** Continuous 1–5 score. 5 = perfect, 1 = totally off. */
@@ -50,29 +60,94 @@ export interface FeedbackRecord {
   imageFile: string; // path relative to DATA_DIR, e.g. "feedback-images/3.png"
 }
 
-interface FeedbackStore {
-  nextId: number;
+// ============================================================================
+// Lazy init: scan/migrate once per process, keep results in module state.
+// ============================================================================
+
+interface State {
   items: FeedbackRecord[];
+  // Counter chain — each appendFeedback awaits, increments, replaces.
+  nextIdPromise: Promise<number>;
 }
 
-async function loadStore(): Promise<FeedbackStore> {
+let statePromise: Promise<State> | null = null;
+
+async function fileExists(p: string): Promise<boolean> {
   try {
-    const raw = await readFile(FEEDBACK_FILE, "utf-8");
-    return JSON.parse(raw) as FeedbackStore;
+    await access(p);
+    return true;
   } catch {
-    return { nextId: 1, items: [] };
+    return false;
   }
 }
 
-async function saveStore(store: FeedbackStore): Promise<void> {
-  await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(FEEDBACK_FILE, JSON.stringify(store, null, 2), "utf-8");
+function parseLines(text: string): FeedbackRecord[] {
+  if (!text) return [];
+  const out: FeedbackRecord[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    try {
+      out.push(JSON.parse(line) as FeedbackRecord);
+    } catch (err) {
+      console.warn(
+        `[Feedback] Skipping malformed NDJSON line: ${line.slice(0, 80)}${line.length > 80 ? "…" : ""} (${(err as Error).message})`
+      );
+    }
+  }
+  return out;
 }
 
-/**
- * Strip the `data:image/png;base64,` prefix from a data URL and return
- * the raw base64 body. Throws if the input isn't a PNG data URL.
- */
+async function migrateLegacyIfNeeded(): Promise<void> {
+  // Skip if NDJSON already exists OR legacy doesn't.
+  if (await fileExists(NDJSON_FILE)) return;
+  if (!(await fileExists(LEGACY_FILE))) return;
+
+  console.log("[Feedback] Migrating legacy feedback.json → feedback.jsonl …");
+  const raw = await readFile(LEGACY_FILE, "utf-8");
+  let parsed: { items?: FeedbackRecord[]; nextId?: number };
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    console.error(
+      `[Feedback] Legacy feedback.json is unparseable — leaving it in place. Error: ${(err as Error).message}`
+    );
+    return;
+  }
+  const items = Array.isArray(parsed.items) ? parsed.items : [];
+  await mkdir(DATA_DIR, { recursive: true });
+  const body = items.map((r) => JSON.stringify(r)).join("\n") + (items.length > 0 ? "\n" : "");
+  await writeFile(NDJSON_FILE, body, "utf-8");
+  await unlink(LEGACY_FILE);
+  console.log(`[Feedback] Migration complete — ${items.length} row(s) in NDJSON. Removed legacy file.`);
+}
+
+async function initState(): Promise<State> {
+  await mkdir(DATA_DIR, { recursive: true });
+  await migrateLegacyIfNeeded();
+
+  let items: FeedbackRecord[] = [];
+  if (await fileExists(NDJSON_FILE)) {
+    const text = await readFile(NDJSON_FILE, "utf-8");
+    items = parseLines(text);
+  }
+
+  const maxId = items.reduce((m, r) => (r.id > m ? r.id : m), 0);
+  return {
+    items,
+    nextIdPromise: Promise.resolve(maxId + 1),
+  };
+}
+
+async function getState(): Promise<State> {
+  if (statePromise === null) statePromise = initState();
+  return statePromise;
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
 function decodePngDataUrl(dataUrl: string): Buffer {
   const match = /^data:image\/png;base64,(.+)$/.exec(dataUrl);
   if (!match) {
@@ -108,8 +183,13 @@ export async function appendFeedback(
     }
   }
 
-  const store = await loadStore();
-  const id = store.nextId;
+  const state = await getState();
+
+  // Capture-then-replace the counter promise so two concurrent appends
+  // both serialize through this assignment and each gets a unique id.
+  const myIdPromise = state.nextIdPromise;
+  state.nextIdPromise = myIdPromise.then((n) => n + 1);
+  const id = await myIdPromise;
 
   await mkdir(IMAGES_DIR, { recursive: true });
   const pngBytes = decodePngDataUrl(input.imageDataUrl);
@@ -133,9 +213,14 @@ export async function appendFeedback(
     imageFile: imageRelPath,
   };
 
-  store.items.push(record);
-  store.nextId++;
-  await saveStore(store);
+  const line = JSON.stringify(record);
+  if (line.length > 60_000) {
+    throw new Error(
+      `[Feedback] Refusing to append row id=${id}: serialized size ${line.length} > 60KB cap`
+    );
+  }
+  await appendFile(NDJSON_FILE, line + "\n", "utf-8");
+  state.items.push(record);
 
   console.log(
     `[Feedback] Recorded id=${id} rating=${record.rating} domain="${record.domainName}" state=${record.stateIndex}/${record.totalStates}`
@@ -154,9 +239,9 @@ export interface ListFeedbackFilter {
 export async function listFeedback(
   filter?: ListFeedbackFilter
 ): Promise<FeedbackRecord[]> {
-  const store = await loadStore();
-  if (!filter) return store.items;
-  return store.items.filter(
+  const { items } = await getState();
+  if (!filter) return items.slice();
+  return items.filter(
     (r) =>
       (filter.domainName === undefined || r.domainName === filter.domainName) &&
       (filter.transformerHash === undefined ||

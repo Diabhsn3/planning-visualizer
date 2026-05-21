@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
 import { FeedbackBox } from "@/components/FeedbackBox";
+import { VerifyStatus } from "@/components/VerifyStatus";
 import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
 import {
   PlayIcon, PauseIcon, SkipForwardIcon, SkipBackIcon,
@@ -630,9 +631,27 @@ export default function Visualizer() {
   const [problemFile, setProblemFile]           = useState<File | null>(null);
   const [problemText, setProblemText]           = useState("");
   const [renderedStates, setRenderedStates]     = useState<any[]>([]);
+  // Symbolic PDDL states (string[] per state) returned alongside the
+  // enriched render states. Used as ground truth `s` for Phase 1 feedback
+  // and Phase 2 verifier grading.
+  const [rawStates, setRawStates]               = useState<string[][] | null>(null);
+  const [predicateSchema, setPredicateSchema]   = useState<{ name: string; arg_types: string[] }[] | null>(null);
+  const [pddlObjects, setPddlObjects]           = useState<{ name: string; type: string }[] | null>(null);
+  // PDDL problem name from the planner. Null when running pre-baked
+  // examples or before any plan has been generated.
+  const [problemName, setProblemName]           = useState<string | null>(null);
+  // sha256[:12] of the problem PDDL content. Stable across re-runs of
+  // the same problem; lets us short-circuit auto-verify if the report
+  // already has results for this (renderer, problem) tuple.
+  const [problemHash, setProblemHash]           = useState<string | null>(null);
   const [plan, setPlan]                         = useState<string[]>([]);
   const [currentStateIndex, setCurrentStateIndex] = useState(0);
   const canvasContainerRef                        = useRef<HTMLDivElement>(null);
+  // One runId per page session — groups verifier rows from the same
+  // browser run so they can be filtered in the report later.
+  const verifyRunIdRef                            = useRef<string>(
+    `vfy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+  );
   const [isPlaying, setIsPlaying]               = useState(false);
   const [playbackSpeed, setPlaybackSpeed]       = useState(1000);
   const [plannerInfo, setPlannerInfo]           = useState<{ used_planner: boolean; info: string; strategy?: any } | null>(null);
@@ -716,11 +735,128 @@ export default function Visualizer() {
     return `${(kb / 1024).toFixed(2)} MB`;
   };
 
+  // Auto-verify state. Results live in a per-state map keyed by the same
+  // (renderer × transformer × stateIndex) triple used for dedup, so when
+  // the user scrubs back to a state they already saw they see THAT
+  // state's saved result — not a fresh "Verifying…" and not whichever
+  // other state's result happens to be the most recent.
+  type VerifyEntry =
+    | { status: "pending" }
+    | {
+        status: "done";
+        result: { precision: number | null; recall: number | null; parseFailure: boolean; cacheHit: boolean };
+      }
+    | { status: "error"; error: string };
+  const verifiedKeysRef = useRef<Set<string>>(new Set());
+  const [verifyByKey, setVerifyByKey] = useState<Map<string, VerifyEntry>>(new Map());
+
+  // Hook-level callbacks (NOT per-call) so every concurrent mutation's
+  // result lands in the map. Per-call options on `.mutate(input, opts)`
+  // only fire for the most-recent call in flight, which dropped results
+  // when the user clicked Next mid-verification.
+  const verifyAutoMutation = trpc.verifier.verifyState.useMutation({
+    onSuccess: (data, variables) => {
+      const key = `${variables.rendererHash ?? "norend"}-${variables.transformerHash ?? "notrans"}-${variables.stateIndex}`;
+      setVerifyByKey((m) =>
+        new Map(m).set(key, {
+          status: "done",
+          result: {
+            precision: data.precision,
+            recall: data.recall,
+            parseFailure: data.parseFailure,
+            cacheHit: data.cacheHit,
+          },
+        })
+      );
+    },
+    onError: (error, variables) => {
+      const key = `${variables.rendererHash ?? "norend"}-${variables.transformerHash ?? "notrans"}-${variables.stateIndex}`;
+      setVerifyByKey((m) =>
+        new Map(m).set(key, {
+          status: "error",
+          error: error.message || "verification failed",
+        })
+      );
+    },
+  });
+
   const strategiesQuery      = trpc.visualizer.listStrategies.useQuery();
   const savedDomainsQuery    = trpc.visualizer.listSavedDomains.useQuery(undefined, { enabled: isCustomDomain, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: false, retry: 1 });
   const loadSavedDomainQuery = trpc.visualizer.loadSavedDomain.useQuery(
     { id: selectedSavedDomainId! }, { enabled: !!selectedSavedDomainId, staleTime: 60000, refetchOnWindowFocus: false, refetchOnMount: false, retry: 1 }
   );
+
+  // Re-runs of the same trajectory (same renderer + same problem) reuse
+  // the prior session's results. We fetch the existing per-state map
+  // once on plan-load and hydrate `verifyByKey` from it before the
+  // auto-verify effect fires. Disabled until the planner has emitted
+  // problemHash — pre-2.4 plans return null and produce no hits.
+  const trajectoryRendererHash = loadSavedDomainQuery.data?.rendererHash ?? null;
+  const trajectoryTransformerHash = loadSavedDomainQuery.data?.transformerHash ?? null;
+  const trajectoryProviderRaw = loadSavedDomainQuery.data?.provider ?? null;
+  const trajectoryNormalizedProvider: "claude" | "gemini" | null =
+    trajectoryProviderRaw
+      ? trajectoryProviderRaw.toLowerCase().includes("gemini")
+        ? "gemini"
+        : trajectoryProviderRaw.toLowerCase().includes("claude")
+          ? "claude"
+          : null
+      : null;
+  const trajectoryRenderMethod: "basic" | "claude" | "gemini" =
+    !isCustomDomain && renderMode === "basic"
+      ? "basic"
+      : trajectoryNormalizedProvider ?? llmProvider;
+  const existingResultsQuery = trpc.verifier.existingResultsForTrajectory.useQuery(
+    {
+      renderMethod: trajectoryRenderMethod,
+      domainName: isCustomDomain ? (customDomainName || "custom") : selectedDomain,
+      problemHash,
+      savedDomainId: selectedSavedDomainId,
+      transformerHash: trajectoryTransformerHash,
+      rendererHash: trajectoryRendererHash,
+    },
+    {
+      enabled: !!problemHash && renderedStates.length > 0,
+      staleTime: 5_000,
+      refetchOnWindowFocus: false,
+    }
+  );
+
+  // Hydrate verifyByKey + dedup set from the prefetched map. The keys
+  // here use the SAME format as the auto-verify useEffect so the effect
+  // sees these as "already verified" and skips.
+  useEffect(() => {
+    const map = existingResultsQuery.data;
+    if (!map) return;
+    const rh = trajectoryRendererHash;
+    const th = trajectoryTransformerHash;
+    setVerifyByKey((prev) => {
+      const next = new Map(prev);
+      for (const [stateIndexStr, rawDigest] of Object.entries(map)) {
+        const digest = rawDigest as {
+          precision: number | null;
+          recall: number | null;
+          parseFailure: boolean;
+          tp: number; fp: number; fn: number;
+        };
+        const idx = Number(stateIndexStr);
+        const key = `${rh ?? "norend"}-${th ?? "notrans"}-${idx}`;
+        if (verifiedKeysRef.current.has(key)) continue;
+        verifiedKeysRef.current.add(key);
+        next.set(key, {
+          status: "done",
+          result: {
+            precision: digest.precision,
+            recall: digest.recall,
+            parseFailure: digest.parseFailure,
+            cacheHit: true, // prior-run reuse — surface the "cached" badge
+          },
+        });
+      }
+      return next;
+    });
+  }, [existingResultsQuery.data, trajectoryRendererHash, trajectoryTransformerHash]);
+
   const saveDomainMutation   = trpc.visualizer.saveDomainToLibrary.useMutation({
     onSuccess: (data) => {
       console.log("[SavedDomains] Domain saved to library:", data.displayName);
@@ -830,6 +966,94 @@ export default function Visualizer() {
     }
   }, [currentStateIndex, plan.length]);
 
+  // Auto-verify every NEW state view: fires `verifyState` the first time
+  // the user sees each (renderer × transformer × stateIndex) triple this
+  // session. Scrubbing back to an already-seen state does NOT re-fire.
+  // Skipped for pre-baked examples (no rawStates/schema/objects).
+  useEffect(() => {
+    if (!rawStates || !predicateSchema || !pddlObjects) return;
+    if (renderedStates.length === 0) return;
+    if (isTransformerGenerating || isLlmGenerating || llmError || transformerError) return;
+    const rendererHash = loadSavedDomainQuery.data?.rendererHash ?? null;
+    const transformerHash = loadSavedDomainQuery.data?.transformerHash ?? null;
+    const key = `${rendererHash ?? "norend"}-${transformerHash ?? "notrans"}-${currentStateIndex}`;
+    if (verifiedKeysRef.current.has(key)) return;
+    const canvas = canvasContainerRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    if (!dataUrl) return;
+    verifiedKeysRef.current.add(key);
+    setVerifyByKey((m) => new Map(m).set(key, { status: "pending" }));
+    // Classify the visualization method for top-level report grouping.
+    // "basic" iff this is a built-in domain in basic-render-mode (the
+    // renderer is the hardcoded canvas, no LLM involvement). Otherwise
+    // the row is attributed to whichever provider produced the code —
+    // and when a saved domain is loaded, that's the SAVED provider, not
+    // whatever the user's dropdown happens to show. Otherwise loading a
+    // Gemini-generated domain while "Claude" is selected would tag the
+    // rows as Claude.
+    const savedProviderRaw = loadSavedDomainQuery.data?.provider ?? null;
+    const normalizeProvider = (s: string | null): "claude" | "gemini" | null => {
+      if (!s) return null;
+      const lower = s.toLowerCase();
+      if (lower.includes("gemini")) return "gemini";
+      if (lower.includes("claude")) return "claude";
+      return null;
+    };
+    const effectiveProvider: "claude" | "gemini" =
+      normalizeProvider(savedProviderRaw) ?? llmProvider;
+    const renderMethod: "basic" | "claude" | "gemini" =
+      !isCustomDomain && renderMode === "basic" ? "basic" : effectiveProvider;
+    const savedDomainDisplayName =
+      loadSavedDomainQuery.data?.displayName ?? null;
+    verifyAutoMutation.mutate({
+      pngBase64: dataUrl,
+      expected: rawStates[currentStateIndex] ?? [],
+      predicateSchema,
+      objects: pddlObjects,
+      runId: verifyRunIdRef.current,
+      runKind: "verify",
+      domainName: isCustomDomain ? (customDomainName || "custom") : selectedDomain,
+      problem: problemName,
+      problemHash,
+      renderMethod,
+      savedDomainDisplayName,
+      isCustomDomain,
+      savedDomainId: selectedSavedDomainId,
+      transformerHash,
+      rendererHash,
+      llmProvider: effectiveProvider,
+      stateIndex: currentStateIndex,
+      totalStates: renderedStates.length,
+      forceRefresh: false,
+    });
+    // verifyAutoMutation is stable across renders — omit from deps to
+    // avoid double-firing when react-query updates its internal state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    currentStateIndex,
+    rawStates,
+    predicateSchema,
+    pddlObjects,
+    problemName,
+    problemHash,
+    renderedStates.length,
+    isTransformerGenerating,
+    isLlmGenerating,
+    llmError,
+    transformerError,
+    isCustomDomain,
+    customDomainName,
+    selectedDomain,
+    selectedSavedDomainId,
+    llmProvider,
+    renderMode,
+    loadSavedDomainQuery.data?.rendererHash,
+    loadSavedDomainQuery.data?.transformerHash,
+    loadSavedDomainQuery.data?.displayName,
+    loadSavedDomainQuery.data?.provider,
+  ]);
+
   const currentStrategy = strategiesQuery.data?.find((s: SearchStrategy) => s.id === selectedStrategy) as SearchStrategy | undefined;
 
   const getDefaultProblem = (domain: string): string => {
@@ -846,9 +1070,19 @@ export default function Visualizer() {
     onSuccess: (data) => {
       setIsProcessing(false);
       setRenderedStates(data.states);
+      setRawStates((data as any).raw_states ?? null);
+      setPredicateSchema((data as any).predicate_schema ?? null);
+      setPddlObjects((data as any).objects ?? null);
+      setProblemName(data.problem ?? null);
+      setProblemHash((data as any).problem_hash ?? null);
       setPlan(data.plan);
       setCurrentStateIndex(0);
       setPlannerInfo({ used_planner: data.used_planner || false, info: data.planner_info || "Unknown", strategy: data.search_strategy });
+      // New plan → fresh dedup set and a fresh runId so this run's rows
+      // group together in the verifier report.
+      verifiedKeysRef.current = new Set();
+      verifyRunIdRef.current = `vfy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      setVerifyByKey(new Map());
       // Success flash
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 900);
@@ -947,9 +1181,17 @@ export default function Visualizer() {
     onSuccess: (data) => {
       setIsProcessing(false);
       setRenderedStates(data.states);
+      setRawStates((data as any).raw_states ?? null);
+      setPredicateSchema((data as any).predicate_schema ?? null);
+      setPddlObjects((data as any).objects ?? null);
+      setProblemName(data.problem ?? null);
+      setProblemHash((data as any).problem_hash ?? null);
       setPlan(data.plan);
       setCurrentStateIndex(0);
       setPlannerInfo({ used_planner: data.used_planner || false, info: data.planner_info || "Unknown", strategy: data.search_strategy });
+      verifiedKeysRef.current = new Set();
+      verifyRunIdRef.current = `vfy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      setVerifyByKey(new Map());
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 900);
       // Auto-trigger transformer generation ONLY for new domain flow
@@ -1356,7 +1598,13 @@ export default function Visualizer() {
             <PDDLHeaderBackground />
           </div>
 
-
+          <a
+            href="/verifier"
+            className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 mr-4 whitespace-nowrap"
+            style={{ fontFamily: "'JetBrains Mono', monospace" }}
+          >
+            Verifier →
+          </a>
 
         </div>
       </header>
@@ -2405,7 +2653,11 @@ export default function Visualizer() {
                         llmProvider,
                         stateIndex: currentStateIndex,
                         totalStates: renderedStates.length,
-                        symbolicState: renderedStates[currentStateIndex],
+                        // Prefer raw PDDL predicates as ground truth (Phase
+                        // 2 canonical form). Fall back to the enriched
+                        // render state for pre-baked examples that
+                        // pre-date raw_states.
+                        symbolicState: rawStates?.[currentStateIndex] ?? renderedStates[currentStateIndex],
                       }}
                       getImageDataUrl={() => {
                         const canvas = canvasContainerRef.current?.querySelector("canvas");
@@ -2413,6 +2665,20 @@ export default function Visualizer() {
                       }}
                     />
                   )}
+
+                  {renderedStates.length > 0 && !isTransformerGenerating && !isLlmGenerating && !llmError && !transformerError && (() => {
+                    const rh = loadSavedDomainQuery.data?.rendererHash ?? null;
+                    const th = loadSavedDomainQuery.data?.transformerHash ?? null;
+                    const currentKey = `${rh ?? "norend"}-${th ?? "notrans"}-${currentStateIndex}`;
+                    const entry = verifyByKey.get(currentKey) ?? null;
+                    return (
+                      <VerifyStatus
+                        applicable={!!(rawStates && predicateSchema && pddlObjects)}
+                        entry={entry}
+                        stateIndex={currentStateIndex}
+                      />
+                    );
+                  })()}
 
                   {/* Controls */}
                   <div className="px-6 py-4 border-t border-white/[0.05] bg-black/[0.15] space-y-4">
