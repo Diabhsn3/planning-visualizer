@@ -4,9 +4,17 @@
   "scripts": {
     "dev": "pnpm --parallel dev",
     "build:frontend": "pnpm --filter planning-visualizer-frontend build",
-    "build:backend": "pnpm --filter planning-visualizer-web build"
+    "build:backend": "pnpm --filter planning-visualizer-web build",
+    "test:api": "pnpm --filter planning-visualizer-web test",
+    "test:frontend": "pnpm --filter planning-visualizer-frontend test",
+    "test:python": "cd backend/planner && pytest --html=../../reports/python.html --self-contained-html --cov --cov-report=html:../../reports/python-cov --cov-report=json:../../reports/python-cov.json -m 'not real_llm and not e2e'",
+    "test:all": "pnpm test:api && pnpm test:frontend && pnpm test:python",
+    "test:e2e:backend": "pnpm --filter planning-visualizer-web vitest run __tests__/e2e",
+    "test:e2e:frontend": "pnpm --filter planning-visualizer-frontend test:e2e",
+    "dashboard": "tsx scripts/build-test-dashboard.ts"
   },
   "devDependencies": {
+    "tsx": "^4.19.1",
     "typescript": "^5.0.0"
   }
 }
