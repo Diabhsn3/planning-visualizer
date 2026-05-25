@@ -1,0 +1,209 @@
+name: QA
+
+on:
+  push:
+    branches: [main, tests]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly unseen-domain run (uses real LLM APIs) — 02:00 UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  PNPM_VERSION: "10.4.1"
+  NODE_VERSION: "22"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # =============================================================
+  # Layer 1 + 2: unit + integration. Runs on every push & PR.
+  # Fail-on: any failure.
+  # =============================================================
+  unit-integration:
+    name: Unit + Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: backend/planner/requirements-dev.txt
+
+      - name: Install pnpm workspaces
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Python dev deps
+        run: pip install -r backend/planner/requirements-dev.txt
+
+      - name: Backend API unit + integration
+        working-directory: backend/api
+        run: pnpm vitest run __tests__/unit __tests__/integration --reporter=default --reporter=json --outputFile=../../reports/ts-api.json
+        env:
+          CI: "true"
+
+      - name: Frontend unit
+        working-directory: frontend
+        run: pnpm vitest run --reporter=default --reporter=json --outputFile=../reports/frontend.json
+        env:
+          CI: "true"
+
+      - name: Python unit + integration
+        working-directory: backend/planner
+        run: |
+          pytest tests/unit tests/integration \
+            --html=../../reports/python.html --self-contained-html \
+            --cov --cov-report=html:../../reports/python-cov \
+            --cov-report=json:../../reports/python-cov.json \
+            -v -m "not real_llm and not e2e"
+
+      - name: Build dashboard
+        run: pnpm dashboard
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports-unit-integration
+          path: reports/
+          retention-days: 14
+
+  # =============================================================
+  # Layer 3: backend E2E on the 6 built-in domains (LLMs MOCKED).
+  # Acceptance: 100% pass.
+  # =============================================================
+  e2e-builtin:
+    name: E2E built-in domains
+    runs-on: ubuntu-latest
+    needs: unit-integration
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install pnpm workspaces
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Python deps
+        run: |
+          pip install -r backend/planner/requirements-dev.txt
+
+      - name: Build Fast Downward
+        working-directory: planning-tools/downward
+        run: |
+          if [ ! -f builds/release/bin/downward ]; then
+            ./build.py release
+          fi
+
+      - name: Backend E2E (built-in domains)
+        working-directory: backend/planner
+        run: pytest tests/e2e/test_builtin_domains.py -v -m e2e
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build dashboard
+        run: pnpm dashboard -- --append-history
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports-e2e-builtin
+          path: reports/
+          retention-days: 14
+
+  # =============================================================
+  # Layer 3 (extension): unseen domains. Nightly only (or manual).
+  # Uses REAL LLM APIs — requires secrets.
+  # Acceptance: ≥90% pass.
+  # =============================================================
+  e2e-unseen-nightly:
+    name: E2E unseen domains (real LLMs)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - run: pnpm install --frozen-lockfile
+      - run: pip install -r backend/planner/requirements-dev.txt
+
+      - name: Build Fast Downward
+        working-directory: planning-tools/downward
+        run: |
+          if [ ! -f builds/release/bin/downward ]; then
+            ./build.py release
+          fi
+
+      - name: Unseen-domain E2E
+        working-directory: backend/planner
+        run: pytest tests/e2e/test_unseen_domains.py -v -m e2e
+
+      - name: Build dashboard (append history)
+        run: pnpm dashboard -- --append-history
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reports-e2e-unseen
+          path: reports/
+          retention-days: 30
+
+  # =============================================================
+  # Publish dashboard to GitHub Pages on main.
+  # =============================================================
+  publish-dashboard:
+    name: Publish dashboard
+    runs-on: ubuntu-latest
+    needs: [unit-integration, e2e-builtin]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: reports-e2e-builtin
+          path: reports/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports/
+      - id: deployment
+        uses: actions/deploy-pages@v4

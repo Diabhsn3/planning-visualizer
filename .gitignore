@@ -12,7 +12,6 @@ venv/
 # Node.js
 node_modules/
 *.log
-pnpm-lock.yaml
 
 # macOS
 .DS_Store
@@ -34,3 +33,14 @@ backend/api/.claude-skill-id
 CLAUDE.md
 /graphify-out
 /frontend/.claude
+
+# Test reports (generated)
+/reports/*
+!/reports/history.jsonl
+!/reports/.gitkeep
+coverage/
+.pytest_cache/
+playwright-report/
+test-results/
+.vitest-cache/
+/backend/planner/output/
