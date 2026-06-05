@@ -1,5 +1,5 @@
 {
-  "nextId": 17,
+  "nextId": 19,
   "domains": [
     {
       "id": 1,
@@ -154,6 +154,28 @@
       "rendererHash": "0df6c279a7c069b6c617b4ea0d28ca30804e8dd0f62ecdc6602eec7fed6fa740",
       "provider": "Claude Sonnet 4.6",
       "createdAt": "2026-05-14T17:57:31.201Z"
+    },
+    {
+      "id": 17,
+      "displayName": "Sokoban",
+      "domainName": "sokoban",
+      "pddlHash": "a538e1185494",
+      "domainPddl": "(define (domain sokoban)\n  (:requirements :typing)\n\n  (:types\n    location direction\n    movable\n    player box - movable\n  )\n\n  (:predicates\n    (at ?obj - movable ?loc - location)\n    (clear ?loc - location)\n    (connected ?from - location ?to - location ?dir - direction)\n  )\n\n  (:action move\n    :parameters (?p - player ?from - location ?to - location ?dir - direction)\n    :precondition (and\n      (at ?p ?from)\n      (clear ?to)\n      (connected ?from ?to ?dir)\n    )\n    :effect (and\n      (not (at ?p ?from))\n      (at ?p ?to)\n      (clear ?from)\n      (not (clear ?to))\n    )\n  )\n\n  (:action push\n    :parameters (?p - player ?b - box ?p-loc - location ?b-loc - location ?to - location ?dir - direction)\n    :precondition (and\n      (at ?p ?p-loc)\n      (at ?b ?b-loc)\n      (clear ?to)\n      (connected ?p-loc ?b-loc ?dir)\n      (connected ?b-loc ?to ?dir)\n    )\n    :effect (and\n      (not (at ?p ?p-loc))\n      (not (at ?b ?b-loc))\n      (at ?p ?b-loc)\n      (at ?b ?to)\n      (clear ?p-loc)\n      (not (clear ?to))\n    )\n  )\n)\n",
+      "transformerHash": "db71ea7a84d23dc97fb7bfae8f44eb096a6454ddab923dcf5d4b966657725508",
+      "rendererHash": "3eba58b65821161d06047372128f61b0f4deb02464e577365af150a8c88093ca",
+      "provider": "Claude Sonnet 4.6",
+      "createdAt": "2026-06-05T22:40:58.979Z"
+    },
+    {
+      "id": 18,
+      "displayName": "Sokoban (2)",
+      "domainName": "sokoban",
+      "pddlHash": "a538e1185494",
+      "domainPddl": "(define (domain sokoban)\n  (:requirements :typing)\n\n  (:types\n    location direction\n    movable\n    player box - movable\n  )\n\n  (:predicates\n    (at ?obj - movable ?loc - location)\n    (clear ?loc - location)\n    (connected ?from - location ?to - location ?dir - direction)\n  )\n\n  (:action move\n    :parameters (?p - player ?from - location ?to - location ?dir - direction)\n    :precondition (and\n      (at ?p ?from)\n      (clear ?to)\n      (connected ?from ?to ?dir)\n    )\n    :effect (and\n      (not (at ?p ?from))\n      (at ?p ?to)\n      (clear ?from)\n      (not (clear ?to))\n    )\n  )\n\n  (:action push\n    :parameters (?p - player ?b - box ?p-loc - location ?b-loc - location ?to - location ?dir - direction)\n    :precondition (and\n      (at ?p ?p-loc)\n      (at ?b ?b-loc)\n      (clear ?to)\n      (connected ?p-loc ?b-loc ?dir)\n      (connected ?b-loc ?to ?dir)\n    )\n    :effect (and\n      (not (at ?p ?p-loc))\n      (not (at ?b ?b-loc))\n      (at ?p ?b-loc)\n      (at ?b ?to)\n      (clear ?p-loc)\n      (not (clear ?to))\n    )\n  )\n)\n",
+      "transformerHash": "5a005336469f6e0ab31ff530aef6fc0686a7dd325afe07f75b957f998b2383f7",
+      "rendererHash": "de56f30e025f1304c52ea19cd42f229b9aa93c9d78067b5a80bc6fbed63156d7",
+      "provider": "Gemini 2.5 Pro",
+      "createdAt": "2026-06-05T22:47:26.271Z"
     }
   ]
 }

@@ -1,0 +1,16 @@
+{
+  "entries": [
+    {
+      "domain": "blocks-world",
+      "provider": "claude",
+      "artifactHash": "2d6ed3a7361fcbe312c732d0d55c829e897b9ec7546c7fc41201ebf3bd2967e4",
+      "createdAt": "2026-05-01T00:03:57.633Z"
+    },
+    {
+      "domain": "blocks-world",
+      "provider": "gemini",
+      "artifactHash": "38a2f656011555c7cf179d18799fee36a9ef3b18f5294b72ea79db995e943860",
+      "createdAt": "2026-05-01T00:13:54.621Z"
+    }
+  ]
+}
