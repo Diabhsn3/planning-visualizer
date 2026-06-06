@@ -23,6 +23,7 @@
 
 import { readFile, writeFile, appendFile, mkdir, unlink, access } from "fs/promises";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,12 +53,25 @@ export interface FeedbackRecord {
   transformerHash: string | null;
   rendererHash: string | null;
   llmProvider: string | null;
+  /**
+   * sha256[:12] of the problem PDDL content. Distinguishes states across
+   * different problems of the same (saved) domain so a rating isn't
+   * mis-joined to a same-index state of another problem. Null on legacy
+   * rows written before this field.
+   */
+  problemHash?: string | null;
 
   stateIndex: number;
   totalStates: number;
 
   symbolicState: unknown;
   imageFile: string; // path relative to DATA_DIR, e.g. "feedback-images/3.png"
+  /**
+   * sha256 of the PNG base64 body — same hashing the verifier uses, so a
+   * feedback entry can be matched to the exact verifier run that graded
+   * the same photo. Null on legacy rows written before this field.
+   */
+  imageHash?: string | null;
 }
 
 // ============================================================================
@@ -148,12 +162,13 @@ async function getState(): Promise<State> {
 // Public API
 // ============================================================================
 
-function decodePngDataUrl(dataUrl: string): Buffer {
+/** Extract the base64 body from a `data:image/png;base64,…` URL. */
+function pngDataUrlBody(dataUrl: string): string {
   const match = /^data:image\/png;base64,(.+)$/.exec(dataUrl);
   if (!match) {
     throw new Error("Expected a base64 PNG data URL (data:image/png;base64,...)");
   }
-  return Buffer.from(match[1], "base64");
+  return match[1];
 }
 
 export interface AppendFeedbackInput {
@@ -165,6 +180,7 @@ export interface AppendFeedbackInput {
   transformerHash: string | null;
   rendererHash: string | null;
   llmProvider: string | null;
+  problemHash: string | null;
   stateIndex: number;
   totalStates: number;
   symbolicState: unknown;
@@ -192,7 +208,11 @@ export async function appendFeedback(
   const id = await myIdPromise;
 
   await mkdir(IMAGES_DIR, { recursive: true });
-  const pngBytes = decodePngDataUrl(input.imageDataUrl);
+  const pngBase64 = pngDataUrlBody(input.imageDataUrl);
+  // Same hashing the verifier uses (sha256 of the base64 body), so this
+  // feedback can be matched to the verifier run for the identical photo.
+  const imageHash = crypto.createHash("sha256").update(pngBase64).digest("hex");
+  const pngBytes = Buffer.from(pngBase64, "base64");
   const imageRelPath = path.join("feedback-images", `${id}.png`);
   await writeFile(path.join(DATA_DIR, imageRelPath), pngBytes);
 
@@ -207,10 +227,12 @@ export async function appendFeedback(
     transformerHash: input.transformerHash,
     rendererHash: input.rendererHash,
     llmProvider: input.llmProvider,
+    problemHash: input.problemHash,
     stateIndex: input.stateIndex,
     totalStates: input.totalStates,
     symbolicState: input.symbolicState,
     imageFile: imageRelPath,
+    imageHash,
   };
 
   const line = JSON.stringify(record);

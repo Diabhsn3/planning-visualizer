@@ -975,7 +975,16 @@ export default function Visualizer() {
   useEffect(() => {
     if (!rawStates || !predicateSchema || !pddlObjects) return;
     if (renderedStates.length === 0) return;
-    if (isTransformerGenerating || isLlmGenerating || llmError || transformerError) return;
+    // Hold off while anything is still running. This prevents auto-verify
+    // (a Claude vision call) from competing with transformer/renderer
+    // generation for the org's rate limit — concurrent load was throttling
+    // the renderer past its timeout. It also guarantees we only ever grade
+    // the FINAL rendered image, never a basic/intermediate one.
+    if (isProcessing || isTransformerGenerating || isLlmGenerating || llmError || transformerError) return;
+    // For any LLM-rendered visualization (custom domain, or built-in in LLM
+    // render mode) wait until the renderer code is actually in place.
+    const needsLlmRender = isCustomDomain || renderMode === "llm";
+    if (needsLlmRender && !llmRendererCode) return;
     const rendererHash = loadSavedDomainQuery.data?.rendererHash ?? null;
     const transformerHash = loadSavedDomainQuery.data?.transformerHash ?? null;
     const key = `${rendererHash ?? "norend"}-${transformerHash ?? "notrans"}-${currentStateIndex}`;
@@ -1040,8 +1049,10 @@ export default function Visualizer() {
     problemName,
     problemHash,
     renderedStates.length,
+    isProcessing,
     isTransformerGenerating,
     isLlmGenerating,
+    llmRendererCode,
     llmError,
     transformerError,
     isCustomDomain,
@@ -2682,6 +2693,7 @@ export default function Visualizer() {
                         transformerHash: loadSavedDomainQuery.data?.transformerHash ?? null,
                         rendererHash: loadSavedDomainQuery.data?.rendererHash ?? null,
                         llmProvider,
+                        problemHash,
                         stateIndex: currentStateIndex,
                         totalStates: renderedStates.length,
                         // Prefer raw PDDL predicates as ground truth (Phase

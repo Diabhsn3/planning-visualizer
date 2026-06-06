@@ -2,10 +2,12 @@ import { z } from "zod";
 import { publicProcedure, router } from "./_core/trpc";
 import { verifyImage } from "./verifier";
 import { listVerifierRuns } from "./verifier-storage";
+import { listFeedback } from "./feedback";
 import {
   aggregateByDomain,
   aggregateByDomainAndProblem,
   aggregateByMethodDomainAndVersion,
+  aggregateWithFeedback,
 } from "./verifier-metrics";
 
 /**
@@ -202,6 +204,58 @@ export const verifierRouter = router({
       }
       return out;
     }),
+
+  /**
+   * Full report: method → domain → version → problem → states, with both
+   * the agent's P/R and the human rating averaged at every level, plus
+   * per-state detail (screenshot, agent score, human rating + comment).
+   * Powers the unified verifier page.
+   */
+  aggregateWithFeedback: publicProcedure.query(async () => {
+    const [runs, feedback] = await Promise.all([
+      listVerifierRuns(),
+      listFeedback(),
+    ]);
+    return aggregateWithFeedback(
+      runs.map((r) => ({
+        // AggregateRowFull base
+        domainName: r.domainName,
+        problem: r.problem ?? null,
+        precision: r.precision,
+        recall: r.recall,
+        renderMethod: r.renderMethod ?? null,
+        savedDomainId: r.savedDomainId,
+        savedDomainDisplayName: r.savedDomainDisplayName ?? null,
+        rendererHash: r.rendererHash,
+        transformerHash: r.transformerHash,
+        isCustomDomain: r.isCustomDomain,
+        llmProvider: r.llmProvider,
+        // FullRow extras
+        problemHash: r.problemHash ?? null,
+        stateIndex: r.stateIndex,
+        tp: r.tp.length,
+        fp: r.fp.length,
+        fn: r.fn.length,
+        parseFailure: r.parseFailure,
+        imageHash: r.imageHash,
+        imagePath: r.imagePath ?? null,
+        createdAt: r.createdAt,
+      })),
+      feedback.map((f) => ({
+        rating: f.rating,
+        comment: f.comment,
+        savedDomainId: f.savedDomainId,
+        domainName: f.domainName,
+        rendererHash: f.rendererHash,
+        transformerHash: f.transformerHash,
+        problemHash: f.problemHash ?? null,
+        stateIndex: f.stateIndex,
+        imageHash: f.imageHash ?? null,
+        imageFile: f.imageFile,
+        createdAt: f.createdAt,
+      }))
+    );
+  }),
 
   /**
    * Four-level rollup: method → domain → version → problem.

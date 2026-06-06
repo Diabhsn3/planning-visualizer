@@ -44,7 +44,7 @@
  * Other improvements baked in:
  *   - `temperature: 0.2` for reproducibility (so the artifact-store
  *     hash dedup actually has a chance of hitting on identical PDDLs).
- *   - 90s timeout via AbortSignal — a stuck call no longer hangs.
+ *   - 240s timeout via AbortSignal — a stuck call no longer hangs.
  *   - Code extraction recognizes both `function foo` and
  *     `const foo = (...) =>` shapes.
  *   - Audit log of user-message sha256 so post-mortems can answer
@@ -131,7 +131,11 @@ export async function callClaudeWithSkill(
     maxTokens,
     logTag,
     temperature = 0.2,
-    timeoutMs = 90_000,
+    // Renderer/transformer generation uses Skills + code-execution and
+    // emits large code; under any concurrent API load (e.g. auto-verify
+    // calls sharing the org rate limit) the request can be throttled and
+    // retried, so 90s was too tight. 240s gives ample headroom.
+    timeoutMs = 240_000,
   } = opts;
 
   const userHash = shortHash(userMessage);

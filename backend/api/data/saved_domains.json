@@ -1,5 +1,5 @@
 {
-  "nextId": 19,
+  "nextId": 20,
   "domains": [
     {
       "id": 1,
@@ -176,6 +176,17 @@
       "rendererHash": "de56f30e025f1304c52ea19cd42f229b9aa93c9d78067b5a80bc6fbed63156d7",
       "provider": "Gemini 2.5 Pro",
       "createdAt": "2026-06-05T22:47:26.271Z"
+    },
+    {
+      "id": 19,
+      "displayName": "Miconic (2)",
+      "domainName": "miconic",
+      "pddlHash": "1fa47fd8197c",
+      "domainPddl": "(define (domain miconic)\n  (:requirements :typing)\n  (:types\n    passenger floor\n  )\n  (:predicates\n    (origin ?p - passenger ?f - floor)\n    (destin ?p - passenger ?f - floor)\n    (above ?f1 - floor ?f2 - floor)\n    (boarded ?p - passenger)\n    (served ?p - passenger)\n    (lift-at ?f - floor)\n  )\n\n  (:action board\n    :parameters (?f - floor ?p - passenger)\n    :precondition (and\n      (lift-at ?f)\n      (origin ?p ?f)\n    )\n    :effect (and\n      (boarded ?p)\n    )\n  )\n\n  (:action depart\n    :parameters (?f - floor ?p - passenger)\n    :precondition (and\n      (lift-at ?f)\n      (destin ?p ?f)\n      (boarded ?p)\n    )\n    :effect (and\n      (not (boarded ?p))\n      (served ?p)\n    )\n  )\n\n  (:action up\n    :parameters (?f1 - floor ?f2 - floor)\n    :precondition (and\n      (lift-at ?f1)\n      (above ?f1 ?f2)\n    )\n    :effect (and\n      (lift-at ?f2)\n      (not (lift-at ?f1))\n    )\n  )\n\n  (:action down\n    :parameters (?f1 - floor ?f2 - floor)\n    :precondition (and\n      (lift-at ?f1)\n      (above ?f2 ?f1)\n    )\n    :effect (and\n      (lift-at ?f2)\n      (not (lift-at ?f1))\n    )\n  )\n)\n",
+      "transformerHash": "663a894ae58508dc17db55f79e1fde389c5c3e4b09fd804acd0cb0bf182c629d",
+      "rendererHash": "26454e478e1596e1b14a00f6f89a3f220256d41f7577bf80c9d6678eacdcc8e4",
+      "provider": "Claude Sonnet 4.6",
+      "createdAt": "2026-06-06T21:11:07.055Z"
     }
   ]
 }

@@ -31,11 +31,11 @@ function inferMethod(f: FeedbackRecord): string {
  *   - saved domain  → (savedDomainId, stateIndex)
  *   - non-saved     → (domainName, rendererHash, transformerHash, stateIndex)
  *
- * Feedback doesn't carry problem/problemHash, so a saved domain run on
- * multiple problems can't be disambiguated here — we take the most-recent
- * matching verification, which is the right photo in all but pathological
- * cases (feedback is given on a state the user is actively viewing, and
- * auto-verify runs on that same view).
+ * When the feedback carries a problemHash (recorded since the
+ * cross-problem fix), it's required to match so a rating on one problem
+ * doesn't bleed onto same-index states of another problem in the same
+ * saved domain. Legacy feedback without a problemHash falls back to
+ * trajectory + stateIndex only.
  */
 function bestVerifierMatch(
   f: FeedbackRecord,
@@ -43,6 +43,8 @@ function bestVerifierMatch(
 ): VerifierRunRow | null {
   const candidates = runs.filter((v) => {
     if (v.stateIndex !== f.stateIndex) return false;
+    if (f.imageHash && v.imageHash && f.imageHash === v.imageHash) return true;
+    if (f.problemHash && norm(v.problemHash) !== norm(f.problemHash)) return false;
     if (f.savedDomainId != null) return v.savedDomainId === f.savedDomainId;
     return (
       v.savedDomainId == null &&
@@ -68,6 +70,7 @@ export const feedbackRouter = router({
         transformerHash: z.string().nullable(),
         rendererHash: z.string().nullable(),
         llmProvider: z.string().nullable(),
+        problemHash: z.string().nullable().optional().default(null),
         stateIndex: z.number().int().nonnegative(),
         totalStates: z.number().int().positive(),
         symbolicState: z.unknown(),

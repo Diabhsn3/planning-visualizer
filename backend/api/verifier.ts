@@ -12,7 +12,7 @@
  * shapes input/output. The metric math stays in verifier-metrics.ts.
  */
 
-import { readFile } from "fs/promises";
+import { readFile, writeFile, mkdir, access } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { getSavedDomain } from "./saved-domains";
@@ -25,9 +25,44 @@ import type { AppendVerifierRunInput, RunKind } from "./verifier-storage";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const DATA_DIR = __dirname.endsWith("dist")
+  ? path.join(__dirname, "..", "data")
+  : path.join(__dirname, "data");
+const VERIFIER_IMAGES_DIR = path.join(DATA_DIR, "verifier-images");
+
 const PLANNER_DIR = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", "..", "planner")
   : path.join(__dirname, "..", "planner");
+
+/**
+ * Persist the verified PNG, content-addressed by its hash so re-runs of
+ * the same image reuse one file. Returns the path relative to DATA_DIR
+ * (served by the /api/verifier-images static route) so the report page
+ * can show a screenshot for every state — not just the ones with human
+ * feedback. Best-effort: on any write error we return null and the row
+ * simply has no screenshot.
+ */
+async function persistVerifierImage(
+  pngBase64: string,
+  imageHash: string
+): Promise<string | null> {
+  const relPath = path.join("verifier-images", `${imageHash}.png`);
+  const absPath = path.join(DATA_DIR, relPath);
+  try {
+    try {
+      await access(absPath);
+      return relPath; // already stored
+    } catch {
+      // not present — write it
+    }
+    await mkdir(VERIFIER_IMAGES_DIR, { recursive: true });
+    await writeFile(absPath, Buffer.from(pngBase64, "base64"));
+    return relPath;
+  } catch (err) {
+    console.warn(`[Verifier] Failed to persist image ${imageHash.slice(0, 8)}: ${(err as Error).message}`);
+    return null;
+  }
+}
 
 const BUILTIN_DOMAIN_PDDL: Record<string, string> = {
   "blocks-world": path.join(PLANNER_DIR, "domains/blocks_world/domain.pddl"),
@@ -158,6 +193,9 @@ export async function verifyImage(
 
   const metrics = setMetrics(input.expected, extracted);
 
+  // Persist the PNG so the report can show a screenshot for this state.
+  const imagePath = await persistVerifierImage(input.pngBase64, imageHash);
+
   const appendInput: AppendVerifierRunInput = {
     runId: input.runId,
     runKind: input.runKind,
@@ -176,7 +214,7 @@ export async function verifyImage(
     extractorModelId,
     extractorVersion: EXTRACTOR_VERSION,
     imageHash,
-    imagePath: null,
+    imagePath,
     expected: input.expected,
     extracted,
     scope: metrics.scope,

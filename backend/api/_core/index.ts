@@ -45,6 +45,11 @@ async function startServer() {
     "/api/feedback-images",
     express.static(path.join(DATA_DIR, "feedback-images"))
   );
+  // Static verifier images (PNGs written per verified state, content-addressed)
+  app.use(
+    "/api/verifier-images",
+    express.static(path.join(DATA_DIR, "verifier-images"))
+  );
   // tRPC API
   app.use(
     "/api/trpc",

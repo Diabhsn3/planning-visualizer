@@ -11,6 +11,8 @@ export interface FeedbackContext {
   transformerHash: string | null;
   rendererHash: string | null;
   llmProvider: string | null;
+  /** sha256[:12] of the problem PDDL — distinguishes states across problems. */
+  problemHash: string | null;
   stateIndex: number;
   totalStates: number;
   symbolicState: unknown;

@@ -479,3 +479,269 @@ export function aggregateByMethodDomainAndVersion(
   });
   return result;
 }
+
+// ============================================================================
+// Full rollup WITH per-state detail + human feedback
+// ============================================================================
+//
+// Same hierarchy as aggregateByMethodDomainAndVersion (method → domain →
+// version → problem) but:
+//   - deduped to ONE entry per unique state (newest verifier row wins),
+//   - each problem carries its `states[]` detail (screenshot + agent score
+//     + human rating/comment),
+//   - every level also reports an average HUMAN rating (mean of per-problem
+//     human averages, equal weight, null-aware) alongside the agent P/R.
+//
+// Human feedback is joined to a state by image hash first (exact same
+// photo), falling back to trajectory + stateIndex. Feedback carries no
+// problem id, so for a saved domain run on multiple problems the fallback
+// can attach the same rating to the same state index across problems —
+// the image-hash match resolves that whenever both sides recorded a hash.
+
+export interface FullRow extends AggregateRowFull {
+  problemHash: string | null;
+  stateIndex: number;
+  tp: number;
+  fp: number;
+  fn: number;
+  parseFailure: boolean;
+  imageHash: string;
+  imagePath: string | null;
+  createdAt: string;
+}
+
+export interface FullFeedback {
+  rating: number;
+  comment: string | null;
+  savedDomainId: number | null;
+  domainName: string;
+  rendererHash: string | null;
+  transformerHash: string | null;
+  problemHash: string | null;
+  stateIndex: number;
+  imageHash: string | null;
+  imageFile: string;
+  createdAt: string;
+}
+
+export interface StateDetail {
+  stateIndex: number;
+  imageUrl: string | null;
+  precision: number | null;
+  recall: number | null;
+  tp: number;
+  fp: number;
+  fn: number;
+  parseFailure: boolean;
+  humanRating: number | null;
+  humanComment: string | null;
+}
+
+export interface ProblemFull {
+  problem: string;
+  avgPrecision: number | null;
+  avgRecall: number | null;
+  avgHumanRating: number | null;
+  nStates: number;
+  nHumanRated: number;
+  states: StateDetail[];
+}
+
+export interface VersionFull {
+  savedDomainId: number | null;
+  versionLabel: string;
+  avgPrecision: number | null;
+  avgRecall: number | null;
+  avgHumanRating: number | null;
+  nStates: number;
+  nHumanRated: number;
+  problems: ProblemFull[];
+}
+
+export interface DomainFull {
+  domainName: string;
+  avgPrecision: number | null;
+  avgRecall: number | null;
+  avgHumanRating: number | null;
+  nStates: number;
+  nHumanRated: number;
+  nVersions: number;
+  versions: VersionFull[];
+}
+
+export interface MethodFull {
+  renderMethod: string;
+  avgPrecision: number | null;
+  avgRecall: number | null;
+  avgHumanRating: number | null;
+  nStates: number;
+  nHumanRated: number;
+  nDomains: number;
+  domains: DomainFull[];
+}
+
+function trajKey(
+  savedDomainId: number | null,
+  domainName: string,
+  rendererHash: string | null,
+  transformerHash: string | null
+): string {
+  return savedDomainId != null
+    ? `saved:${savedDomainId}`
+    : `local:${domainName}:${rendererHash ?? ""}:${transformerHash ?? ""}`;
+}
+
+export function aggregateWithFeedback(
+  rows: FullRow[],
+  feedback: FullFeedback[]
+): MethodFull[] {
+  // --- Feedback lookups (newest wins) ---
+  // Primary: exact same photo (image hash). Fallback: trajectory +
+  // problemHash + stateIndex, so a rating on one problem never bleeds onto
+  // a same-index state of another problem in the same saved domain. Only
+  // feedback that carries a problemHash participates in the fallback map;
+  // legacy feedback without one is reachable only via the image hash.
+  const fbByImageHash = new Map<string, FullFeedback>();
+  const fbByTrajProblem = new Map<string, FullFeedback>();
+  const fbSorted = [...feedback].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  for (const f of fbSorted) {
+    if (f.imageHash) fbByImageHash.set(f.imageHash, f);
+    if (f.problemHash) {
+      fbByTrajProblem.set(
+        `${trajKey(f.savedDomainId, f.domainName, f.rendererHash, f.transformerHash)}|${f.problemHash}|${f.stateIndex}`,
+        f
+      );
+    }
+  }
+  function findFeedback(r: FullRow): FullFeedback | null {
+    if (r.imageHash) {
+      const hit = fbByImageHash.get(r.imageHash);
+      if (hit) return hit;
+    }
+    if (r.problemHash) {
+      return (
+        fbByTrajProblem.get(
+          `${trajKey(r.savedDomainId, r.domainName, r.rendererHash, r.transformerHash)}|${r.problemHash}|${r.stateIndex}`
+        ) ?? null
+      );
+    }
+    return null;
+  }
+
+  // --- Bucket rows, dedup to newest per unique state ---
+  interface ProblemBucket { label: string; states: Map<number, FullRow>; }
+  interface VersionBucket { savedDomainId: number | null; label: string; problems: Map<string, ProblemBucket>; }
+  interface DomainBucket { versions: Map<string, VersionBucket>; }
+  interface MethodBucket { domains: Map<string, DomainBucket>; }
+  const methods = new Map<string, MethodBucket>();
+
+  for (const r of rows) {
+    const method = inferRenderMethod(r);
+    const domain = r.domainName;
+    const versionKey = r.savedDomainId != null ? `saved-${r.savedDomainId}` : `local-${domain}`;
+    const versionLabel = r.savedDomainDisplayName ?? r.domainName;
+    const problemKey = r.problemHash ?? r.problem ?? "(unknown)";
+    const problemLabel = r.problem ?? "(unknown)";
+
+    let m = methods.get(method);
+    if (!m) { m = { domains: new Map() }; methods.set(method, m); }
+    let d = m.domains.get(domain);
+    if (!d) { d = { versions: new Map() }; m.domains.set(domain, d); }
+    let v = d.versions.get(versionKey);
+    if (!v) { v = { savedDomainId: r.savedDomainId, label: versionLabel, problems: new Map() }; d.versions.set(versionKey, v); }
+    let p = v.problems.get(problemKey);
+    if (!p) { p = { label: problemLabel, states: new Map() }; v.problems.set(problemKey, p); }
+    const existing = p.states.get(r.stateIndex);
+    if (!existing || r.createdAt.localeCompare(existing.createdAt) > 0) {
+      p.states.set(r.stateIndex, r);
+    }
+  }
+
+  const imgUrl = (r: FullRow, fb: FullFeedback | null): string | null => {
+    if (r.imagePath) return `/api/${r.imagePath}`;
+    if (fb) return `/api/${fb.imageFile}`;
+    return null;
+  };
+
+  const result: MethodFull[] = [];
+  for (const [method, m] of methods) {
+    const domainsOut: DomainFull[] = [];
+    for (const [domain, d] of m.domains) {
+      const versionsOut: VersionFull[] = [];
+      for (const v of d.versions.values()) {
+        const problemsOut: ProblemFull[] = [];
+        for (const p of v.problems.values()) {
+          const states: StateDetail[] = [...p.states.values()]
+            .sort((a, b) => a.stateIndex - b.stateIndex)
+            .map((r) => {
+              const fb = findFeedback(r);
+              return {
+                stateIndex: r.stateIndex,
+                imageUrl: imgUrl(r, fb),
+                precision: r.precision,
+                recall: r.recall,
+                tp: r.tp,
+                fp: r.fp,
+                fn: r.fn,
+                parseFailure: r.parseFailure,
+                humanRating: fb ? fb.rating : null,
+                humanComment: fb ? fb.comment : null,
+              };
+            });
+          problemsOut.push({
+            problem: p.label,
+            avgPrecision: meanOrNull(states.map((s) => s.precision)),
+            avgRecall: meanOrNull(states.map((s) => s.recall)),
+            avgHumanRating: meanOrNull(states.map((s) => s.humanRating)),
+            nStates: states.length,
+            nHumanRated: states.filter((s) => s.humanRating != null).length,
+            states,
+          });
+        }
+        problemsOut.sort((a, b) => a.problem.localeCompare(b.problem));
+        versionsOut.push({
+          savedDomainId: v.savedDomainId,
+          versionLabel: v.label,
+          avgPrecision: meanOrNull(problemsOut.map((p) => p.avgPrecision)),
+          avgRecall: meanOrNull(problemsOut.map((p) => p.avgRecall)),
+          avgHumanRating: meanOrNull(problemsOut.map((p) => p.avgHumanRating)),
+          nStates: problemsOut.reduce((s, p) => s + p.nStates, 0),
+          nHumanRated: problemsOut.reduce((s, p) => s + p.nHumanRated, 0),
+          problems: problemsOut,
+        });
+      }
+      versionsOut.sort((a, b) => a.versionLabel.localeCompare(b.versionLabel));
+      domainsOut.push({
+        domainName: domain,
+        avgPrecision: meanOrNull(versionsOut.map((v) => v.avgPrecision)),
+        avgRecall: meanOrNull(versionsOut.map((v) => v.avgRecall)),
+        avgHumanRating: meanOrNull(versionsOut.map((v) => v.avgHumanRating)),
+        nStates: versionsOut.reduce((s, v) => s + v.nStates, 0),
+        nHumanRated: versionsOut.reduce((s, v) => s + v.nHumanRated, 0),
+        nVersions: versionsOut.length,
+        versions: versionsOut,
+      });
+    }
+    domainsOut.sort((a, b) => a.domainName.localeCompare(b.domainName));
+    result.push({
+      renderMethod: method,
+      avgPrecision: meanOrNull(domainsOut.map((d) => d.avgPrecision)),
+      avgRecall: meanOrNull(domainsOut.map((d) => d.avgRecall)),
+      avgHumanRating: meanOrNull(domainsOut.map((d) => d.avgHumanRating)),
+      nStates: domainsOut.reduce((s, d) => s + d.nStates, 0),
+      nHumanRated: domainsOut.reduce((s, d) => s + d.nHumanRated, 0),
+      nDomains: domainsOut.length,
+      domains: domainsOut,
+    });
+  }
+  const order = ["basic", "claude", "gemini"];
+  result.sort((a, b) => {
+    const ai = order.indexOf(a.renderMethod);
+    const bi = order.indexOf(b.renderMethod);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    return a.renderMethod.localeCompare(b.renderMethod);
+  });
+  return result;
+}
