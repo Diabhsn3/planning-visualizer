@@ -9,6 +9,21 @@ function fmt(n: number | null, digits = 3): string {
   return n.toFixed(digits);
 }
 
+function ratingDescriptor(r: number): string {
+  if (r >= 4.75) return "Perfect";
+  if (r >= 4) return "Mostly correct";
+  if (r >= 3) return "Partial — some issues";
+  if (r >= 2) return "Mostly wrong";
+  return "Totally off";
+}
+
+function ratingColor(r: number): string {
+  if (r >= 4) return "text-green-400";
+  if (r >= 3) return "text-yellow-400";
+  if (r >= 2) return "text-orange-400";
+  return "text-red-400";
+}
+
 // Top-level tabs always shown in this order, even if a section is empty.
 const SECTIONS: { id: "basic" | "claude" | "gemini"; label: string }[] = [
   { id: "basic", label: "Basic" },
@@ -22,6 +37,7 @@ export default function Verifier() {
 
   const aggQuery = trpc.verifier.aggregateByMethodDomainAndVersion.useQuery();
   const runsQuery = trpc.verifier.listVerifierRuns.useQuery();
+  const feedbackQuery = trpc.feedback.listFeedbackWithScores.useQuery();
 
   const methodsByKey = useMemo(() => {
     const m = new Map<string, (typeof aggQuery.data)[number]>();
@@ -190,6 +206,109 @@ export default function Verifier() {
             })}
           </div>
         )}
+
+        {/* Human feedback — each entry shows the photo, the human rating +
+            comment, and the agent's score for the same photo. */}
+        <section className="rounded-xl border border-white/[0.08] bg-[#0F1722] overflow-hidden">
+          <div className="px-4 py-3 border-b border-white/[0.05] text-xs text-slate-400" style={mono}>
+            Human feedback ({(feedbackQuery.data ?? []).length})
+          </div>
+          {feedbackQuery.isLoading ? (
+            <div className="px-4 py-6 text-xs text-slate-500" style={mono}>
+              loading…
+            </div>
+          ) : (feedbackQuery.data ?? []).length === 0 ? (
+            <div className="px-4 py-6 text-xs text-slate-500" style={mono}>
+              No human feedback yet. Rate a state on the visualizer and it will
+              appear here alongside the agent score.
+            </div>
+          ) : (
+            <div className="divide-y divide-white/[0.04]">
+              {(feedbackQuery.data ?? []).map((f) => (
+                <div key={f.id} className="flex gap-4 px-4 py-4">
+                  {/* Photo */}
+                  <a
+                    href={f.imageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0"
+                    title="Open full image"
+                  >
+                    <img
+                      src={f.imageUrl}
+                      alt={`feedback ${f.id}`}
+                      className="w-28 h-20 object-contain rounded-lg border border-white/[0.08] bg-black/40"
+                    />
+                  </a>
+
+                  {/* Details */}
+                  <div className="flex-1 min-w-0 space-y-1.5" style={mono}>
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-wide text-slate-500">
+                      <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-300">
+                        {f.renderMethod}
+                      </span>
+                      <span className="text-slate-300">{f.domainName}</span>
+                      {f.versionLabel && f.versionLabel !== f.domainName && (
+                        <>
+                          <span className="text-slate-700">·</span>
+                          <span className="text-slate-400">{f.versionLabel}</span>
+                        </>
+                      )}
+                      {f.problem && (
+                        <>
+                          <span className="text-slate-700">·</span>
+                          <span className="text-slate-400">{f.problem}</span>
+                        </>
+                      )}
+                      <span className="text-slate-700">·</span>
+                      <span className="text-slate-500">
+                        state {f.stateIndex + 1}/{f.totalStates}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-slate-500">Human:</span>
+                      <span className={`font-semibold tabular-nums ${ratingColor(f.rating)}`}>
+                        {f.rating.toFixed(1)} / 5
+                      </span>
+                      <span className="text-slate-500">{ratingDescriptor(f.rating)}</span>
+                    </div>
+
+                    {f.comment && (
+                      <div className="text-xs text-slate-300 bg-white/[0.03] border border-white/[0.06] rounded-md px-2.5 py-1.5 whitespace-pre-wrap">
+                        {f.comment}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-slate-500">Agent:</span>
+                      {f.verification ? (
+                        <>
+                          <span className="text-slate-300">
+                            P=<span className="tabular-nums text-slate-100">{fmt(f.verification.precision, 2)}</span>
+                          </span>
+                          <span className="text-slate-300">
+                            R=<span className="tabular-nums text-slate-100">{fmt(f.verification.recall, 2)}</span>
+                          </span>
+                          <span className="text-slate-600">
+                            TP {f.verification.tp} · FP {f.verification.fp} · FN {f.verification.fn}
+                          </span>
+                          {f.verification.parseFailure && (
+                            <span className="text-amber-400 text-[10px] uppercase tracking-wide">
+                              parse failure
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-slate-600">no verification for this photo</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* Recent runs — debug aid, scoped to the active section */}
         <section className="rounded-xl border border-white/[0.08] bg-[#0F1722] overflow-hidden">
