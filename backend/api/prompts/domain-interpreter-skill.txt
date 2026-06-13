@@ -377,6 +377,7 @@ export function transformTransport(raw: RawState): RenderedState {
 8. **No overlapping** — no two objects at the exact same position
 9. **Preserve all raw.relations** in the output
 10. **Single export** — only `export function transformDomainName(...)`
+11. **Always return a complete `RenderedState`** — never return `undefined`/`null`, never throw; position every object on EVERY code path. A missing `return` on some branch blanks or crashes the renderer.
 
 # FINAL INSTRUCTIONS
 

@@ -335,12 +335,35 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
       try {
         const transformFn = compileTransformer(transformerCode);
         if (transformFn) {
-          effectiveState = transformFn(state);
+          const out = transformFn(state);
+          // A generated transformer can RETURN a bad value (undefined / wrong
+          // shape) without throwing — guard so it can never crash the app
+          // (reading `.domain` on undefined). Fall back to the raw state.
+          if (out && typeof out === "object" && Array.isArray((out as RenderedState).objects)) {
+            effectiveState = out;
+          } else {
+            console.warn("[Transformer] returned a non-state value; using raw state");
+          }
         }
       } catch (err) {
         console.error("[Transformer] Runtime error:", err);
         // Fall back to raw state on error
       }
+    }
+    // Final safety net: never let a bad transformer/renderer crash the app by
+    // reading `.domain` on a missing state. Fall back to the raw state; if even
+    // that is unusable, draw a neutral frame and stop instead of throwing (which
+    // would blow up the whole React tree via the error boundary).
+    if (!effectiveState || typeof effectiveState !== "object") {
+      effectiveState = state;
+    }
+    if (!effectiveState || typeof effectiveState !== "object" || typeof effectiveState.domain !== "string") {
+      drawDefaultBackground(ctx, width, height);
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.font = "13px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("No valid state to display for this step.", width / 2, height / 2);
+      return;
     }
 
     // ============================================

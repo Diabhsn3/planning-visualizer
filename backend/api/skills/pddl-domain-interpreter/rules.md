@@ -135,6 +135,7 @@ This makes the final image read as: `p1` inside `a1` inside the `city2` box ⇒ 
 - **Do NOT** return objects without a `properties.color` field — this will break the Canvas renderer
 - **Do NOT** position objects related by `at`/`in`/`on` far apart and expect a line to connect them — place the contained object INSIDE its container's region
 - **Do NOT** leave any object floating in empty/decorative space — route locationless objects to a single "Unplaced" region
+- **Do NOT** return `undefined`/`null` or throw — ALWAYS return a complete `RenderedState` with every object positioned, on EVERY code path. A missing `return` on some branch blanks or crashes the renderer.
 
 ## Validation Checklist
 
