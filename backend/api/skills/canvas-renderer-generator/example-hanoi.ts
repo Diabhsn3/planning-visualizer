@@ -23,6 +23,7 @@ export interface VisualRelation {
   type: string;
   source: string;
   target?: string;
+  properties?: Record<string, any>;
 }
 
 export interface RenderedState {

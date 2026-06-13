@@ -18,8 +18,9 @@ Your job is to write a TypeScript function that takes one of these raw states an
 This skill includes reference files you MUST read before generating code:
 
 1. **`interfaces.ts`** — The exact TypeScript interfaces (`RawState`, `RenderedState`, `VisualObject`, `VisualRelation`) that define the input and output types. You MUST use these exact types.
-2. **`example-blocks-world.ts`** — A complete, working transformer for the Blocks World domain. Study this carefully as a template for your output.
-3. **`rules.md`** — Rules, constraints, and best practices for the generated transformer function.
+2. **`example-blocks-world.ts`** — A complete transformer for the Blocks World domain (a STACKING domain). Study it as the template for stacking / `on` layouts.
+3. **`example-transport.ts`** — A complete transformer for a locations + nested-containment domain (vehicles `at` locations, passengers `in` vehicles). Study it as the template for ANY domain with `at` / `in` / `on` location relations — the most common case. It shows how to position contained objects INSIDE their container, set `containerId`/`relationship`, and route locationless objects to an "Unplaced" region.
+4. **`rules.md`** — Rules, constraints, and best practices for the generated transformer function. Read the **"#1 GOAL — LAY OUT FOR FAITHFUL READBACK"** section FIRST.
 
 ## What You Receive
 

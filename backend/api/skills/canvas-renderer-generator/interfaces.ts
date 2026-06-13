@@ -24,6 +24,13 @@ export interface VisualRelation {
   source: string;
   /** ID of the target object (optional — some relations are unary, e.g., "clear") */
   target?: string;
+  /**
+   * Optional, advisory hints from the Stage 1 transformer. May be absent —
+   * always fall back to reading `type` directly if a hint is missing.
+   * Common hint: `relationship: "contained" | "nested" | "edge"` tells you
+   * whether to draw the relation as physical containment/nesting or as a line.
+   */
+  properties?: Record<string, any>;
 }
 
 export interface RenderedState {

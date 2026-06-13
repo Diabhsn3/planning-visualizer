@@ -243,16 +243,20 @@ function extractCode(response: string): string {
     return codeBlockMatch[1].trim();
   }
 
-  // If no code block, check if the response starts with typical code patterns
+  // If no code block, strip any leading prose: slice from the first line that
+  // begins a code construct (comment or top-level declaration). Models sometimes
+  // prepend a sentence like "Now I'll generate the renderer…" despite being told
+  // not to; without this it gets transpiled into garbage and breaks the file.
   const trimmed = response.trim();
-  if (
-    trimmed.startsWith("export ") ||
-    trimmed.startsWith("interface ") ||
-    trimmed.startsWith("function ") ||
-    trimmed.startsWith("//") ||
-    trimmed.startsWith("const ")
-  ) {
-    return trimmed;
+  const lines = trimmed.split("\n");
+  const codeStart = lines.findIndex((l) =>
+    /^\s*(\/\/|\/\*|\*|import\s|export\s|interface\s|type\s+\w|const\s+\w|let\s+\w|var\s+\w|function\s+\w|async\s+function\s|class\s+\w)/.test(l),
+  );
+  if (codeStart >= 0) {
+    if (codeStart > 0) {
+      console.warn(`[LLM Renderer] Stripped ${codeStart} leading non-code line(s) from response`);
+    }
+    return lines.slice(codeStart).join("\n").trim();
   }
 
   // Last resort: return the whole response trimmed

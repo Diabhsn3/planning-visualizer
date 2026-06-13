@@ -8,6 +8,19 @@ A planning visualizer app runs a planner (Fast Downward) on PDDL problems and vi
 
 Your job is to write a TypeScript function that takes one of these flat raw states and transforms it into a fully enriched `RenderedState` — with positions, colors, labels, and layout — ready for a Canvas renderer to draw.
 
+# ⭐ #1 GOAL — LAY OUT FOR FAITHFUL READBACK (read this first)
+
+The renderer you feed can only be as legible as the positions you assign. Your #1 job is to lay objects out so a viewer of the FINAL IMAGE — a human OR a vision model — can reconstruct the EXACT set of true predicates, with correct identities. Aesthetics are strictly secondary.
+
+CONTAINMENT, NOT CONNECTOR LINES. When a relation means located-in / at / on / holding / loaded / inside, the contained object must end up DRAWN INSIDE its container. You make that possible by:
+- Positioning the contained object's [x, y] INSIDE its container's region (near the container, offset so multiple contents tile without overlap) — NOT at a far-away spot the renderer would have to connect with a line.
+- Tagging the relation with `properties.relationship`: "contained" (`at`/`on` a place), "nested" (`in` a vehicle/container), or "edge" (a genuine peer link like connected/road/adjacent). Advisory only — the renderer also reads the relation `type`.
+- Setting `properties.containerId` on the contained object to its container's id, so the renderer can nest it and grow the container to fit.
+
+A line across the canvas between two distant glyphs reads as "near"/"connected" and often crosses unrelated containers, causing misattribution (an aircraft `at city2` read as `at city4`). Place the object INSIDE city2 instead.
+
+EVERY OBJECT HAS A HOME; NOTHING FLOATS. Give every object a position inside a real region. An object with NO `at`/`in`/`on` relation this step must go to a dedicated "Unplaced" holding area (a reserved, labeled zone) — never parked on empty or decorative space. Do NOT invent virtual "band"/"lane"/"road"/"strip" objects to park items on.
+
 # INPUT FORMAT
 
 The user will provide:
@@ -104,6 +117,18 @@ Choose the layout that matches the domain's natural visual metaphor:
 - **Locations** (`at ?x ?loc`): divide canvas into location regions, objects inside their region
 - **Graph/network** (`connected ?a ?b`): arrange nodes in grid or circle
 - **Containers** (`in ?x ?container`): draw containers as rectangles, contents inside
+
+### Worked layout — Locations & Transport (`at` / `in` / `on`)
+
+The most common — and most often mis-laid-out — class (logistics, ferry, zenotravel, gripper, depot, …). When the domain has locations plus things that are `at` a location and possibly `in` a vehicle/container, compute positions like this:
+1. Locations → a grid of large regions; give each a base `[x, y]` and `width`/`height` in `properties` so the renderer draws a labeled box.
+2. An object `at` a location → a position INSIDE that location's region, offset by its index among the location's contents (tile, no overlap). Set `properties.containerId` to the location id.
+3. An object `in` a vehicle → a position INSIDE the vehicle's region (nested). Set `properties.containerId` to the vehicle id. If the vehicle is `at` a location, the passenger lands inside the location too: location ⊃ vehicle ⊃ passenger.
+4. Tag each such relation with `properties.relationship` = "contained" (`at`/`on`) or "nested" (`in`).
+5. Objects with no location → a reserved "Unplaced" region.
+6. Keep the raw PDDL `type` on each VisualObject (e.g. `type: o.type`, role in `properties.role`) so the renderer can pick a recognizable ICON per type (plane, truck, ship, person…). Size vehicle/container boxes generously so a recognizable icon plus its contents fit.
+
+See the "EXAMPLE OUTPUT (Transport / Locations Domain)" below for a complete reference transformer.
 
 Canvas is **800 × 600** pixels. Origin at top-left. Y increases downward.
 
@@ -214,6 +239,129 @@ export function transformBlocksWorld(raw: RawState): RenderedState {
     relations: raw.relations.map(r => ({ type: r.type, source: r.source, target: r.target, properties: r.properties })),
     metadata: raw.metadata,
   };
+}
+```
+
+# EXAMPLE OUTPUT (Transport / Locations Domain)
+
+Use THIS template for ANY domain with `at` / `in` / `on` location relations (logistics, ferry, zenotravel, gripper, depot, …). It classifies objects by ROLE inferred from the relation target TYPES (a "location" is any object whose TYPE appears as an `at` target; a "vehicle" is any object whose TYPE appears as an `in` target; everything else is a "mover" — using the *type* means a location with nothing at it right now is still drawn as an empty box, not dumped into "Unplaced"), lays locations out as a grid of boxes plus an "Unplaced" box, positions every contained object INSIDE its container's box (tiled, no overlap), and tags `containerId` / `relationship` so the renderer draws containment — never lines.
+
+```typescript
+interface RawRelation { type: string; source: string; target?: string; properties?: Record<string, any>; }
+interface RawObject { id: string; type: string; label: string; properties?: Record<string, any>; }
+interface RawState { domain: string; objects: RawObject[]; relations: RawRelation[]; metadata?: Record<string, any>; }
+interface VisualObject { id: string; type: string; label: string; position: [number, number]; properties: { color: string; [key: string]: any; }; }
+interface VisualRelation { type: string; source: string; target?: string; properties?: Record<string, any>; }
+interface RenderedState { domain: string; objects: VisualObject[]; relations: VisualRelation[]; metadata?: Record<string, any>; }
+
+const PALETTE = ["#4E79A7","#F28E2B","#59A14F","#E15759","#B07AA1","#76B7B2","#FF9DA7","#EDC948","#9C755F","#499894"];
+function hashId(id: string): number { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return h; }
+function colorFor(id: string): string { return PALETTE[hashId(id) % PALETTE.length]; }
+function makeLabel(id: string): string {
+  const m = id.match(/^([a-zA-Z_-]+?)[\s_-]?(\d+|[A-Z])$/);
+  if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase() + " " + m[2];
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+const CANVAS_W = 800;
+const CANVAS_H = 600;
+const UNPLACED = "__unplaced__";
+
+function tileSlots(n: number, box: { x: number; y: number; w: number; h: number }, topPad: number) {
+  if (n <= 0) return [] as Array<{ cx: number; cy: number; cw: number; ch: number }>;
+  const cols = Math.max(1, Math.ceil(Math.sqrt(n)));
+  const rows = Math.ceil(n / cols);
+  const innerX = box.x + 6, innerY = box.y + topPad, innerW = box.w - 12, innerH = box.h - topPad - 6;
+  const cw = innerW / cols, ch = innerH / rows;
+  const out: Array<{ cx: number; cy: number; cw: number; ch: number }> = [];
+  for (let i = 0; i < n; i++) { const c = i % cols, r = Math.floor(i / cols); out.push({ cx: innerX + c * cw + cw / 2, cy: innerY + r * ch + ch / 2, cw, ch }); }
+  return out;
+}
+
+export function transformTransport(raw: RawState): RenderedState {
+  const typeOf: Record<string, string> = {};
+  for (const o of raw.objects) typeOf[o.id] = o.type;
+  const atOf: Record<string, string> = {};
+  const inOf: Record<string, string> = {};
+  const locationTypes = new Set<string>();
+  const vehicleTypes = new Set<string>();
+  for (const r of raw.relations) {
+    if (r.type === "at" && r.target) { atOf[r.source] = r.target; if (typeOf[r.target]) locationTypes.add(typeOf[r.target]); }
+    else if (r.type === "in" && r.target) { inOf[r.source] = r.target; if (typeOf[r.target]) vehicleTypes.add(typeOf[r.target]); }
+  }
+  const role = (id: string): "location" | "vehicle" | "mover" =>
+    locationTypes.has(typeOf[id]) ? "location" : vehicleTypes.has(typeOf[id]) ? "vehicle" : "mover";
+
+  const realLocations = raw.objects.filter((o) => role(o.id) === "location").map((o) => o.id).sort();
+  const places = [...realLocations, UNPLACED];
+
+  const cols = Math.max(1, Math.ceil(Math.sqrt(places.length)));
+  const rows = Math.ceil(places.length / cols);
+  const margin = 20, pad = 10;
+  const cellW = (CANVAS_W - margin * 2) / cols, cellH = (CANVAS_H - margin * 2) / rows;
+  const placeRect: Record<string, { x: number; y: number; w: number; h: number }> = {};
+  places.forEach((pid, i) => {
+    const c = i % cols, r = Math.floor(i / cols);
+    placeRect[pid] = { x: margin + c * cellW + pad, y: margin + r * cellH + pad, w: cellW - pad * 2, h: cellH - pad * 2 };
+  });
+  const placeOf = (id: string): string => (atOf[id] && placeRect[atOf[id]] ? atOf[id] : UNPLACED);
+
+  const directContents: Record<string, string[]> = {};
+  const passengers: Record<string, string[]> = {};
+  for (const pid of places) directContents[pid] = [];
+  for (const o of raw.objects) {
+    if (role(o.id) === "location") continue;
+    if (role(o.id) === "mover" && inOf[o.id]) { (passengers[inOf[o.id]] = passengers[inOf[o.id]] || []).push(o.id); }
+    else { directContents[placeOf(o.id)].push(o.id); }
+  }
+
+  const positions: Record<string, [number, number]> = {};
+  const sizes: Record<string, { w: number; h: number }> = {};
+  for (const pid of places) {
+    const items = directContents[pid].slice().sort();
+    const slots = tileSlots(items.length, placeRect[pid], 26);
+    items.forEach((id, i) => {
+      const s = slots[i];
+      positions[id] = [s.cx, s.cy];
+      if (role(id) === "vehicle") {
+        const vw = Math.max(64, Math.min(s.cw - 10, 170)), vh = Math.max(48, Math.min(s.ch - 10, 110)); // room for a vehicle icon + passengers
+        sizes[id] = { w: vw, h: vh };
+        const vbox = { x: s.cx - vw / 2, y: s.cy - vh / 2, w: vw, h: vh };
+        const plist = (passengers[id] || []).slice().sort();
+        const pslots = tileSlots(plist.length, vbox, 18);
+        plist.forEach((pid2, j) => { positions[pid2] = [pslots[j].cx, pslots[j].cy]; });
+      }
+    });
+  }
+
+  const objects: VisualObject[] = [];
+  for (const pid of places) {
+    const rect = placeRect[pid];
+    const unplaced = pid === UNPLACED;
+    objects.push({
+      id: pid, type: unplaced ? "unplaced" : "location", label: unplaced ? "Unplaced" : makeLabel(pid),
+      position: [rect.x + rect.w / 2, rect.y + rect.h / 2],
+      properties: { color: unplaced ? "#9aa0a6" : colorFor(pid), role: "location", width: rect.w, height: rect.h, unplaced },
+    });
+  }
+  for (const o of raw.objects) {
+    const rl = role(o.id);
+    if (rl === "location") continue;
+    const pos = positions[o.id] || [CANVAS_W / 2, CANVAS_H / 2];
+    if (rl === "vehicle") {
+      const sz = sizes[o.id] || { w: 90, h: 60 };
+      objects.push({ id: o.id, type: o.type, label: makeLabel(o.id), position: pos, properties: { color: colorFor(o.id), role: "vehicle", width: sz.w, height: sz.h, containerId: placeOf(o.id) } }); // keep raw type (e.g. "aircraft") for icon choice
+    } else {
+      objects.push({ id: o.id, type: o.type, label: makeLabel(o.id), position: pos, properties: { color: colorFor(o.id), role: "mover", radius: 16, containerId: inOf[o.id] || placeOf(o.id) } });
+    }
+  }
+
+  const relations: VisualRelation[] = raw.relations.map((r) => ({
+    type: r.type, source: r.source, target: r.target,
+    properties: { ...(r.properties || {}), relationship: r.type === "in" ? "nested" : r.type === "at" ? "contained" : "edge" },
+  }));
+
+  return { domain: raw.domain, objects, relations, metadata: raw.metadata };
 }
 ```
 

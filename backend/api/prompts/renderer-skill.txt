@@ -8,6 +8,42 @@ You will receive:
 
 **CRITICAL**: The sample states are from a SINGLE small example problem. The actual problems your code will process may have MORE or FEWER objects, DIFFERENT object names, and DIFFERENT numbers of relations. Your renderer MUST handle ANY valid problem in this domain — never hardcode positions, colors, or layout based on the specific objects in the samples.
 
+# ⭐ #1 GOAL — FAITHFUL READBACK (read this first; it overrides aesthetics)
+
+The single most important property of a visualization is FAITHFUL READBACK: a viewer who has never seen the planning problem — a human OR a vision model — must be able to look at the rendered image ALONE and reconstruct the EXACT set of true ground predicates, with the correct object identities. Beauty and decoration are strictly secondary.
+
+- Draw every true relation so unambiguously that a viewer can name it and its arguments without guessing.
+- Never encode two different relations in visually similar ways, and never encode a relation in a way that could be mistaken for decoration or for a different relation.
+- If a relation is hard to draw unambiguously, draw it MORE explicitly (nest it, box it, label it) — never more subtly. A careful reader OMITS anything ambiguous, so ambiguity silently destroys correctness.
+
+## Containment beats connector lines (the most important drawing rule)
+
+When a relation means located-in / at / on / holding / loaded / inside — one object is physically AT or WITHIN another — draw the contained object PHYSICALLY INSIDE (or directly stacked ON) its container: adjacent and clearly bounded. Do NOT represent such a relation with a line drawn between two distant objects.
+
+Why this matters: a line across the canvas reads as "near" or "connected", and on its way it often passes over OTHER containers. Viewers then attribute the object to the wrong one. This is exactly how an aircraft that is `at city2` gets misread as `at city4` — the line from the aircraft to city2 happens to cross city4. Drawing the aircraft INSIDE the city2 box removes all doubt.
+
+- FORBIDDEN for any semantic relation: faint, low-alpha (globalAlpha < 0.85), dashed, or dotted connector lines. They read as decoration and get dropped.
+- A line is acceptable ONLY for a genuine graph edge between peers (e.g. connected, road, link, adjacent) that has no containment meaning — and then it must be SOLID, fully opaque, >= 2px thick, ideally with an arrowhead or a short label naming the relation.
+- This rule is CONDITIONAL on meaning: stacking (on ?x ?y, as in blocks/hanoi) stays a physical stack; a real connectivity graph stays a graph. Do not force the wrong metaphor.
+
+## No floating objects; no decorative pseudo-locations
+
+Every object must sit inside a clearly-bounded region that encodes its location/state. Never leave an object floating on a decorative strip (a "road", "runway", "water", or empty band) where its location is implied only by proximity.
+
+- Known location (an at/in/on relation): draw the object INSIDE that location's bounded region.
+- NO known location this step: place it in a single, explicitly-labeled "Unplaced" holding area (e.g. dashed gray border, muted fill), clearly separated from real locations.
+
+## Worked pattern — Locations & Transport (`at` / `in` / `on`)
+
+The most common case (logistics, ferry, zenotravel, gripper, depot, …). When the domain has locations plus things that are `at` a location and possibly `in` a vehicle/container:
+1. Draw each LOCATION as a large, labeled, solid-bordered box, sized to fit its contents; arrange the boxes on a grid.
+2. An object `at` a location is drawn INSIDE that location's box.
+3. An object `in` a vehicle is drawn nested INSIDE that vehicle's glyph, which is itself inside the location box when the vehicle is `at` a location: location box ⊃ vehicle glyph ⊃ passenger glyph.
+4. Tile contents inside their container with no overlap; grow the container to fit.
+5. Objects with no location go to the labeled "Unplaced" area.
+
+See the "EXAMPLE OUTPUT (Transport / Locations Domain)" below for a complete reference renderer.
+
 # THE DATA STRUCTURE
 The data you will visualize follows this exact TypeScript interface:
 
@@ -24,6 +60,7 @@ interface VisualRelation {
   type: string;
   source: string; // ID of the source object
   target?: string; // ID of the target object (optional)
+  properties?: Record<string, any>; // optional, advisory hints (e.g. { relationship: "contained" | "nested" | "edge" })
 }
 
 interface RenderedState {
@@ -62,6 +99,10 @@ The functions must be named exactly as follows, where `DomainName` is the CamelC
 5. **Colors:** Use a distinct, pleasing color palette. Use shadows or gradients for depth if appropriate.
 6. **Robustness:** Handle missing properties gracefully. Not all objects will have `position` or `properties`.
 7. **Genericity:** The renderer MUST work for any number of objects. Never hardcode positions for a specific problem. Always iterate over `state.objects` and `state.relations` dynamically.
+8. **Decoration must not look semantic:** Backgrounds and scenery (roads, runways, water, grids, clouds, gradients) must be subtle, low-contrast, and obviously non-semantic. Never draw a band/lane/strip/path that an object then "sits on" as if it were its location. Keep background work in `renderDomainNameBackground`; keep semantic regions (location boxes, containers) in the main render with solid borders and labels.
+9. **Tile, don't overlap; resize; keep stable:** Within any region/container, lay contents on a tidy grid with consistent gaps; never overlap. If contents exceed the container, ENLARGE the container (and its parent, if nested). Keep each object in the same screen region across states so only the action's effect visibly changes. OPTIONAL: if `state.metadata?.action` is present you may highlight the named object(s), without obscuring labels or containment.
+10. **Legend decodes relation ENCODINGS:** If you export a legend, explain every object glyph AND how each relation TYPE is encoded — containment and nesting, not only line styles (e.g. "X inside Y's box = at", "P nested in V = in", "dashed gray area = Unplaced"). Prefer a legend (not `undefined`) whenever relations are encoded by containment/nesting.
+11. **Draw recognizable ICONS, not generic boxes/dots:** Each object TYPE should look like what it represents, drawn with pure Canvas paths (no images) — an aircraft like an aircraft, a person like a person, a truck like a truck. Choose the silhouette from the object's `type`; keep a labeled box/disc as the FALLBACK only. A container's body can double as the area holding its contents (e.g. an aircraft fuselage as the cabin). Keep BOTH recognizability AND containment — an accurate but unreadable box-and-dot diagram is not the goal. (See the transport example's `drawPlane`/`drawPerson`.)
 
 # EXAMPLE OUTPUT (Hanoi Domain)
 Here is a perfect example of what your output should look like. Notice how it extracts data, calculates dynamic layout, and uses pure Canvas drawing:
@@ -194,6 +235,141 @@ export function renderHanoiBackground(ctx: CanvasRenderingContext2D, width: numb
 }
 
 export const renderHanoiLegend = undefined;
+```
+
+# EXAMPLE OUTPUT (Transport / Locations Domain)
+
+Use THIS template for ANY domain with `at` / `in` / `on` location relations (logistics, ferry, zenotravel, gripper, depot, …) — the most common case. Two ideas combined: (a) containment is drawn as NESTING, never connector lines; (b) each object is drawn as a recognizable Canvas-path ICON of what it is — an aircraft looks like an aircraft, a person like a person — chosen by `type` (`drawVehicleBox`/`drawToken` are the fallbacks; for a trucks/ferry domain add a truck/boat). The Stage 1 transformer already set each object's `position`; `properties.role` ∈ {"location","vehicle","mover"}; location/vehicle boxes carry `width`/`height`, movers carry `radius`; `type` is the raw PDDL type used to choose the icon. A location with `properties.unplaced` is the "Unplaced" holding area.
+
+```typescript
+interface VisualObject { id: string; type: string; label: string; position?: [number, number]; properties?: Record<string, any>; }
+interface VisualRelation { type: string; source: string; target?: string; properties?: Record<string, any>; }
+interface RenderedState { domain: string; objects: VisualObject[]; relations: VisualRelation[]; }
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+function hexToRgba(hex: string, a: number): string {
+  const m = hex.replace("#", "");
+  const v = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
+  return `rgba(${parseInt(v.slice(0,2),16)}, ${parseInt(v.slice(2,4),16)}, ${parseInt(v.slice(4,6),16)}, ${a})`;
+}
+function darken(hex: string, f = 0.65): string {
+  const m = hex.replace("#", "");
+  const v = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;
+  return `rgb(${Math.round(parseInt(v.slice(0,2),16)*f)}, ${Math.round(parseInt(v.slice(2,4),16)*f)}, ${Math.round(parseInt(v.slice(4,6),16)*f)})`;
+}
+
+// Type icons (Canvas paths) — make each object look like what it is.
+function drawPerson(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string): void {
+  const dark = darken(color, 0.5), headR = r * 0.4, headCy = cy - r * 0.46;
+  ctx.beginPath(); ctx.moveTo(cx - r*0.62, cy + r*0.78); ctx.lineTo(cx - r*0.48, cy + r*0.02);
+  ctx.quadraticCurveTo(cx, cy - r*0.34, cx + r*0.48, cy + r*0.02); ctx.lineTo(cx + r*0.62, cy + r*0.78); ctx.closePath();
+  ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = dark; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, headCy, headR, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill(); ctx.stroke();
+}
+function drawPlane(ctx: CanvasRenderingContext2D, box: {x:number;y:number;w:number;h:number}, color: string): void {
+  const cx = box.x + box.w/2, cy = box.y + box.h/2, fw = box.w*0.78, fh = Math.max(26, box.h*0.46);
+  const fx = cx - fw/2, fy = cy - fh/2, dark = darken(color, 0.5);
+  ctx.lineJoin = "miter"; ctx.fillStyle = hexToRgba(color, 0.6); ctx.strokeStyle = dark; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx+fw*0.06, cy-fh*0.45); ctx.lineTo(cx-fw*0.08, box.y+box.h*0.1); ctx.lineTo(cx-fw*0.28, box.y+box.h*0.12); ctx.lineTo(cx-fw*0.16, cy-fh*0.45); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+fw*0.06, cy+fh*0.45); ctx.lineTo(cx-fw*0.08, box.y+box.h*0.9); ctx.lineTo(cx-fw*0.28, box.y+box.h*0.88); ctx.lineTo(cx-fw*0.16, cy+fh*0.45); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(fx+fw*0.04, cy-fh*0.4); ctx.lineTo(fx-fw*0.08, cy-fh*0.95); ctx.lineTo(fx+fw*0.02, cy-fh*0.95); ctx.lineTo(fx+fw*0.16, cy-fh*0.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(fx+fw*0.04, cy+fh*0.4); ctx.lineTo(fx-fw*0.08, cy+fh*0.95); ctx.lineTo(fx+fw*0.02, cy+fh*0.95); ctx.lineTo(fx+fw*0.16, cy+fh*0.4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = hexToRgba(color, 0.95); ctx.strokeStyle = dark; ctx.lineWidth = 2; roundRect(ctx, fx, fy, fw, fh, fh/2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(fx+fw-3, fy+1); ctx.lineTo(fx+fw+box.w*0.12, cy); ctx.lineTo(fx+fw-3, fy+fh-1); ctx.closePath(); ctx.fillStyle = hexToRgba(color, 0.95); ctx.fill(); ctx.stroke();
+}
+function drawVehicleBox(ctx: CanvasRenderingContext2D, box: {x:number;y:number;w:number;h:number}, color: string): void {
+  ctx.fillStyle = hexToRgba(color, 0.9); ctx.strokeStyle = darken(color, 0.5); ctx.lineWidth = 2; roundRect(ctx, box.x, box.y, box.w, box.h, 8); ctx.fill(); ctx.stroke();
+}
+function drawToken(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string): void {
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = darken(color, 0.5); ctx.lineWidth = 1.5; ctx.stroke();
+}
+
+export function renderTransport(ctx: CanvasRenderingContext2D, state: RenderedState): void {
+  const locations = state.objects.filter((o) => o.properties?.role === "location");
+  const vehicles = state.objects.filter((o) => o.properties?.role === "vehicle");
+  const movers = state.objects.filter((o) => o.properties?.role === "mover");
+
+  // 1) Location boxes (behind contents). Unplaced = dashed grey, never a real location.
+  for (const loc of locations) {
+    if (!loc.position) continue;
+    const [cx, cy] = loc.position;
+    const w = loc.properties?.width ?? 160, h = loc.properties?.height ?? 120;
+    const x = cx - w / 2, y = cy - h / 2;
+    const unplaced = !!loc.properties?.unplaced;
+    const color = loc.properties?.color ?? "#4E79A7";
+    if (unplaced) { ctx.setLineDash([6, 4]); ctx.strokeStyle = "#9aa0a6"; ctx.fillStyle = "rgba(154,160,166,0.08)"; }
+    else { ctx.setLineDash([]); ctx.strokeStyle = color; ctx.fillStyle = hexToRgba(color, 0.1); }
+    ctx.lineWidth = 2;
+    roundRect(ctx, x, y, w, h, 10); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = unplaced ? "#5f6368" : darken(color);
+    ctx.font = "bold 14px Arial"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+    ctx.fillText(loc.label, x + 8, y + 6);
+  }
+
+  // 2) Vehicles — pick an icon matching the real-world type (here: aircraft).
+  //    For a trucks/ferry domain draw a truck/boat instead; fall back to a box.
+  for (const v of vehicles) {
+    if (!v.position) continue;
+    const [cx, cy] = v.position;
+    const w = v.properties?.width ?? 120, h = v.properties?.height ?? 80;
+    const box = { x: cx - w / 2, y: cy - h / 2, w, h };
+    const color = v.properties?.color ?? "#F28E2B";
+    const kind = (v.type || "").toString();
+    if (/air|plane|jet|flight|aircraft/i.test(kind)) drawPlane(ctx, box, color); else drawVehicleBox(ctx, box, color);
+    ctx.fillStyle = darken(color, 0.5); ctx.font = "bold 11px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(v.label, cx, box.y - 1);
+  }
+
+  // 3) Movers — people get a figure, anything else a labeled token; drawn at the
+  //    position the transformer chose (INSIDE their vehicle or location).
+  for (const m of movers) {
+    if (!m.position) continue;
+    const [cx, cy] = m.position;
+    const r = m.properties?.radius ?? 16;
+    const color = m.properties?.color ?? "#59A14F";
+    const kind = (m.type || "").toString();
+    if (/person|people|passenger|traveler|pilot|crew|human/i.test(kind)) drawPerson(ctx, cx, cy - 2, r, color); else drawToken(ctx, cx, cy, r * 0.8, color);
+    ctx.fillStyle = "#1a1a1a"; ctx.font = "bold 10px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.fillText(m.label, cx, cy + r * 0.85);
+  }
+}
+
+export function renderTransportBackground(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, "#f7f9fc"); g.addColorStop(1, "#eef2f7");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "rgba(120,130,150,0.06)";
+  for (let x = 20; x < width; x += 40) for (let y = 20; y < height; y += 40) { ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI * 2); ctx.fill(); }
+}
+
+export function renderTransportLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.save(); ctx.textAlign = "left"; ctx.textBaseline = "middle";
+  ctx.font = "bold 13px Arial"; ctx.fillStyle = "#1a1a1a"; ctx.fillText("Legend", x, y);
+  let ly = y + 24; const line = 30;
+  ctx.setLineDash([]); ctx.strokeStyle = "#4E79A7"; ctx.fillStyle = hexToRgba("#4E79A7", 0.1); ctx.lineWidth = 2;
+  roundRect(ctx, x, ly - 10, 28, 20, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#333"; ctx.font = "12px Arial"; ctx.fillText("Location  (a box = a place)", x + 38, ly);
+  ly += line;
+  drawPlane(ctx, { x: x - 2, y: ly - 12, w: 34, h: 24 }, "#F28E2B");
+  ctx.fillStyle = "#333"; ctx.fillText("Vehicle inside a Location  =  (at vehicle location)", x + 38, ly);
+  ly += line;
+  drawPerson(ctx, x + 14, ly, 12, "#59A14F");
+  ctx.fillStyle = "#333"; ctx.fillText("Person inside a Vehicle  =  (in person vehicle)", x + 38, ly);
+  ly += line;
+  ctx.setLineDash([6, 4]); ctx.strokeStyle = "#9aa0a6"; ctx.fillStyle = "rgba(154,160,166,0.08)"; ctx.lineWidth = 2;
+  roundRect(ctx, x, ly - 10, 28, 20, 4); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = "#333"; ctx.fillText("Unplaced  (no location this step)", x + 38, ly);
+  ctx.restore();
+}
 ```
 
 # FINAL INSTRUCTIONS

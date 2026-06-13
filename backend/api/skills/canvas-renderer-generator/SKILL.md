@@ -18,8 +18,9 @@ When the user provides a **domain name**, **2–3 sample enriched states** from 
 This skill includes reference files you MUST read before generating code:
 
 1. **`interfaces.ts`** — The exact TypeScript interfaces (`VisualObject`, `VisualRelation`, `RenderedState`) that define the data structure you will receive. You MUST use these exact types.
-2. **`example-hanoi.ts`** — A complete, working renderer for the Tower of Hanoi domain. Study this carefully as a template for your output.
-3. **`rules.md`** — Visualization rules, best practices, and common mistakes to avoid.
+2. **`example-hanoi.ts`** — A complete renderer for the Tower of Hanoi domain (a STACKING domain). Study it as the template for stacking / `on` layouts.
+3. **`example-transport.ts`** — A complete renderer for a locations + nested-containment domain (vehicles `at` locations, passengers `in` vehicles). Study it as the template for ANY domain with `at` / `in` / `on` location relations — the most common case, and the one most often drawn wrong.
+4. **`rules.md`** — Visualization rules, best practices, and common mistakes to avoid. Read the **"#1 GOAL — FAITHFUL READBACK"** section FIRST.
 
 ## IMPORTANT RULES
 
@@ -83,13 +84,18 @@ export function renderDomainNameLegend(ctx: CanvasRenderingContext2D, x: number,
 - If the domain is self-explanatory, export `undefined`
 - If a legend helps, draw it at the given (x, y) coordinates
 - Legend must be consistent across all states
+- If the domain encodes any relation by containment or nesting (e.g. `at`/`in`/`on`), PREFER a legend (not `undefined`) and make it decode those encodings — e.g. "X inside Y's box = `at`", "P nested in vehicle V = `in`", "dashed gray area = Unplaced" — not just the object glyphs
 
 ## Quality Criteria
 
 Before returning your code, verify:
 - [ ] All object types from the transformer code are visually represented
-- [ ] All relation types are visually represented (containment, stacking, connections)
-- [ ] Objects at the same location do NOT overlap — use offsets
+- [ ] `at` / `in` / `on` / `holding` relations are drawn as physical CONTAINMENT / NESTING — NOT as connector lines
+- [ ] No faint / dashed / dotted / `globalAlpha` < 0.85 lines are used for any meaningful relation (lines only for genuine peer graph edges, and then solid + opaque)
+- [ ] Every object sits inside a bounded region; objects with no location are in a clearly-labeled "Unplaced" area
+- [ ] A reader could reconstruct the exact predicate set (with correct ids) from the image alone
+- [ ] Each object type is drawn as a recognizable icon (Canvas paths) of what it is — an aircraft like an aircraft, a person like a person — not a generic box/dot, while still nesting contained objects
+- [ ] Objects at the same location do NOT overlap — use offsets / tiling
 - [ ] Container objects resize dynamically based on their contents
 - [ ] Labels are readable and positioned clearly
 - [ ] Colors are distinct and pleasing

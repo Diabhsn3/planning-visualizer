@@ -1,5 +1,40 @@
 # PDDL Domain Interpreter — Rules & Best Practices
 
+## ⭐ #1 GOAL — LAY OUT FOR FAITHFUL READBACK (read this first)
+
+The renderer you feed can only be as legible as the positions you assign. Your #1 job is to
+lay objects out so that a viewer of the FINAL IMAGE — a human OR a vision model — can
+reconstruct the EXACT set of true predicates, with the correct object identities. Aesthetics
+are strictly secondary.
+
+### Containment, not connector lines
+
+When a relation means **located-in / at / on / holding / loaded / inside**, the contained
+object must end up DRAWN INSIDE its container in the final image. You make that possible by:
+
+- **Positioning the contained object's `[x, y]` *inside its container's region*** — near the
+  container, offset so multiple contents tile without overlap — NOT at some far-away spot that
+  the renderer would have to connect with a line.
+- **Tagging the relation** with `properties.relationship`:
+  `"contained"` (object `at`/`on` a place), `"nested"` (object `in` a vehicle/container), or
+  `"edge"` (a genuine peer graph link such as `connected`/`road`/`adjacent`). This advisory hint
+  tells the renderer to draw containment instead of a line. (Advisory only — the renderer also
+  reads the relation `type`.)
+- **Setting `properties.containerId`** on the contained object to its container's id, so the
+  renderer can nest it and grow the container to fit.
+
+A line drawn across the canvas between two distant glyphs reads as "near"/"connected" and often
+crosses unrelated containers, causing misattribution (an aircraft `at city2` gets read as `at
+city4`). Place the object *inside* city2 instead.
+
+### Every object has a home; nothing floats
+
+Give every object a position inside a real region. An object with NO `at`/`in`/`on` relation in
+the current state must be sent to a dedicated **"Unplaced" holding area** (a reserved region of
+the canvas you treat as a labeled zone) — never parked on empty or decorative space. Do NOT
+invent virtual "band"/"lane"/"road"/"strip" objects to park items on; every position must
+correspond to a real location region, a real container, or the "Unplaced" area.
+
 ## Mandatory Rules
 
 ### Code Structure
@@ -53,6 +88,33 @@ Read the PDDL domain carefully and choose the layout that matches the domain's n
 - **Distribute objects evenly.** Use `(canvasWidth / (count + 1)) * index` patterns for horizontal distribution.
 - **Leave margins.** Keep at least 40px from canvas edges for labels.
 
+### Worked Layout: Locations & Transport (`at` / `in` / `on`)
+
+The most common domain class — and the one most often laid out wrong (logistics, ferry,
+zenotravel, gripper, depot, …). When the domain has *locations* plus things that are `at` a
+location and possibly `in` a vehicle/container, compute positions like this:
+
+1. **Locations** become a grid of large regions. Compute a base `[x, y]` (and a width/height in
+   `properties`) for each location so the renderer can draw it as a labeled box.
+2. **An object `at` a location** gets a position *inside that location's region*, offset by its
+   index among that location's contents so multiple contents tile without overlap. Set its
+   `properties.containerId` to the location's id.
+3. **An object `in` a vehicle/container** gets a position *at/inside the vehicle's position*
+   (nested). Set `properties.containerId` to the vehicle's id. If the vehicle is `at` a location,
+   the vehicle is already inside that location's region, so the nested object lands inside the
+   location too — giving **location ⊃ vehicle ⊃ passenger**.
+4. **Tag each such relation** with `properties.relationship` = `"contained"` (`at`/`on`) or
+   `"nested"` (`in`).
+5. **Unplaced objects** (no `at`/`in` in this state) get a position inside a reserved "Unplaced"
+   band; tag/track them so the renderer draws a distinct holding area.
+6. **Keep the raw PDDL `type`** on each VisualObject (e.g. `type: o.type`, with the role in
+   `properties.role`) so the renderer can pick a recognizable ICON per type (plane, truck, ship,
+   person…). **Size vehicle/container boxes generously** (width/height in `properties`) so a
+   recognizable icon plus its contents fit without overlap.
+
+This makes the final image read as: `p1` inside `a1` inside the `city2` box ⇒ `(in p1 a1)` and
+`(at a1 city2)`. See `example-transport.ts` for a complete reference transformer.
+
 ## Relation Handling
 
 15. **Preserve all relations.** Copy all relations from `raw.relations` to the output. Do not drop any.
@@ -71,6 +133,8 @@ Read the PDDL domain carefully and choose the layout that matches the domain's n
 - **Do NOT** use `Object.keys()` on `raw.relations` — it's an array, not an object
 - **Do NOT** return objects without a `position` field — this will break the Canvas renderer
 - **Do NOT** return objects without a `properties.color` field — this will break the Canvas renderer
+- **Do NOT** position objects related by `at`/`in`/`on` far apart and expect a line to connect them — place the contained object INSIDE its container's region
+- **Do NOT** leave any object floating in empty/decorative space — route locationless objects to a single "Unplaced" region
 
 ## Validation Checklist
 
@@ -86,3 +150,6 @@ Before returning your code, verify mentally that:
 - [ ] The function handles 1 object, 3 objects, and 10 objects correctly
 - [ ] No `import` statements in the output
 - [ ] No `Math.random()` calls
+- [ ] Objects related by `at`/`in`/`on` are positioned INSIDE their container's region (not far apart)
+- [ ] `properties.containerId` is set on every contained object; `properties.relationship` is set on every containment/nesting relation
+- [ ] Objects with no location land in a single reserved "Unplaced" region — none float in empty space
