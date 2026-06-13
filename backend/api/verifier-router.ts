@@ -236,6 +236,8 @@ export const verifierRouter = router({
         tp: r.tp.length,
         fp: r.fp.length,
         fn: r.fn.length,
+        fnItems: r.fn,
+        fpItems: r.fp,
         parseFailure: r.parseFailure,
         imageHash: r.imageHash,
         imagePath: r.imagePath ?? null,

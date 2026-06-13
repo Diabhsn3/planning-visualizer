@@ -504,6 +504,10 @@ export interface FullRow extends AggregateRowFull {
   tp: number;
   fp: number;
   fn: number;
+  /** Actual FN predicate strings — in `s` but not extracted (image missed them). */
+  fnItems: string[];
+  /** Actual FP predicate strings — extracted but not in `s` (hallucinated). */
+  fpItems: string[];
   parseFailure: boolean;
   imageHash: string;
   imagePath: string | null;
@@ -532,6 +536,10 @@ export interface StateDetail {
   tp: number;
   fp: number;
   fn: number;
+  /** FN predicates — present in ground truth, missing from the image. */
+  missing: string[];
+  /** FP predicates — extracted but not in ground truth (hallucinated). */
+  extra: string[];
   parseFailure: boolean;
   humanRating: number | null;
   humanComment: string | null;
@@ -683,6 +691,8 @@ export function aggregateWithFeedback(
                 tp: r.tp,
                 fp: r.fp,
                 fn: r.fn,
+                missing: r.fnItems,
+                extra: r.fpItems,
                 parseFailure: r.parseFailure,
                 humanRating: fb ? fb.rating : null,
                 humanComment: fb ? fb.comment : null,

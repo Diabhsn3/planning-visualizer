@@ -264,6 +264,24 @@ export default function Verifier() {
                                             )}
                                           </div>
 
+                                          {st.missing.length > 0 && (
+                                            <div className="flex gap-2 text-[11px]">
+                                              <span className="text-red-400/80 shrink-0">Missing (FN):</span>
+                                              <span className="text-slate-300 break-words">
+                                                {st.missing.join("  ")}
+                                              </span>
+                                            </div>
+                                          )}
+
+                                          {st.extra.length > 0 && (
+                                            <div className="flex gap-2 text-[11px]">
+                                              <span className="text-amber-400/80 shrink-0">Extra (FP):</span>
+                                              <span className="text-slate-300 break-words">
+                                                {st.extra.join("  ")}
+                                              </span>
+                                            </div>
+                                          )}
+
                                           <div className="flex items-center gap-2 text-xs">
                                             <span className="text-slate-500">Human:</span>
                                             {st.humanRating != null ? (
