@@ -1,5 +1,5 @@
 {
-  "nextId": 21,
+  "nextId": 25,
   "domains": [
     {
       "id": 1,
@@ -198,6 +198,50 @@
       "rendererHash": "002be98ef506761d9844784dce729e601e88ff8ee573470b4e4fbd274c081080",
       "provider": "Claude Sonnet 4.6",
       "createdAt": "2026-06-10T11:23:30.781Z"
+    },
+    {
+      "id": 21,
+      "displayName": "Ferry (9)",
+      "domainName": "ferry",
+      "pddlHash": "e34fb4c19d5c",
+      "domainPddl": "(define (domain ferry)\n  (:requirements :typing)\n  (:types\n    location car ferry\n  )\n  (:predicates\n    (at ?obj - (either car ferry) ?loc - location)\n    (on ?c - car ?f - ferry)\n    (empty ?f - ferry)\n  )\n\n  (:action board\n    :parameters (?c - car ?f - ferry ?loc - location)\n    :precondition (and\n      (at ?c ?loc)\n      (at ?f ?loc)\n      (empty ?f)\n    )\n    :effect (and\n      (not (at ?c ?loc))\n      (not (empty ?f))\n      (on ?c ?f)\n    )\n  )\n\n  (:action debark\n    :parameters (?c - car ?f - ferry ?loc - location)\n    :precondition (and\n      (on ?c ?f)\n      (at ?f ?loc)\n    )\n    :effect (and\n      (not (on ?c ?f))\n      (empty ?f)\n      (at ?c ?loc)\n    )\n  )\n\n  (:action sail\n    :parameters (?f - ferry ?from - location ?to - location)\n    :precondition (and\n      (at ?f ?from)\n    )\n    :effect (and\n      (not (at ?f ?from))\n      (at ?f ?to)\n    )\n  )\n)\n",
+      "transformerHash": "916b27ae384f58cc3b31aaf9b35a26047f76762d4578389e1973c83dacb12aa0",
+      "rendererHash": "5822922fa65fdd018dec45e731cc5433666cfd14acee689c9fa816df5c9d4932",
+      "provider": "Claude Sonnet 4.6",
+      "createdAt": "2026-06-13T17:59:12.020Z"
+    },
+    {
+      "id": 22,
+      "displayName": "Childsnack",
+      "domainName": "Childsnack",
+      "pddlHash": "39cd69099610",
+      "domainPddl": "(define (domain child-snack)\n  (:requirements :strips :typing)\n  (:types\n    child bread-portion content-portion sandwich tray place - object\n  )\n  (:constants kitchen - place)\n  (:predicates\n    (at_kitchen_bread ?b - bread-portion)\n    (at_kitchen_content ?c - content-portion)\n    (at_kitchen_sandwich ?s - sandwich)\n    (no_gluten_bread ?b - bread-portion)\n    (no_gluten_content ?c - content-portion)\n    (ontray ?s - sandwich ?t - tray)\n    (no_gluten_sandwich ?s - sandwich)\n    (allergic_gluten ?c - child)\n    (not_allergic_gluten ?c - child)\n    (served ?c - child)\n    (waiting ?c - child ?p - place)\n    (at ?t - tray ?p - place)\n    (notexist ?s - sandwich)\n  )\n\n  (:action make_sandwich_no_gluten\n    :parameters (?s - sandwich ?b - bread-portion ?c - content-portion)\n    :precondition (and (at_kitchen_bread ?b)\n                       (at_kitchen_content ?c)\n                       (no_gluten_bread ?b)\n                       (no_gluten_content ?c)\n                       (notexist ?s))\n    :effect (and (not (at_kitchen_bread ?b))\n                 (not (at_kitchen_content ?c))\n                 (at_kitchen_sandwich ?s)\n                 (no_gluten_sandwich ?s)\n                 (not (notexist ?s)))\n  )\n\n  (:action make_sandwich\n    :parameters (?s - sandwich ?b - bread-portion ?c - content-portion)\n    :precondition (and (at_kitchen_bread ?b)\n                       (at_kitchen_content ?c)\n                       (notexist ?s))\n    :effect (and (not (at_kitchen_bread ?b))\n                 (not (at_kitchen_content ?c))\n                 (at_kitchen_sandwich ?s)\n                 (not (notexist ?s)))\n  )\n\n  (:action put_on_tray\n    :parameters (?s - sandwich ?t - tray)\n    :precondition (and (at_kitchen_sandwich ?s)\n                       (at ?t kitchen))\n    :effect (and (not (at_kitchen_sandwich ?s))\n                 (ontray ?s ?t))\n  )\n\n  (:action serve_sandwich_no_gluten\n    :parameters (?s - sandwich ?c - child ?t - tray ?p - place)\n    :precondition (and (allergic_gluten ?c)\n                       (ontray ?s ?t)\n                       (waiting ?c ?p)\n                       (no_gluten_sandwich ?s)\n                       (at ?t ?p))\n    :effect (and (not (ontray ?s ?t))\n                 (served ?c))\n  )\n\n  (:action serve_sandwich\n    :parameters (?s - sandwich ?c - child ?t - tray ?p - place)\n    :precondition (and (not_allergic_gluten ?c)\n                       (waiting ?c ?p)\n                       (ontray ?s ?t)\n                       (at ?t ?p))\n    :effect (and (not (ontray ?s ?t))\n                 (served ?c))\n  )\n\n  (:action move_tray\n    :parameters (?t - tray ?p1 ?p2 - place)\n    :precondition (at ?t ?p1)\n    :effect (and (not (at ?t ?p1))\n                 (at ?t ?p2))\n  )\n)",
+      "transformerHash": "1c5e24fe628636fde2e0bce0904cbdd6896ff2be4d655a866b97bb76b9a1aa73",
+      "rendererHash": "67d5ff81697249cec58cca71250d0856558271c5354558f9eca27fd9a4eaceda",
+      "provider": "Claude Sonnet 4.6",
+      "createdAt": "2026-06-13T18:07:51.931Z"
+    },
+    {
+      "id": 23,
+      "displayName": "Ferrey",
+      "domainName": "ferrey",
+      "pddlHash": "e34fb4c19d5c",
+      "domainPddl": "(define (domain ferry)\n  (:requirements :typing)\n  (:types\n    location car ferry\n  )\n  (:predicates\n    (at ?obj - (either car ferry) ?loc - location)\n    (on ?c - car ?f - ferry)\n    (empty ?f - ferry)\n  )\n\n  (:action board\n    :parameters (?c - car ?f - ferry ?loc - location)\n    :precondition (and\n      (at ?c ?loc)\n      (at ?f ?loc)\n      (empty ?f)\n    )\n    :effect (and\n      (not (at ?c ?loc))\n      (not (empty ?f))\n      (on ?c ?f)\n    )\n  )\n\n  (:action debark\n    :parameters (?c - car ?f - ferry ?loc - location)\n    :precondition (and\n      (on ?c ?f)\n      (at ?f ?loc)\n    )\n    :effect (and\n      (not (on ?c ?f))\n      (empty ?f)\n      (at ?c ?loc)\n    )\n  )\n\n  (:action sail\n    :parameters (?f - ferry ?from - location ?to - location)\n    :precondition (and\n      (at ?f ?from)\n    )\n    :effect (and\n      (not (at ?f ?from))\n      (at ?f ?to)\n    )\n  )\n)\n",
+      "transformerHash": "8ec8f3b2be24538695df327c548e8a77ec73faa7b26c38e2cb4b70a6bab164d7",
+      "rendererHash": "2d827a6803860b188f7d9566ac56167968d81934a8bad03aeb3c9bb9c638640a",
+      "provider": "Claude Sonnet 4.6",
+      "createdAt": "2026-06-13T18:38:10.759Z"
+    },
+    {
+      "id": 24,
+      "displayName": "Zeno (4)",
+      "domainName": "zeno",
+      "pddlHash": "21fdf7a74f81",
+      "domainPddl": "(define (domain zenotravel)\n  (:requirements :typing)\n  (:types\n    person city aircraft\n  )\n  (:predicates\n    (at ?x - (either person aircraft) ?c - city)\n    (in ?p - person ?a - aircraft)\n  )\n\n  (:action board\n    :parameters (?p - person ?a - aircraft ?c - city)\n    :precondition (and\n      (at ?p ?c)\n      (at ?a ?c)\n    )\n    :effect (and\n      (not (at ?p ?c))\n      (in ?p ?a)\n    )\n  )\n\n  (:action debark\n    :parameters (?p - person ?a - aircraft ?c - city)\n    :precondition (and\n      (in ?p ?a)\n      (at ?a ?c)\n    )\n    :effect (and\n      (not (in ?p ?a))\n      (at ?p ?c)\n    )\n  )\n\n  (:action fly\n    :parameters (?a - aircraft ?c1 - city ?c2 - city)\n    :precondition (and\n      (at ?a ?c1)\n    )\n    :effect (and\n      (not (at ?a ?c1))\n      (at ?a ?c2)\n    )\n  )\n)\n",
+      "transformerHash": "277e4c84158ec47f5907476d9089956a099628b59dc47f58449ff96f7fea8673",
+      "rendererHash": "14f0e1d10c09df020943e2cc8a7087b73342b1fe75ffcbe4c722bf14d601327b",
+      "provider": "Claude Sonnet 4.6",
+      "createdAt": "2026-06-13T18:47:31.512Z"
     }
   ]
 }

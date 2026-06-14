@@ -1,5 +1,6 @@
 import {
   motion,
+  AnimatePresence,
   useReducedMotion,
   useScroll,
   useSpring,
@@ -10,6 +11,7 @@ import { useLocation } from "wouter";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
+import { useStudyMode } from "@/contexts/StudyModeContext";
 
 // Shared cubic-bezier — mirrors the one used in Visualizer.tsx so motion
 // across the two pages feels like the same product.
@@ -560,6 +562,18 @@ export default function Welcome() {
   const reduceMotion = useReducedMotion() ?? false;
   const go = () => navigate("/visualizer");
 
+  // ── Study-mode session start (facilitator) ────────────────────────────────
+  const { startSession } = useStudyMode();
+  const [showStudyPrompt, setShowStudyPrompt] = useState(false);
+  const [studyName, setStudyName] = useState("");
+  const beginStudy = () => {
+    const name = studyName.trim();
+    if (!name) return;
+    startSession(name);
+    setShowStudyPrompt(false);
+    navigate("/visualizer");
+  };
+
   // Enter / ⌘K opens the visualizer from anywhere on the welcome page
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -716,8 +730,18 @@ export default function Welcome() {
               <span>to open</span>
             </motion.div>
 
-            <motion.div
+            <motion.button
               {...stagger(9)}
+              type="button"
+              onClick={() => setShowStudyPrompt(true)}
+              className="mt-8 text-[10px] uppercase tracking-[0.28em] text-slate-500 hover:text-purple-300 transition-colors underline underline-offset-4 decoration-dotted"
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}
+            >
+              ◔ Start study session
+            </motion.button>
+
+            <motion.div
+              {...stagger(10)}
               className="mt-10 text-[10px] uppercase tracking-[0.28em] text-slate-600"
               style={{ fontFamily: "'JetBrains Mono', monospace" }}
             >
@@ -869,6 +893,75 @@ export default function Welcome() {
           </p>
         </motion.div>
       </section>
+
+      {/* ── STUDY-SESSION NAME PROMPT ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {showStudyPrompt && (
+          <motion.div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => setShowStudyPrompt(false)}
+            />
+            <motion.div
+              className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0F1A2E] p-7 shadow-2xl"
+              initial={{ opacity: 0, scale: 0.96, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 4 }}
+              transition={{ type: "spring", stiffness: 380, damping: 34 }}
+            >
+              <div
+                className="text-[10px] uppercase tracking-[0.28em] text-purple-300/85 mb-2"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                Study session
+              </div>
+              <h3 className="text-lg font-semibold text-slate-100">
+                Welcome — what's your full name?
+              </h3>
+              <p className="mt-1 text-sm text-slate-400">
+                We'll record it with your usability survey at the end of the
+                session.
+              </p>
+              <input
+                type="text"
+                autoFocus
+                value={studyName}
+                onChange={(e) => setStudyName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") beginStudy();
+                }}
+                placeholder="Full name"
+                className="mt-5 w-full px-3 py-2.5 text-sm bg-white/[0.04] border border-white/[0.1] rounded-lg text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-400/50"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              />
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowStudyPrompt(false)}
+                  className="px-4 py-2 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={beginStudy}
+                  disabled={!studyName.trim()}
+                  className="px-5 py-2 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  Begin session →
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

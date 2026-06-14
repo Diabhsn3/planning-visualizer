@@ -4,6 +4,8 @@ import { trpc } from "@/lib/trpc";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
 import { FeedbackBox } from "@/components/FeedbackBox";
+import { SusSurvey } from "@/components/SusSurvey";
+import { useStudyMode } from "@/contexts/StudyModeContext";
 import { VerifyStatus } from "@/components/VerifyStatus";
 import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
 import {
@@ -625,6 +627,8 @@ const CustomDomainLoading = ({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Visualizer() {
+  const studyMode = useStudyMode();
+  const [showSus, setShowSus] = useState(false);
   const [selectedDomain, setSelectedDomain]     = useState("blocks-world");
   const [selectedStrategy, setSelectedStrategy] = useState("astar-lmcut");
   const [problemType, setProblemType]           = useState<"example" | "custom">("example");
@@ -1611,6 +1615,27 @@ export default function Visualizer() {
             <PDDLHeaderBackground />
           </div>
 
+          {/* ── Study Mode: participant banner + end-session control ── */}
+          {studyMode.active && (
+            <div className="flex items-center gap-3 mr-4 flex-shrink-0">
+              <span
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-500/15 ring-1 ring-purple-400/30 text-[11px] text-purple-200 whitespace-nowrap"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                Study mode · {studyMode.participantName}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowSus(true)}
+                className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors whitespace-nowrap"
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                End session &amp; take survey
+              </button>
+            </div>
+          )}
+
           <a
             href="/verifier"
             className="text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 mr-4 whitespace-nowrap"
@@ -1621,6 +1646,20 @@ export default function Visualizer() {
 
         </div>
       </header>
+
+      {/* ── Study Mode: SUS questionnaire ── */}
+      {studyMode.active && studyMode.startedAt && studyMode.participantName && (
+        <SusSurvey
+          open={showSus}
+          participantName={studyMode.participantName}
+          startedAt={studyMode.startedAt}
+          onClose={() => setShowSus(false)}
+          onFinished={() => {
+            setShowSus(false);
+            studyMode.endSession();
+          }}
+        />
+      )}
 
       <main className="container max-w-[1440px] py-8" style={{ position: "relative", zIndex: 1 }}>
 
