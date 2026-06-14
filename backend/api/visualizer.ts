@@ -5,8 +5,10 @@ import { generateRenderer, type LLMProvider } from "./llm-renderer";
 import { generateTransformer } from "./llm-domain-interpreter";
 import { listSavedDomains, getSavedDomain, saveDomain, findSavedDomainByPddl, findAllSavedDomainsByPddl, deleteSavedDomain } from "./saved-domains";
 import { saveBasicRenderer, findBasicRenderer } from "./basic-renderer-cache";
+import { logEventSafe } from "./events";
 import path from "path";
 import { fileURLToPath } from "url";
+import { randomUUID } from "crypto";
 import { exec } from "child_process";
 import { promisify } from "util";
 
@@ -152,22 +154,29 @@ export const visualizerRouter = router({
         problemContent: z.string(),
         domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"]),
         searchStrategy: z.enum(VALID_STRATEGY_IDS).optional().default("lazy-greedy-ff"),
+        sessionId: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       console.log('[uploadAndGenerate] Starting with domain:', input.domainName);
       console.log('[uploadAndGenerate] Search strategy:', input.searchStrategy);
       console.log('[uploadAndGenerate] Problem content length:', input.problemContent.length);
-      
+
+      const startedAt = Date.now();
+      const sessionId = input.sessionId ?? null;
+      let outcomeLogged = false;
+
       let domainPath: string = "";
       let problemPath: string = "";
-      
+
       try {
         // Create uploads directory
         const uploadsDir = path.join(__dirname, "uploads");
         await mkdir(uploadsDir, { recursive: true });
 
-        const timestamp = Date.now();
+        // Unique per-request token (uuid) so simultaneous uploads never
+        // collide on a shared filename in the uploads dir.
+        const timestamp = `${Date.now()}_${randomUUID()}`;
 
         // If domainContent is empty, use the domain file from repository
         if (!input.domainContent || input.domainContent.trim() === "") {
@@ -220,8 +229,37 @@ export const visualizerRouter = router({
         console.log('[uploadAndGenerate] JSON parsed successfully, success:', data.success);
 
         if (!data.success) {
+          await logEventSafe({
+            clientId: ctx.clientId,
+            sessionId,
+            type: "solve_attempt",
+            data: {
+              success: false,
+              custom: false,
+              domain: input.domainName,
+              searchStrategy: input.searchStrategy,
+              errorType: data.error_type ?? "planner_failure",
+              durationMs: Date.now() - startedAt,
+            },
+          });
+          outcomeLogged = true;
           throw new Error(data.error || "Failed to solve problem");
         }
+
+        await logEventSafe({
+          clientId: ctx.clientId,
+          sessionId,
+          type: "solve_attempt",
+          data: {
+            success: true,
+            custom: false,
+            domain: input.domainName,
+            searchStrategy: input.searchStrategy,
+            numStates: data.num_states ?? null,
+            durationMs: Date.now() - startedAt,
+          },
+        });
+        outcomeLogged = true;
 
         // Clean up uploaded files after successful processing
         try {
@@ -268,6 +306,21 @@ export const visualizerRouter = router({
         }
         console.error('[uploadAndGenerate] Error:', error);
         console.error('[uploadAndGenerate] Error stack:', error instanceof Error ? error.stack : 'No stack');
+        if (!outcomeLogged) {
+          await logEventSafe({
+            clientId: ctx.clientId,
+            sessionId,
+            type: "solve_attempt",
+            data: {
+              success: false,
+              custom: false,
+              domain: input.domainName,
+              searchStrategy: input.searchStrategy,
+              errorType: "exception",
+              durationMs: Date.now() - startedAt,
+            },
+          });
+        }
         throw new Error(
           error instanceof Error
             ? error.message
@@ -289,11 +342,16 @@ export const visualizerRouter = router({
         problemContent: z.string().min(1, "Problem PDDL content is required"),
         domainName: z.string().min(1, "Domain name is required"),
         searchStrategy: z.enum(VALID_STRATEGY_IDS).optional().default("lazy-greedy-ff"),
+        sessionId: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       console.log('[uploadAndGenerateCustom] Starting with custom domain:', input.domainName);
       console.log('[uploadAndGenerateCustom] Search strategy:', input.searchStrategy);
+
+      const startedAt = Date.now();
+      const sessionId = input.sessionId ?? null;
+      let outcomeLogged = false;
 
       let domainPath: string = "";
       let problemPath: string = "";
@@ -301,7 +359,8 @@ export const visualizerRouter = router({
       try {
         const uploadsDir = path.join(__dirname, "uploads");
         await mkdir(uploadsDir, { recursive: true });
-        const timestamp = Date.now();
+        // Unique per-request token (uuid) to avoid simultaneous-upload collisions.
+        const timestamp = `${Date.now()}_${randomUUID()}`;
 
         domainPath = path.join(uploadsDir, `custom_domain_${timestamp}.pddl`);
         problemPath = path.join(uploadsDir, `custom_problem_${timestamp}.pddl`);
@@ -332,8 +391,37 @@ export const visualizerRouter = router({
 
         const data = JSON.parse(stdout);
         if (!data.success) {
+          await logEventSafe({
+            clientId: ctx.clientId,
+            sessionId,
+            type: "solve_attempt",
+            data: {
+              success: false,
+              custom: true,
+              domain: input.domainName,
+              searchStrategy: input.searchStrategy,
+              errorType: data.error_type ?? "planner_failure",
+              durationMs: Date.now() - startedAt,
+            },
+          });
+          outcomeLogged = true;
           throw new Error(data.error || "Failed to solve custom problem");
         }
+
+        await logEventSafe({
+          clientId: ctx.clientId,
+          sessionId,
+          type: "solve_attempt",
+          data: {
+            success: true,
+            custom: true,
+            domain: input.domainName,
+            searchStrategy: input.searchStrategy,
+            numStates: data.num_states ?? null,
+            durationMs: Date.now() - startedAt,
+          },
+        });
+        outcomeLogged = true;
 
         try {
           await unlink(domainPath);
@@ -361,6 +449,21 @@ export const visualizerRouter = router({
           if (problemPath) await unlink(problemPath).catch(() => {});
         } catch { /* ignore */ }
         console.error('[uploadAndGenerateCustom] Error:', error);
+        if (!outcomeLogged) {
+          await logEventSafe({
+            clientId: ctx.clientId,
+            sessionId,
+            type: "solve_attempt",
+            data: {
+              success: false,
+              custom: true,
+              domain: input.domainName,
+              searchStrategy: input.searchStrategy,
+              errorType: "exception",
+              durationMs: Date.now() - startedAt,
+            },
+          });
+        }
         throw new Error(
           error instanceof Error
             ? error.message
@@ -522,9 +625,10 @@ export const visualizerRouter = router({
         domainPddl: z.string(),
         transformerCode: z.string(),
         provider: z.enum(["claude", "gemini"]),
+        sessionId: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       console.log("[Stage 2 - Renderer] ========================================");
       console.log("[Stage 2 - Renderer] Starting canvas renderer generation");
       console.log("[Stage 2 - Renderer] Domain:", input.domainName);
@@ -533,12 +637,27 @@ export const visualizerRouter = router({
       console.log("[Stage 2 - Renderer] PDDL domain length:", input.domainPddl.length);
       console.log("[Stage 2 - Renderer] Transformer code length:", input.transformerCode.length);
 
+      const llmStartedAt = Date.now();
       const result = await generateRenderer({
         domainName: input.domainName,
         states: input.states,
         domainPddl: input.domainPddl,
         transformerCode: input.transformerCode,
         provider: input.provider as LLMProvider,
+      });
+
+      await logEventSafe({
+        clientId: ctx.clientId,
+        sessionId: input.sessionId ?? null,
+        type: "llm_call",
+        data: {
+          kind: "renderer",
+          provider: input.provider,
+          domain: input.domainName,
+          success: result.success,
+          errorType: result.success ? null : (result.error ?? "llm_failure"),
+          durationMs: Date.now() - llmStartedAt,
+        },
       });
 
       if (!result.success) {
@@ -613,19 +732,35 @@ export const visualizerRouter = router({
         domainPddl: z.string(),
         sampleStates: z.array(z.any()),
         provider: z.enum(["claude", "gemini"]),
+        sessionId: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       console.log("[llmGenerateTransformer] Starting for domain:", input.domainName);
       console.log("[llmGenerateTransformer] Provider:", input.provider);
       console.log("[llmGenerateTransformer] PDDL length:", input.domainPddl.length);
       console.log("[llmGenerateTransformer] Sample states:", input.sampleStates.length);
 
+      const llmStartedAt = Date.now();
       const result = await generateTransformer({
         domainName: input.domainName,
         domainPddl: input.domainPddl,
         sampleStates: input.sampleStates,
         provider: input.provider as LLMProvider,
+      });
+
+      await logEventSafe({
+        clientId: ctx.clientId,
+        sessionId: input.sessionId ?? null,
+        type: "llm_call",
+        data: {
+          kind: "transformer",
+          provider: input.provider,
+          domain: input.domainName,
+          success: result.success,
+          errorType: result.success ? null : (result.error ?? "llm_failure"),
+          durationMs: Date.now() - llmStartedAt,
+        },
       });
 
       if (!result.success) {

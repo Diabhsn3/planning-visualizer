@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
+import { getSessionId } from "@/lib/session";
 import { AlertTriangle, RotateCcw } from "lucide-react";
-import { Component, ReactNode } from "react";
+import { Component, ErrorInfo, ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
@@ -19,6 +20,33 @@ class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    // Report React crashes to the server so the pilot can count sessions
+    // that did NOT render end-to-end. Best-effort, fire-and-forget; matches
+    // the superjson tRPC wire format ({ json: <input> }).
+    try {
+      void fetch("/api/trpc/events.logEvent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          json: {
+            sessionId: getSessionId(),
+            type: "app_crash",
+            data: {
+              message: error.message,
+              stack: error.stack?.slice(0, 2000) ?? null,
+              componentStack: info.componentStack?.slice(0, 2000) ?? null,
+              path: window.location.pathname,
+            },
+          },
+        }),
+      }).catch(() => {});
+    } catch {
+      /* never let logging break the error UI */
+    }
   }
 
   render() {

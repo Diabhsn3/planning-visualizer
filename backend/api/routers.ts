@@ -6,6 +6,7 @@ import { visualizerRouter } from "./visualizer";
 import { feedbackRouter } from "./feedback-router";
 import { verifierRouter } from "./verifier-router";
 import { susRouter } from "./sus-router";
+import { eventsRouter } from "./events-router";
 
 export const appRouter = router({
   system: systemRouter,
@@ -13,6 +14,7 @@ export const appRouter = router({
   feedback: feedbackRouter,
   verifier: verifierRouter,
   sus: susRouter,
+  events: eventsRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

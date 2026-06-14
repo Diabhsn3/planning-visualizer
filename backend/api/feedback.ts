@@ -44,6 +44,11 @@ export interface FeedbackRecord {
   id: number;
   createdAt: string;
 
+  /** Anonymous per-browser id (pilot unique-user proxy); null for legacy rows. */
+  clientId: string | null;
+  /** Per-page-load session id; null for legacy rows. */
+  sessionId: string | null;
+
   rating: Rating;
   comment: string | null;
 
@@ -172,6 +177,8 @@ function pngDataUrlBody(dataUrl: string): string {
 }
 
 export interface AppendFeedbackInput {
+  clientId: string | null;
+  sessionId: string | null;
   rating: Rating;
   comment: string | null;
   domainName: string;
@@ -219,6 +226,8 @@ export async function appendFeedback(
   const record: FeedbackRecord = {
     id,
     createdAt: new Date().toISOString(),
+    clientId: input.clientId,
+    sessionId: input.sessionId,
     rating: input.rating,
     comment: input.rating === 5 ? (input.comment?.trim() || null) : input.comment!.trim(),
     domainName: input.domainName,

@@ -7,6 +7,7 @@ No fallback plans - if the planner fails, users get a clear error message.
 import sys
 import subprocess
 import tempfile
+import shutil
 import os
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -133,10 +134,18 @@ def run_fast_downward(
     if timeout is None:
         timeout = get_planner_timeout()
     
-    # Create temporary file for plan output
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.plan') as tmp:
-        plan_file = Path(tmp.name)
-    
+    # Create an isolated working directory for THIS run. Concurrent planner
+    # invocations must never share Fast Downward's intermediate files — most
+    # importantly the translator's output.sas, which defaults to a RELATIVE
+    # path resolved against the process CWD. If two simultaneous solves ran
+    # in the same directory, one run's translator output could overwrite the
+    # file another run's search is reading, producing wrong plans, spurious
+    # "no solution" errors, or crashes. We give each run its own temp dir and
+    # pass an explicit --sas-file inside it (plan-file too), then remove it.
+    run_dir = Path(tempfile.mkdtemp(prefix="fd_run_"))
+    plan_file = run_dir / "plan.out"
+    sas_file = run_dir / "output.sas"
+
     try:
         # Build command with strategy-specific arguments
         # Use --log-level warning to suppress verbose search logs (reduces output by 90%+)
@@ -144,16 +153,18 @@ def run_fast_downward(
             sys.executable,
             str(FD_PATH),
             "--log-level", "warning",  # Suppress verbose logs to prevent stdout buffer overflow
+            "--sas-file", str(sas_file),  # Per-run translator output (isolate concurrent runs)
             "--plan-file", str(plan_file),
             domain_path,
             problem_path,
         ] + strategy.fd_args  # Add strategy-specific search arguments
-        
+
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            cwd=str(run_dir),  # any stray relative output stays inside this run's dir
         )
         
         # Check for specific error conditions
@@ -223,9 +234,8 @@ def run_fast_downward(
         )
         
     finally:
-        # Clean up temporary file
-        if plan_file.exists():
-            plan_file.unlink()
+        # Clean up the entire isolated run directory (plan + sas + any strays)
+        shutil.rmtree(run_dir, ignore_errors=True)
 
 
 def solve_problem(

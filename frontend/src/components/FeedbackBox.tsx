@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { getSessionId } from "@/lib/session";
 
 /** Continuous 1–5 score. 5 = perfect, 1 = totally off. */
 export type Rating = number;
@@ -81,6 +82,7 @@ export function FeedbackBox({ context, getImageDataUrl, disabled }: FeedbackBoxP
       rating,
       comment: needsComment ? comment.trim() : (comment.trim() || null),
       imageDataUrl,
+      sessionId: getSessionId(),
       ...context,
     });
   };

@@ -3,6 +3,7 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import path from "path";
+import { existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
@@ -59,7 +60,27 @@ async function startServer() {
       allowMethodOverride: true,
     })
   );
-  // Backend is now API-only, frontend runs separately
+
+  // Single-origin production serving: when a frontend build exists, serve it
+  // (static assets + SPA history fallback) from this same Express server so
+  // one URL (e.g. http://132.73.84.70:PORT) works without a separate dev
+  // server or reverse proxy. In dev, no build exists, so this stays off and
+  // the frontend keeps running on its own Vite server.
+  // __dirname is .../backend/api/_core (dev) or .../backend/api/dist (prod);
+  // both are 3 levels below the repo root, so frontend/dist resolves the same.
+  const FRONTEND_DIST = path.resolve(__dirname, "../../../frontend/dist");
+  if (existsSync(path.join(FRONTEND_DIST, "index.html"))) {
+    app.use(express.static(FRONTEND_DIST));
+    // History fallback for client-side routes — anything not under /api/.
+    app.get(/^\/(?!api\/).*/, (_req, res) => {
+      res.sendFile(path.join(FRONTEND_DIST, "index.html"));
+    });
+    console.log(`[server] Serving frontend build from ${FRONTEND_DIST}`);
+  } else {
+    console.log(
+      "[server] No frontend build found — running API-only (dev mode; frontend served by Vite)."
+    );
+  }
 
   const preferredPort = parseInt(process.env.PORT || "4000"); // Backend on 4000, frontend on 3000
   const port = await findAvailablePort(preferredPort);

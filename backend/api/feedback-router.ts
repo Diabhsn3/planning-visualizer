@@ -75,10 +75,16 @@ export const feedbackRouter = router({
         totalStates: z.number().int().positive(),
         symbolicState: z.unknown(),
         imageDataUrl: z.string(),
+        sessionId: z.string().nullable().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const record = await appendFeedback(input);
+    .mutation(async ({ input, ctx }) => {
+      const { sessionId, ...rest } = input;
+      const record = await appendFeedback({
+        ...rest,
+        clientId: ctx.clientId,
+        sessionId: sessionId ?? null,
+      });
       return { id: record.id, createdAt: record.createdAt };
     }),
 

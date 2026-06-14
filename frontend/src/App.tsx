@@ -2,9 +2,36 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
+import { useEffect, useRef } from "react";
+import { trpc } from "@/lib/trpc";
+import { getSessionId } from "@/lib/session";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { StudyModeProvider } from "./contexts/StudyModeContext";
+
+/**
+ * Fires a single `session_start` event per page-load so the pilot can count
+ * sessions and unique users. Best-effort — failures are ignored.
+ */
+function SessionTracker() {
+  const logEvent = trpc.events.logEvent.useMutation();
+  const fired = useRef(false);
+  useEffect(() => {
+    if (fired.current) return;
+    fired.current = true;
+    logEvent.mutate({
+      sessionId: getSessionId(),
+      type: "session_start",
+      data: {
+        userAgent: navigator.userAgent,
+        path: window.location.pathname,
+        referrer: document.referrer || null,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
 import Verifier from "./pages/Verifier";
 import Visualizer from "./pages/Visualizer";
 import Welcome from "./pages/Welcome";
@@ -37,6 +64,7 @@ function App() {
         <StudyModeProvider>
           <TooltipProvider>
             <Toaster />
+            <SessionTracker />
             <Router />
           </TooltipProvider>
         </StudyModeProvider>

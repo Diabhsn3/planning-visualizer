@@ -23,9 +23,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { writeArtifact, readArtifact } from "./artifacts";
+import { createMutex } from "./async-mutex";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Serializes load -> mutate -> save so concurrent saveDomain/deleteSavedDomain
+// calls can't lose updates or assign duplicate ids.
+const writeLock = createMutex();
 
 const DATA_DIR = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", "data")
@@ -285,36 +290,38 @@ export async function saveDomain(params: {
   rendererCode: string;
   provider: string;
 }): Promise<SavedDomain> {
-  const store = await loadStore();
-  const pddlHash = hashPddl(params.domainPddl);
+  return writeLock(async () => {
+    const store = await loadStore();
+    const pddlHash = hashPddl(params.domainPddl);
 
-  // Write code to artifacts (deduped by content hash)
-  const transformerHash = await writeArtifact(params.transformerCode);
-  const rendererHash = await writeArtifact(params.rendererCode);
+    // Write code to artifacts (deduped by content hash)
+    const transformerHash = await writeArtifact(params.transformerCode);
+    const rendererHash = await writeArtifact(params.rendererCode);
 
-  const existingNames = store.domains.map((d) => d.displayName);
-  const displayName = generateDisplayName(params.domainName, existingNames);
+    const existingNames = store.domains.map((d) => d.displayName);
+    const displayName = generateDisplayName(params.domainName, existingNames);
 
-  const record: SavedDomainRecord = {
-    id: store.nextId,
-    displayName,
-    domainName: params.domainName,
-    pddlHash,
-    domainPddl: params.domainPddl,
-    transformerHash,
-    rendererHash,
-    provider: params.provider,
-    createdAt: new Date().toISOString(),
-  };
+    const record: SavedDomainRecord = {
+      id: store.nextId,
+      displayName,
+      domainName: params.domainName,
+      pddlHash,
+      domainPddl: params.domainPddl,
+      transformerHash,
+      rendererHash,
+      provider: params.provider,
+      createdAt: new Date().toISOString(),
+    };
 
-  store.domains.push(record);
-  store.nextId++;
-  await saveStore(store);
+    store.domains.push(record);
+    store.nextId++;
+    await saveStore(store);
 
-  console.log(
-    `[SavedDomains] Saved "${displayName}" (id=${record.id}, pddlHash=${pddlHash}, transformer=${transformerHash.slice(0, 8)}…, renderer=${rendererHash.slice(0, 8)}…)`
-  );
-  return hydrate(record);
+    console.log(
+      `[SavedDomains] Saved "${displayName}" (id=${record.id}, pddlHash=${pddlHash}, transformer=${transformerHash.slice(0, 8)}…, renderer=${rendererHash.slice(0, 8)}…)`
+    );
+    return hydrate(record);
+  });
 }
 
 /**
@@ -322,13 +329,15 @@ export async function saveDomain(params: {
  * underlying artifacts because they may be shared with other entries.
  */
 export async function deleteSavedDomain(id: number): Promise<boolean> {
-  const store = await loadStore();
-  const idx = store.domains.findIndex((d) => d.id === id);
-  if (idx === -1) return false;
-  const removed = store.domains.splice(idx, 1)[0];
-  await saveStore(store);
-  console.log(
-    `[SavedDomains] Deleted domain: ${removed.displayName} (id=${id})`
-  );
-  return true;
+  return writeLock(async () => {
+    const store = await loadStore();
+    const idx = store.domains.findIndex((d) => d.id === id);
+    if (idx === -1) return false;
+    const removed = store.domains.splice(idx, 1)[0];
+    await saveStore(store);
+    console.log(
+      `[SavedDomains] Deleted domain: ${removed.displayName} (id=${id})`
+    );
+    return true;
+  });
 }

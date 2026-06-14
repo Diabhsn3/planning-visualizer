@@ -1,5 +1,5 @@
 {
-  "nextId": 25,
+  "nextId": 26,
   "domains": [
     {
       "id": 1,
@@ -242,6 +242,17 @@
       "rendererHash": "14f0e1d10c09df020943e2cc8a7087b73342b1fe75ffcbe4c722bf14d601327b",
       "provider": "Claude Sonnet 4.6",
       "createdAt": "2026-06-13T18:47:31.512Z"
+    },
+    {
+      "id": 25,
+      "displayName": "Zeno (5)",
+      "domainName": "zeno",
+      "pddlHash": "21fdf7a74f81",
+      "domainPddl": "(define (domain zenotravel)\n  (:requirements :typing)\n  (:types\n    person city aircraft\n  )\n  (:predicates\n    (at ?x - (either person aircraft) ?c - city)\n    (in ?p - person ?a - aircraft)\n  )\n\n  (:action board\n    :parameters (?p - person ?a - aircraft ?c - city)\n    :precondition (and\n      (at ?p ?c)\n      (at ?a ?c)\n    )\n    :effect (and\n      (not (at ?p ?c))\n      (in ?p ?a)\n    )\n  )\n\n  (:action debark\n    :parameters (?p - person ?a - aircraft ?c - city)\n    :precondition (and\n      (in ?p ?a)\n      (at ?a ?c)\n    )\n    :effect (and\n      (not (in ?p ?a))\n      (at ?p ?c)\n    )\n  )\n\n  (:action fly\n    :parameters (?a - aircraft ?c1 - city ?c2 - city)\n    :precondition (and\n      (at ?a ?c1)\n    )\n    :effect (and\n      (not (at ?a ?c1))\n      (at ?a ?c2)\n    )\n  )\n)\n",
+      "transformerHash": "a0a5d2ca90507d169954b0a23045c8118a6693f1f70c302a010907de53577518",
+      "rendererHash": "8c6f7d538a15c233062e0a9d2ba9b40b67b3bfa635ccf04efa1aa30e49ecdaca",
+      "provider": "Gemini 2.5 Pro",
+      "createdAt": "2026-06-14T15:26:22.510Z"
     }
   ]
 }

@@ -14,9 +14,14 @@ import { readFile, writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { writeArtifact, readArtifact } from "./artifacts";
+import { createMutex } from "./async-mutex";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Serializes load -> mutate -> save on basic_renderers.json so concurrent
+// renderer generations for different domains can't lose each other's entry.
+const writeLock = createMutex();
 
 const DATA_DIR = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", "data")
@@ -72,29 +77,31 @@ export async function saveBasicRenderer(
   code: string
 ): Promise<{ artifactHash: string; reused: boolean }> {
   const artifactHash = await writeArtifact(code);
-  const store = await loadStore();
-  const existing = store.entries.find(
-    (e) => e.domain === domain && e.provider === provider
-  );
-  if (existing && existing.artifactHash === artifactHash) {
-    return { artifactHash, reused: true };
-  }
-  if (existing) {
-    existing.artifactHash = artifactHash;
-    existing.createdAt = new Date().toISOString();
-  } else {
-    store.entries.push({
-      domain,
-      provider,
-      artifactHash,
-      createdAt: new Date().toISOString(),
-    });
-  }
-  await saveStore(store);
-  console.log(
-    `[BasicRendererCache] Saved (${domain}, ${provider}) → ${artifactHash.slice(0, 12)}…`
-  );
-  return { artifactHash, reused: false };
+  return writeLock(async () => {
+    const store = await loadStore();
+    const existing = store.entries.find(
+      (e) => e.domain === domain && e.provider === provider
+    );
+    if (existing && existing.artifactHash === artifactHash) {
+      return { artifactHash, reused: true };
+    }
+    if (existing) {
+      existing.artifactHash = artifactHash;
+      existing.createdAt = new Date().toISOString();
+    } else {
+      store.entries.push({
+        domain,
+        provider,
+        artifactHash,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    await saveStore(store);
+    console.log(
+      `[BasicRendererCache] Saved (${domain}, ${provider}) → ${artifactHash.slice(0, 12)}…`
+    );
+    return { artifactHash, reused: false };
+  });
 }
 
 /**

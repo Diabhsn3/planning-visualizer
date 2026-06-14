@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue, useMotionValueEvent, animate as motionAnimate } from "framer-motion";
 import { trpc } from "@/lib/trpc";
+import { getSessionId } from "@/lib/session";
 import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
 import { FeedbackBox } from "@/components/FeedbackBox";
@@ -629,6 +630,8 @@ const CustomDomainLoading = ({
 export default function Visualizer() {
   const studyMode = useStudyMode();
   const [showSus, setShowSus] = useState(false);
+  // Pilot telemetry: log client-side events (render crashes, etc.).
+  const logEventMutation = trpc.events.logEvent.useMutation();
   const [selectedDomain, setSelectedDomain]     = useState("blocks-world");
   const [selectedStrategy, setSelectedStrategy] = useState("astar-lmcut");
   const [problemType, setProblemType]           = useState<"example" | "custom">("example");
@@ -1189,7 +1192,7 @@ export default function Visualizer() {
       console.warn("[BasicRenderer] Lookup failed, proceeding with LLM:", err);
     }
 
-    llmGenerateMutation.mutate({ domainName: selectedDomain, states: renderedStates.slice(0, 3), domainPddl: "", transformerCode: "", provider: llmProvider });
+    llmGenerateMutation.mutate({ domainName: selectedDomain, states: renderedStates.slice(0, 3), domainPddl: "", transformerCode: "", provider: llmProvider, sessionId: getSessionId() });
   };
 
   useEffect(() => { setLlmRendererCode(null); setLlmError(null); setLlmModelInfo(null); }, [selectedDomain]);
@@ -1284,6 +1287,7 @@ export default function Visualizer() {
               domainPddl,
               transformerCode: data.code!,
               provider: (data.provider?.toLowerCase().includes("claude") ? "claude" : "gemini") as "claude" | "gemini",
+              sessionId: getSessionId(),
             });
           });
         }
@@ -1330,6 +1334,7 @@ export default function Visualizer() {
         domainPddl,
         sampleStates: renderedStates.slice(0, 3),
         provider: llmProvider,
+        sessionId: getSessionId(),
       });
     };
 
@@ -1389,6 +1394,7 @@ export default function Visualizer() {
       domainPddl: pendingPddl,
       sampleStates: renderedStates.slice(0, 3),
       provider: llmProvider,
+      sessionId: getSessionId(),
     });
   };
 
@@ -1452,6 +1458,7 @@ export default function Visualizer() {
             problemContent,
             domainName: savedDomain.domainName,
             searchStrategy: selectedStrategy as any,
+            sessionId: getSessionId(),
           });
         };
         run();
@@ -1471,6 +1478,7 @@ export default function Visualizer() {
           domainContent, problemContent,
           domainName: customDomainName.trim(),
           searchStrategy: selectedStrategy as any,
+          sessionId: getSessionId(),
         });
       };
       run();
@@ -1482,11 +1490,11 @@ export default function Visualizer() {
       if (inputMode === "text" && !problemText.trim()) { setIsProcessing(false); alert("Please paste PDDL content"); return; }
       const reader = new FileReader();
       const process = (content: string) =>
-        uploadMutation.mutate({ domainContent: "", problemContent: content, domainName: selectedDomain as any, searchStrategy: selectedStrategy as any });
+        uploadMutation.mutate({ domainContent: "", problemContent: content, domainName: selectedDomain as any, searchStrategy: selectedStrategy as any, sessionId: getSessionId() });
       if (inputMode === "file" && problemFile) { reader.onload = (e) => process(e.target?.result as string); reader.readAsText(problemFile); }
       else if (inputMode === "text") process(problemText);
     } else {
-      uploadMutation.mutate({ domainContent: "", problemContent: getDefaultProblem(selectedDomain), domainName: selectedDomain as any, searchStrategy: selectedStrategy as any });
+      uploadMutation.mutate({ domainContent: "", problemContent: getDefaultProblem(selectedDomain), domainName: selectedDomain as any, searchStrategy: selectedStrategy as any, sessionId: getSessionId() });
     }
   };
 
@@ -2717,7 +2725,20 @@ export default function Visualizer() {
                           isLast={currentStateIndex === renderedStates.length - 1}
                           llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
                           transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
-                          onLlmError={err => setLlmError(err)}
+                          onLlmError={err => {
+                            setLlmError(err);
+                            logEventMutation.mutate({
+                              sessionId: getSessionId(),
+                              type: "render_crash",
+                              data: {
+                                domain: isCustomDomain ? customDomainName : selectedDomain,
+                                isCustomDomain,
+                                stateIndex: currentStateIndex,
+                                renderMethod: renderMode,
+                                error: String(err).slice(0, 500),
+                              },
+                            });
+                          }}
                         />
                       </div>
                     )}
