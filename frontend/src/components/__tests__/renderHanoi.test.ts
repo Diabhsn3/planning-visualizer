@@ -63,12 +63,7 @@ describe("renderHanoi", () => {
     expect(() => renderHanoiBackground(ctx, 800, 600)).not.toThrow();
   });
 
-  it("legend renders without throwing (or is undefined)", () => {
-    if (typeof renderHanoiLegend === "function") {
-      const ctx = makeCtx();
-      expect(() => renderHanoiLegend(ctx, 0, 0)).not.toThrow();
-    } else {
-      expect(renderHanoiLegend).toBeUndefined();
-    }
+  it("legend is undefined when not implemented", () => {
+    expect(renderHanoiLegend).toBeUndefined();
   });
 });

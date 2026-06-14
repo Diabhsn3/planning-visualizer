@@ -14,7 +14,6 @@ const execAsync = promisify(exec);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = path.join(__dirname, "data");
 
 // Detect Python executable
 function getPythonCommand(): string {
