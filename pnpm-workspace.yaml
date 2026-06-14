@@ -1,3 +1,11 @@
 packages:
   - "frontend"
   - "backend/api"
+
+# Allow these dependencies to run their install/build scripts.
+# Without this, pnpm 10+ blocks them by default. On machines whose pnpm
+# treats blocked builds as fatal, a fresh install fails with
+# ERR_PNPM_IGNORED_BUILDS (notably on Windows). esbuild's postinstall
+# wires up its native binary, so it must be allowed.
+onlyBuiltDependencies:
+  - esbuild
