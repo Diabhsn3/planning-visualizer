@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import type { StudyIntake } from "@/contexts/StudyModeContext";
 
 // ── The ten standard SUS statements, in order ───────────────────────────────
 // Odd items are positively worded, even items negatively worded. Do not
@@ -30,7 +32,7 @@ const mono = { fontFamily: "'JetBrains Mono', monospace" } as const;
 
 interface SusSurveyProps {
   open: boolean;
-  participantName: string;
+  intake: StudyIntake;
   /** ISO timestamp of when the study session started. */
   startedAt: string;
   /** Close without submitting (e.g. facilitator cancels). */
@@ -40,25 +42,25 @@ interface SusSurveyProps {
   onFinished: () => void;
 }
 
-function csvEscape(value: unknown): string {
-  const s = value === null || value === undefined ? "" : String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 export function SusSurvey({
   open,
-  participantName,
+  intake,
   startedAt,
   onClose,
   onFinished,
 }: SusSurveyProps) {
+  const [, navigate] = useLocation();
   const [answers, setAnswers] = useState<(number | null)[]>(
     Array(10).fill(null)
   );
+  const [exit, setExit] = useState({
+    useCases: "",
+    suggestions: "",
+    overallImpression: "",
+  });
   const [submittedScore, setSubmittedScore] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const utils = trpc.useUtils();
   const submitMutation = trpc.sus.submitSus.useMutation({
     onSuccess: (res) => {
       setSubmittedScore(res.score);
@@ -77,60 +79,24 @@ export function SusSurvey({
       0,
       new Date(submittedAt).getTime() - new Date(startedAt).getTime()
     );
+    const hasExit =
+      exit.useCases.trim() ||
+      exit.suggestions.trim() ||
+      exit.overallImpression.trim();
     submitMutation.mutate({
-      participantName,
+      participantId: intake.participantId,
+      profile: intake.profile,
+      studyDate: intake.studyDate,
+      facilitator: intake.facilitator,
+      noteTaker: intake.noteTaker,
+      mode: intake.mode,
       responses: answers as number[],
       startedAt,
       submittedAt,
       durationMs,
       userAgent: navigator.userAgent ?? null,
+      exitInterview: hasExit ? exit : null,
     });
-  };
-
-  const handleExportCsv = async () => {
-    try {
-      const rows = await utils.sus.listSus.fetch();
-      const header = [
-        "id",
-        "participantName",
-        "score",
-        "durationMs",
-        "startedAt",
-        "submittedAt",
-        ...Array.from({ length: 10 }, (_, i) => `q${i + 1}`),
-        "userAgent",
-      ];
-      const lines = [header.join(",")];
-      for (const r of rows) {
-        lines.push(
-          [
-            r.id,
-            r.participantName,
-            r.score,
-            r.durationMs,
-            r.startedAt,
-            r.submittedAt,
-            ...r.responses,
-            r.userAgent,
-          ]
-            .map(csvEscape)
-            .join(",")
-        );
-      }
-      const blob = new Blob([lines.join("\n")], {
-        type: "text/csv;charset=utf-8",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "sus_responses.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(
-        `CSV export failed: ${(err as Error).message ?? "unknown error"}`
-      );
-    }
   };
 
   const scoreVerdict = useMemo(() => {
@@ -174,7 +140,7 @@ export function SusSurvey({
                   System Usability Scale
                 </div>
                 <h2 className="text-xl font-semibold text-slate-100">
-                  A few quick questions, {participantName.split(" ")[0]}
+                  A few quick questions — {intake.participantId}
                 </h2>
                 <p className="mt-1 text-sm text-slate-400">
                   For each statement, choose how much you agree. There are no
@@ -231,6 +197,36 @@ export function SusSurvey({
                 ))}
               </div>
 
+              {/* ── Optional exit interview ── */}
+              <div className="rounded-xl border border-white/[0.06] bg-black/[0.12] p-4 space-y-3">
+                <div
+                  className="text-[10px] uppercase tracking-[0.28em] text-purple-300/70"
+                  style={mono}
+                >
+                  Exit interview · optional
+                </div>
+                {([
+                  { key: "useCases", label: "Use cases mentioned" },
+                  { key: "suggestions", label: "Suggestions" },
+                  { key: "overallImpression", label: "Overall impression" },
+                ] as const).map((f) => (
+                  <div key={f.key}>
+                    <label className="block text-[11px] text-slate-400 mb-1" style={mono}>
+                      {f.label}
+                    </label>
+                    <textarea
+                      value={exit[f.key]}
+                      onChange={(e) =>
+                        setExit((prev) => ({ ...prev, [f.key]: e.target.value }))
+                      }
+                      rows={2}
+                      className="w-full px-3 py-2 text-xs bg-white/[0.04] border border-white/[0.08] rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-white/[0.2] resize-y"
+                      style={mono}
+                    />
+                  </div>
+                ))}
+              </div>
+
               {error && (
                 <div className="text-xs text-red-400" style={mono}>
                   {error}
@@ -268,7 +264,7 @@ export function SusSurvey({
               <div className="text-5xl">✓</div>
               <div>
                 <h2 className="text-xl font-semibold text-slate-100">
-                  Thank you, {participantName.split(" ")[0]}!
+                  Thank you — {intake.participantId}
                 </h2>
                 <p className="mt-1 text-sm text-slate-400">
                   Your responses have been recorded.
@@ -300,11 +296,14 @@ export function SusSurvey({
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={handleExportCsv}
+                  onClick={() => {
+                    onFinished();
+                    navigate("/study-results");
+                  }}
                   className="px-4 py-2 text-xs font-medium rounded-lg border border-white/[0.12] text-slate-200 hover:bg-white/[0.06] transition-colors"
                   style={mono}
                 >
-                  Export all results (CSV)
+                  View all results →
                 </button>
                 <button
                   type="button"

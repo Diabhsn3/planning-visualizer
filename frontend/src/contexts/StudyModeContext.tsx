@@ -11,14 +11,27 @@ import React, { createContext, useContext, useState } from "react";
  * alive, but a new tab / fresh browser session starts clean.
  */
 
+export type StudyProfile = "lab_researcher" | "cs_student";
+export type StudyModeKind = "in_person" | "remote";
+
+/** Participant intake header captured at session start. */
+export interface StudyIntake {
+  participantId: string;
+  profile: StudyProfile | null;
+  studyDate: string;
+  facilitator: string;
+  noteTaker: string;
+  mode: StudyModeKind | null;
+}
+
 interface StudyModeState {
   active: boolean;
-  participantName: string | null;
+  intake: StudyIntake | null;
   startedAt: string | null;
 }
 
 interface StudyModeContextType extends StudyModeState {
-  startSession: (name: string) => void;
+  startSession: (intake: StudyIntake) => void;
   endSession: () => void;
 }
 
@@ -33,12 +46,12 @@ function load(): StudyModeState {
     const raw = sessionStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as StudyModeState;
-      if (parsed && parsed.active && parsed.participantName) return parsed;
+      if (parsed && parsed.active && parsed.intake?.participantId) return parsed;
     }
   } catch {
     /* ignore malformed storage */
   }
-  return { active: false, participantName: null, startedAt: null };
+  return { active: false, intake: null, startedAt: null };
 }
 
 function persist(state: StudyModeState) {
@@ -52,10 +65,10 @@ function persist(state: StudyModeState) {
 export function StudyModeProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<StudyModeState>(() => load());
 
-  const startSession = (name: string) => {
+  const startSession = (intake: StudyIntake) => {
     const next: StudyModeState = {
       active: true,
-      participantName: name.trim(),
+      intake: { ...intake, participantId: intake.participantId.trim() },
       startedAt: new Date().toISOString(),
     };
     setState(next);
@@ -65,7 +78,7 @@ export function StudyModeProvider({ children }: { children: React.ReactNode }) {
   const endSession = () => {
     const next: StudyModeState = {
       active: false,
-      participantName: null,
+      intake: null,
       startedAt: null,
     };
     setState(next);

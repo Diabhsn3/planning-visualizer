@@ -11,7 +11,7 @@ import { useLocation } from "wouter";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
-import { useStudyMode } from "@/contexts/StudyModeContext";
+import { useStudyMode, type StudyIntake } from "@/contexts/StudyModeContext";
 
 // Shared cubic-bezier — mirrors the one used in Visualizer.tsx so motion
 // across the two pages feels like the same product.
@@ -565,11 +565,20 @@ export default function Welcome() {
   // ── Study-mode session start (facilitator) ────────────────────────────────
   const { startSession } = useStudyMode();
   const [showStudyPrompt, setShowStudyPrompt] = useState(false);
-  const [studyName, setStudyName] = useState("");
+  const today = new Date().toISOString().slice(0, 10);
+  const [intake, setIntake] = useState<StudyIntake>({
+    participantId: "",
+    profile: null,
+    studyDate: today,
+    facilitator: "",
+    noteTaker: "",
+    mode: null,
+  });
+  const setIntakeField = <K extends keyof StudyIntake>(k: K, v: StudyIntake[K]) =>
+    setIntake((prev) => ({ ...prev, [k]: v }));
   const beginStudy = () => {
-    const name = studyName.trim();
-    if (!name) return;
-    startSession(name);
+    if (!intake.participantId.trim()) return;
+    startSession(intake);
     setShowStudyPrompt(false);
     navigate("/visualizer");
   };
@@ -894,7 +903,7 @@ export default function Welcome() {
         </motion.div>
       </section>
 
-      {/* ── STUDY-SESSION NAME PROMPT ─────────────────────────────────────── */}
+      {/* ── STUDY-SESSION INTAKE FORM ─────────────────────────────────────── */}
       <AnimatePresence>
         {showStudyPrompt && (
           <motion.div
@@ -908,55 +917,145 @@ export default function Welcome() {
               onClick={() => setShowStudyPrompt(false)}
             />
             <motion.div
-              className="relative w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0F1A2E] p-7 shadow-2xl"
+              className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-white/[0.08] bg-[#0F1A2E] p-7 shadow-2xl"
               initial={{ opacity: 0, scale: 0.96, y: 8 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 4 }}
               transition={{ type: "spring", stiffness: 380, damping: 34 }}
+              style={{ fontFamily: "'JetBrains Mono', monospace" }}
             >
-              <div
-                className="text-[10px] uppercase tracking-[0.28em] text-purple-300/85 mb-2"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
-              >
+              <div className="text-[10px] uppercase tracking-[0.28em] text-purple-300/85 mb-2">
                 Study session
               </div>
-              <h3 className="text-lg font-semibold text-slate-100">
-                Welcome — what's your full name?
+              <h3 className="text-lg font-semibold text-slate-100" style={{ fontFamily: "inherit" }}>
+                Participant intake
               </h3>
-              <p className="mt-1 text-sm text-slate-400">
-                We'll record it with your usability survey at the end of the
-                session.
+              <p className="mt-1 text-xs text-slate-400">
+                Filled by the facilitator. Saved with the SUS survey at the end.
               </p>
-              <input
-                type="text"
-                autoFocus
-                value={studyName}
-                onChange={(e) => setStudyName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") beginStudy();
-                }}
-                placeholder="Full name"
-                className="mt-5 w-full px-3 py-2.5 text-sm bg-white/[0.04] border border-white/[0.1] rounded-lg text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-400/50"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
-              />
-              <div className="mt-6 flex items-center justify-end gap-3">
+
+              <div className="mt-5 space-y-4 text-sm">
+                {/* Participant ID */}
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Participant ID *</label>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={intake.participantId}
+                    onChange={(e) => setIntakeField("participantId", e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") beginStudy(); }}
+                    placeholder="e.g. P-07"
+                    className="w-full px-3 py-2 text-sm bg-white/[0.04] border border-white/[0.1] rounded-lg text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-400/50"
+                  />
+                </div>
+
+                {/* Profile */}
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1.5">Profile</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { v: "lab_researcher", label: "Lab researcher" },
+                      { v: "cs_student", label: "CS student (no PDDL)" },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setIntakeField("profile", intake.profile === opt.v ? null : opt.v)}
+                        className={`px-3 py-2 rounded-lg border text-xs transition-colors ${
+                          intake.profile === opt.v
+                            ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-200"
+                            : "border-white/[0.08] bg-white/[0.02] text-slate-400 hover:bg-white/[0.06]"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Date + Mode */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={intake.studyDate}
+                      onChange={(e) => setIntakeField("studyDate", e.target.value)}
+                      className="w-full px-3 py-2 text-sm bg-white/[0.04] border border-white/[0.1] rounded-lg text-slate-100 focus:outline-none focus:border-purple-400/50 [color-scheme:dark]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1.5">Mode</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { v: "in_person", label: "In-person" },
+                        { v: "remote", label: "Remote" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.v}
+                          type="button"
+                          onClick={() => setIntakeField("mode", intake.mode === opt.v ? null : opt.v)}
+                          className={`px-2 py-2 rounded-lg border text-xs transition-colors ${
+                            intake.mode === opt.v
+                              ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-200"
+                              : "border-white/[0.08] bg-white/[0.02] text-slate-400 hover:bg-white/[0.06]"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Facilitator + Note-taker */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Facilitator</label>
+                    <input
+                      type="text"
+                      value={intake.facilitator}
+                      onChange={(e) => setIntakeField("facilitator", e.target.value)}
+                      className="w-full px-3 py-2 text-sm bg-white/[0.04] border border-white/[0.1] rounded-lg text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-400/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Note-taker</label>
+                    <input
+                      type="text"
+                      value={intake.noteTaker}
+                      onChange={(e) => setIntakeField("noteTaker", e.target.value)}
+                      className="w-full px-3 py-2 text-sm bg-white/[0.04] border border-white/[0.1] rounded-lg text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-purple-400/50"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowStudyPrompt(false)}
-                  className="px-4 py-2 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  onClick={() => navigate("/study-results")}
+                  className="text-[11px] text-slate-500 hover:text-purple-300 underline underline-offset-2 transition-colors"
                 >
-                  Cancel
+                  View all results →
                 </button>
-                <button
-                  type="button"
-                  onClick={beginStudy}
-                  disabled={!studyName.trim()}
-                  className="px-5 py-2 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  Begin session →
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowStudyPrompt(false)}
+                    className="px-4 py-2 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={beginStudy}
+                    disabled={!intake.participantId.trim()}
+                    className="px-5 py-2 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Begin session →
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>

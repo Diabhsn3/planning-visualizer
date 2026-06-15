@@ -1631,7 +1631,7 @@ export default function Visualizer() {
                 style={{ fontFamily: "'JetBrains Mono', monospace" }}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
-                Study mode · {studyMode.participantName}
+                Study mode · {studyMode.intake?.participantId}
               </span>
               <button
                 type="button"
@@ -1656,10 +1656,10 @@ export default function Visualizer() {
       </header>
 
       {/* ── Study Mode: SUS questionnaire ── */}
-      {studyMode.active && studyMode.startedAt && studyMode.participantName && (
+      {studyMode.active && studyMode.startedAt && studyMode.intake && (
         <SusSurvey
           open={showSus}
-          participantName={studyMode.participantName}
+          intake={studyMode.intake}
           startedAt={studyMode.startedAt}
           onClose={() => setShowSus(false)}
           onFinished={() => {
