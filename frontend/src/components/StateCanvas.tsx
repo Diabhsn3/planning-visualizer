@@ -27,16 +27,10 @@ interface DomainRenderer {
   legendData?: LegendEntry[];
 }
 
-// Shared legend for the imaging domains (rovers & satellite): a target
-// progresses Pending → Imaged → Sent.
-const IMAGING_LEGEND: LegendEntry[] = [
-  { label: "Pending — target not yet imaged", color: "#FF9800", shape: "circle" },
-  { label: "Imaged — image captured", color: "#2196F3", shape: "circle" },
-  { label: "Sent — image transmitted", color: "#4CAF50", shape: "circle" },
-];
-
 // Map of domain names to their renderer configurations
 // Note: blocks-world and gripper are defined later in this file
+// Every built-in draws its own rich on-canvas legend (rover crosshairs,
+// satellite icons, etc.); the showLegend toggle controls visibility.
 const domainRenderers: Record<string, DomainRenderer> = {
   "depot": {
     render: renderDepot,
@@ -47,7 +41,6 @@ const domainRenderers: Record<string, DomainRenderer> = {
     render: renderSatellite,
     background: renderSatelliteBackground,
     legend: renderSatelliteLegend,
-    legendData: IMAGING_LEGEND,
   },
   "hanoi": {
     render: renderHanoi,
@@ -58,7 +51,6 @@ const domainRenderers: Record<string, DomainRenderer> = {
     render: renderRovers,
     background: renderRoversBackground,
     legend: renderRoversLegend,
-    legendData: IMAGING_LEGEND,
   },
   // blocks-world and gripper are added after their functions are defined
 };
