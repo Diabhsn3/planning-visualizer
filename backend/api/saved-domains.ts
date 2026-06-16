@@ -19,24 +19,16 @@
  */
 
 import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { writeArtifact, readArtifact } from "./artifacts";
 import { createMutex } from "./async-mutex";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { DATA_DIR, dataPath } from "./ndjson-store";
 
 // Serializes load -> mutate -> save so concurrent saveDomain/deleteSavedDomain
 // calls can't lose updates or assign duplicate ids.
 const writeLock = createMutex();
 
-const DATA_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "data")
-  : path.join(__dirname, "data");
-
-const SAVED_DOMAINS_FILE = path.join(DATA_DIR, "saved_domains.json");
+const SAVED_DOMAINS_FILE = dataPath("saved_domains.json");
 
 // ==================== Types ====================
 

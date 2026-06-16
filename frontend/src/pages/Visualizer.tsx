@@ -1,55 +1,41 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence, useMotionValue, useMotionValueEvent, animate as motionAnimate } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { getSessionId } from "@/lib/session";
-import { Textarea } from "@/components/ui/textarea";
 import { StateCanvas } from "@/components/StateCanvas";
+import { usePlayback } from "@/hooks/usePlayback";
+import { PlaybackControls } from "@/components/PlaybackControls";
+import { CollapseSection } from "@/components/CollapseSection";
+import { SpeedBadge } from "@/components/SpeedBadge";
+import { StrategyPicker, type SearchStrategy } from "@/components/StrategyPicker";
+import { RenderModePicker, type RenderMode, type LlmProvider } from "@/components/RenderModePicker";
+import { ErrorModal, type ErrorModalState } from "@/components/ErrorModal";
+import { PddlViewerModal } from "@/components/PddlViewerModal";
+import { DuplicateDomainModal, type DuplicateMatch } from "@/components/DuplicateDomainModal";
+import { DeleteDomainModal } from "@/components/DeleteDomainModal";
+import { DomainGrid, type Domain, type DomainColors } from "@/components/DomainGrid";
+import { SavedDomainsList } from "@/components/SavedDomainsList";
+import { CustomDomainUpload } from "@/components/CustomDomainUpload";
+import { ProblemInput } from "@/components/ProblemInput";
+import { SavedDomainDetail } from "@/components/SavedDomainDetail";
+import { easeOut, spring, fadeInUp } from "@/lib/animation";
 import { FeedbackBox } from "@/components/FeedbackBox";
 import { SusSurvey } from "@/components/SusSurvey";
 import { useStudyMode } from "@/contexts/StudyModeContext";
 import { VerifyStatus } from "@/components/VerifyStatus";
 import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
 import {
-  PlayIcon, PauseIcon, SkipForwardIcon, SkipBackIcon,
-  UploadIcon, FileCodeIcon, AlertIcon, ClockIcon, ZapIcon,
+  PlayIcon,
+  AlertIcon,
   CheckCircleIcon,
-  ChevronDownIcon, WandIcon, RefreshIcon, BrainIcon,
-  MenuIcon, CloseIcon, TerminalIcon,
+  ChevronDownIcon, WandIcon,
+  MenuIcon, TerminalIcon,
   BlocksWorldIcon, GripperIcon, DepotIcon, HanoiIcon, RoverIcon, SatelliteIcon,
-  SparklesIcon,
-  ClaudeIcon, GeminiIcon,
 } from "@/components/Icons";
 
-interface SearchStrategy {
-  id: string; name: string; description: string;
-  isOptimal: boolean; speed: "fast" | "medium" | "slow";
-  whenToUse: string; warning: string | null;
-}
+// (SearchStrategy type now lives in @/components/StrategyPicker — imported above.)
 
-// ─── Animation tokens ────────────────────────────────────────────────────────
-const easeOut: [number, number, number, number] = [0.23, 1, 0.32, 1];
-const spring = { type: "spring", stiffness: 380, damping: 34 } as const;
-
-const fadeInUp = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  exit:    { opacity: 0, y: -4 },
-};
-
-const modalVariants = {
-  initial: { opacity: 0, scale: 0.96, y: 8 },
-  animate: { opacity: 1, scale: 1,    y: 0 },
-  exit:    { opacity: 0, scale: 0.96, y: 4 },
-};
-
-const listStagger = {
-  animate: { transition: { staggerChildren: 0.04, delayChildren: 0.02 } },
-};
-
-const listItem = {
-  initial: { opacity: 0, x: -8 },
-  animate: { opacity: 1, x: 0  },
-};
+// (Animation tokens moved to @/lib/animation — imported above.)
 
 // ─── Ambient background orbs ─────────────────────────────────────────────────
 const AmbientOrbs = () => (
@@ -67,16 +53,7 @@ const AmbientOrbs = () => (
 );
 
 // ─── Animated counter ────────────────────────────────────────────────────────
-const AnimatedNumber = ({ value }: { value: number }) => {
-  const mv = useMotionValue(value);
-  const [display, setDisplay] = useState(value);
-  useMotionValueEvent(mv, "change", (v) => setDisplay(Math.round(v)));
-  useEffect(() => {
-    const ctrl = motionAnimate(mv, value, { duration: 0.4, ease: easeOut });
-    return () => ctrl.stop();
-  }, [value, mv]);
-  return <span className="tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{display}</span>;
-};
+// (AnimatedNumber moved into PlaybackControls — its only consumer.)
 
 // ─── Blinking cursor ─────────────────────────────────────────────────────────
 const BlinkingCursor = () => (
@@ -186,53 +163,13 @@ const ScanBeam = () => (
 );
 
 // ─── Collapsible wrapper ─────────────────────────────────────────────────────
-const CollapseSection = ({ open, children }: { open: boolean; children: React.ReactNode }) => (
-  <AnimatePresence>
-    {open && (
-      <motion.div
-        initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-        exit={{ height: 0, opacity: 0 }}
-        transition={{ type: "spring", stiffness: 400, damping: 36 }}
-        style={{ overflow: "hidden" }}
-      >
-        {children}
-      </motion.div>
-    )}
-  </AnimatePresence>
-);
+// (CollapseSection moved to @/components/CollapseSection — imported above.)
 
 // ─── Pill toggle ─────────────────────────────────────────────────────────────
-const PillToggle = ({
-  options, value, onChange,
-}: { options: { id: string; label: React.ReactNode }[]; value: string; onChange: (v: string) => void }) => (
-  <div className="flex bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.07]">
-    {options.map(o => (
-      <button key={o.id} onClick={() => onChange(o.id)}
-        className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-md text-xs font-medium transition-all duration-150 ${
-          value === o.id
-            ? "bg-[#1a2e48] text-slate-100 shadow-sm border border-white/[0.1]"
-            : "text-slate-600 hover:text-slate-400"
-        }`}>
-        {o.label}
-      </button>
-    ))}
-  </div>
-);
+// (PillToggle moved to @/components/PillToggle; ProblemInput owns the Step 2 UI.)
 
 // ─── Modal backdrop ───────────────────────────────────────────────────────────
-const ModalBackdrop = ({ children, onClose }: { children: React.ReactNode; onClose: () => void }) => (
-  <motion.div
-    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-    transition={{ duration: 0.18 }}
-    onClick={onClose}
-    className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-  >
-    <motion.div {...modalVariants} transition={{ type: "spring", stiffness: 350, damping: 28 }}
-      onClick={e => e.stopPropagation()}>
-      {children}
-    </motion.div>
-  </motion.div>
-);
+// (ModalBackdrop moved to @/components/ModalBackdrop — imported above.)
 
 // ─── Custom-domain LLM loading state ─────────────────────────────────────────
 // Shown in the visualization box while the two LLM calls (transformer →
@@ -664,9 +601,17 @@ export default function Visualizer() {
   const verifyRunIdRef                            = useRef<string>(
     `vfy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
   );
-  const [isPlaying, setIsPlaying]               = useState(false);
-  const [playbackSpeed, setPlaybackSpeed]       = useState(1000);
-  const [plannerInfo, setPlannerInfo]           = useState<{ used_planner: boolean; info: string; strategy?: any } | null>(null);
+  const {
+    isPlaying,
+    playbackSpeed,
+    setPlaybackSpeed,
+    play: handlePlay,
+    pause: handlePause,
+    next: handleNext,
+    previous: handlePrevious,
+    stop: stopPlayback,
+  } = usePlayback({ totalStates: renderedStates.length, setCurrentStateIndex });
+  const [plannerInfo, setPlannerInfo]           = useState<{ used_planner: boolean; info: string; strategy?: { id: string; name: string; isOptimal: boolean; speed: string } | null } | null>(null);
   const [elapsedTime, setElapsedTime]           = useState(0);
   const [isProcessing, setIsProcessing]         = useState(false);
   const [isDomainOpen, setIsDomainOpen]         = useState(true);
@@ -677,21 +622,17 @@ export default function Visualizer() {
   const [isSidebarCollapsed, setIsSidebarCollapsed]     = useState(false);
   const [showSuccessFlash, setShowSuccessFlash]         = useState(false);
 
-  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const planStepsRef        = useRef<HTMLDivElement>(null);
   const usingSavedDomainRef = useRef(false);  // tracks if current upload is from a saved domain
 
   // LLM Renderer state
-  const [renderMode, setRenderMode]           = useState<"basic" | "llm">("basic");
-  const [llmProvider, setLlmProvider]         = useState<"claude" | "gemini">("claude");
+  const [renderMode, setRenderMode]           = useState<RenderMode>("basic");
+  const [llmProvider, setLlmProvider]         = useState<LlmProvider>("claude");
   const [llmRendererCode, setLlmRendererCode] = useState<string | null>(null);
   const [isLlmGenerating, setIsLlmGenerating] = useState(false);
   const [llmError, setLlmError]               = useState<string | null>(null);
   const [llmModelInfo, setLlmModelInfo]       = useState<string | null>(null);
-  const [errorModal, setErrorModal] = useState<{
-    show: boolean; title: string; message: string;
-    errorType?: string; suggestedDomain?: string; suggestedDomainName?: string;
-  }>({ show: false, title: "", message: "" });
+  const [errorModal, setErrorModal] = useState<ErrorModalState>({ show: false, title: "", message: "" });
 
   // "Domain already exists" modal — surfaces when an upload's PDDL hash
   // matches one or more entries in the saved-domains library. Lets the
@@ -699,15 +640,7 @@ export default function Visualizer() {
   // fresh LLM generation that creates a new versioned entry.
   const [duplicateModal, setDuplicateModal] = useState<{
     show: boolean;
-    matches: Array<{
-      id: number;
-      displayName: string;
-      domainName: string;
-      provider: string;
-      createdAt: string;
-      transformerHash: string;
-      rendererHash: string;
-    }>;
+    matches: DuplicateMatch[];
     /** PDDL the user just submitted — used if they pick "Create new". */
     pendingDomainPddl: string;
   }>({ show: false, matches: [], pendingDomainPddl: "" });
@@ -741,13 +674,6 @@ export default function Visualizer() {
   const [showGeneratedCode, setShowGeneratedCode] = useState(false);
 
   // Format a byte count like "1234" -> "1.2 KB" / "768 B"
-  const formatBytes = (n: number): string => {
-    if (!n || n < 1024) return `${n} B`;
-    const kb = n / 1024;
-    if (kb < 1024) return `${kb.toFixed(1)} KB`;
-    return `${(kb / 1024).toFixed(2)} MB`;
-  };
-
   // Auto-verify state. Results live in a per-state map keyed by the same
   // (renderer × transformer × stateIndex) triple used for dedup, so when
   // the user scrubs back to a state they already saw they see THAT
@@ -915,7 +841,7 @@ export default function Visualizer() {
     { domainName: selectedDomain as any }, { enabled: showDomainDefinition }
   );
 
-  const domains = [
+  const domains: Domain[] = [
     { id: "blocks-world", name: "Blocks World",  description: "Classic block stacking",              Icon: BlocksWorldIcon },
     { id: "gripper",      name: "Gripper",        description: "Robot gripper moving balls",          Icon: GripperIcon     },
     { id: "depot",        name: "Depot",          description: "Truck & crane depot logistics",       Icon: DepotIcon       },
@@ -924,7 +850,7 @@ export default function Visualizer() {
     { id: "satellite",    name: "Satellite",      description: "Orbital imaging & transmission",      Icon: SatelliteIcon   },
   ];
 
-  const domainColors: Record<string, { iconBg: string; iconColor: string; selBg: string; selBorder: string; nameColor: string; dotColor: string; dotGlow: string }> = {
+  const domainColors: DomainColors = {
     "blocks-world": { iconBg: "rgba(99,102,241,0.2)",   iconColor: "#A5B4FC", selBg: "rgba(99,102,241,0.1)",  selBorder: "rgba(99,102,241,0.35)", nameColor: "#C7D2FE", dotColor: "#818CF8", dotGlow: "rgba(99,102,241,0.7)"  },
     "gripper":      { iconBg: "rgba(245,158,11,0.18)",  iconColor: "#FCD34D", selBg: "rgba(245,158,11,0.1)", selBorder: "rgba(245,158,11,0.32)", nameColor: "#FDE68A", dotColor: "#F59E0B", dotGlow: "rgba(245,158,11,0.7)"  },
     "depot":        { iconBg: "rgba(6,182,212,0.18)",   iconColor: "#67E8F9", selBg: "rgba(6,182,212,0.1)",  selBorder: "rgba(6,182,212,0.32)",  nameColor: "#A5F3FC", dotColor: "#06B6D4", dotGlow: "rgba(6,182,212,0.7)"   },
@@ -942,27 +868,7 @@ export default function Visualizer() {
     return () => { if (interval) clearInterval(interval); };
   }, [isProcessing]);
 
-  // Drives autoplay. The interval is recreated whenever isPlaying OR
-  // playbackSpeed changes, so moving the speed slider mid-playback takes effect
-  // immediately — previously the interval captured the speed at Play-click time
-  // and ignored slider changes until the user paused and replayed.
-  useEffect(() => {
-    if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setCurrentStateIndex((prev) => {
-        if (prev >= renderedStates.length - 1) {
-          setIsPlaying(false);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, playbackSpeed);
-    playbackIntervalRef.current = interval;
-    return () => {
-      clearInterval(interval);
-      if (playbackIntervalRef.current === interval) playbackIntervalRef.current = null;
-    };
-  }, [isPlaying, playbackSpeed, renderedStates.length]);
+  // (Autoplay is owned by the usePlayback hook above.)
 
   useEffect(() => {
     // Only run when switching TO a real basic domain. An empty selectedDomain
@@ -976,7 +882,7 @@ export default function Visualizer() {
     // Generate. Only the Generate handlers (uploadMutation /
     // uploadCustomMutation onSuccess) replace those.
     setProblemType("example"); setProblemFile(null); setProblemText(""); setInputMode("file");
-    setIsPlaying(false); if (playbackIntervalRef.current) { clearInterval(playbackIntervalRef.current); playbackIntervalRef.current = null; }
+    stopPlayback();
     // Reset custom domain state when switching to a built-in domain
     if (isCustomDomain) {
       setIsCustomDomain(false); setCustomDomainName(""); setCustomDomainFile(null);
@@ -1112,11 +1018,11 @@ export default function Visualizer() {
     onSuccess: (data) => {
       setIsProcessing(false);
       setRenderedStates(data.states);
-      setRawStates((data as any).raw_states ?? null);
-      setPredicateSchema((data as any).predicate_schema ?? null);
-      setPddlObjects((data as any).objects ?? null);
+      setRawStates(data.raw_states ?? null);
+      setPredicateSchema(data.predicate_schema ?? null);
+      setPddlObjects(data.objects ?? null);
       setProblemName(data.problem ?? null);
-      setProblemHash((data as any).problem_hash ?? null);
+      setProblemHash(data.problem_hash ?? null);
       setPlan(data.plan);
       setCurrentStateIndex(0);
       setVizRunId((n) => n + 1); // new plan → remount canvas (reset zoom/pan)
@@ -1224,11 +1130,11 @@ export default function Visualizer() {
     onSuccess: (data) => {
       setIsProcessing(false);
       setRenderedStates(data.states);
-      setRawStates((data as any).raw_states ?? null);
-      setPredicateSchema((data as any).predicate_schema ?? null);
-      setPddlObjects((data as any).objects ?? null);
+      setRawStates(data.raw_states ?? null);
+      setPredicateSchema(data.predicate_schema ?? null);
+      setPddlObjects(data.objects ?? null);
       setProblemName(data.problem ?? null);
-      setProblemHash((data as any).problem_hash ?? null);
+      setProblemHash(data.problem_hash ?? null);
       setPlan(data.plan);
       setCurrentStateIndex(0);
       setVizRunId((n) => n + 1); // new plan → remount canvas (reset zoom/pan)
@@ -1522,32 +1428,10 @@ export default function Visualizer() {
     }
   };
 
-  // The autoplay interval itself is owned by the effect keyed on
-  // [isPlaying, playbackSpeed, renderedStates.length] above; these handlers
-  // just flip the flag.
-  const handlePlay = () => setIsPlaying(true);
+  // Playback handlers (handlePlay/handlePause/handleNext/handlePrevious/
+  // stopPlayback) come from the usePlayback hook above.
 
-  const handlePause = () => {
-    setIsPlaying(false);
-    if (playbackIntervalRef.current) { clearInterval(playbackIntervalRef.current); playbackIntervalRef.current = null; }
-  };
-
-  const handleNext     = () => setCurrentStateIndex(prev => Math.min(prev + 1, renderedStates.length - 1));
-  const handlePrevious = () => setCurrentStateIndex(prev => Math.max(prev - 1, 0));
-
-  const getSpeedBadge = (speed: string) => {
-    const map = {
-      fast:   { Icon: ZapIcon,   bg: "bg-green-500/15",  text: "text-green-400",  label: "Fast"   },
-      medium: { Icon: ClockIcon, bg: "bg-amber-500/15",  text: "text-amber-400",  label: "Medium" },
-      slow:   { Icon: AlertIcon, bg: "bg-red-500/15",    text: "text-red-400",    label: "Slow"   },
-    }[speed] ?? { Icon: ClockIcon, bg: "bg-white/8", text: "text-slate-400", label: speed };
-    const { Icon } = map;
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${map.bg} ${map.text}`}>
-        <Icon className="w-2.5 h-2.5" />{map.label}
-      </span>
-    );
-  };
+  // (getSpeedBadge replaced by the <SpeedBadge> component — imported above.)
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60); const sec = s % 60;
@@ -1806,60 +1690,14 @@ export default function Visualizer() {
                         {/* Basic: domain list */}
                         <AnimatePresence mode="wait">
                           {!isCustomDomain && (
-                            <motion.div
+                            <DomainGrid
                               key="basic-list"
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.2, ease: easeOut }}
-                              className="overflow-hidden space-y-0.5"
-                            >
-                              <motion.div className="space-y-0.5" variants={listStagger} initial="initial" animate="animate">
-                                {domains.map(domain => {
-                                  const DomainIcon = domain.Icon;
-                                  const sel = selectedDomain === domain.id;
-                                  return (
-                                    <motion.button
-                                      key={domain.id}
-                                      variants={listItem}
-                                      transition={{ duration: 0.18, ease: easeOut }}
-                                      onClick={() => { setSelectedDomain(domain.id); setIsCustomDomain(false); }}
-                                      whileTap={{ scale: 0.98 }}
-                                      whileHover={!sel ? { x: 2 } : undefined}
-                                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border"
-                                      style={sel ? { background: domainColors[domain.id]?.selBg, borderColor: domainColors[domain.id]?.selBorder } : { borderColor: "transparent" }}
-                                    >
-                                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                                        style={{ background: sel ? domainColors[domain.id]?.iconBg : "rgba(255,255,255,0.06)" }}>
-                                        <span style={{ color: sel ? domainColors[domain.id]?.iconColor : "#64748B", display: "contents" }}>
-                                          <DomainIcon className="w-5 h-5 transition-colors" />
-                                        </span>
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-medium leading-none transition-colors"
-                                          style={{ fontFamily: "'JetBrains Mono', monospace", color: sel ? domainColors[domain.id]?.nameColor : "#CBD5E1" }}>
-                                          {domain.name}
-                                        </div>
-                                        <div className="text-xs text-slate-500 truncate mt-0.5">{domain.description}</div>
-                                      </div>
-                                      {sel && (
-                                        <motion.div
-                                          layoutId="domain-sel-dot"
-                                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                          style={{ background: domainColors[domain.id]?.dotColor, boxShadow: `0 0 8px ${domainColors[domain.id]?.dotGlow}` }}
-                                        />
-                                      )}
-                                    </motion.button>
-                                  );
-                                })}
-                              </motion.div>
-                              <button
-                                onClick={() => setShowDomainDefinition(true)}
-                                className="w-full mt-1 px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/[0.04] transition-all duration-150 flex items-center justify-center gap-1.5">
-                                <FileCodeIcon className="w-3 h-3" />
-                                View Domain Definition
-                              </button>
-                            </motion.div>
+                              domains={domains}
+                              selectedDomain={selectedDomain}
+                              domainColors={domainColors}
+                              onSelect={(id) => { setSelectedDomain(id); setIsCustomDomain(false); }}
+                              onViewDefinition={() => setShowDomainDefinition(true)}
+                            />
                           )}
 
                           {/* Custom: Saved / Upload New sub-toggle + panels */}
@@ -1936,219 +1774,40 @@ export default function Visualizer() {
                                     </button>
 
                                     <CollapseSection open={savedDomainsListOpen}>
-                                      <div className="space-y-1 pt-1">
-                                    {savedDomainsQuery.isLoading && (
-                                      <div className="text-xs text-slate-500 text-center py-4">Loading saved domains...</div>
-                                    )}
-                                    {savedDomainsQuery.data && savedDomainsQuery.data.length === 0 && (
-                                      <div className="text-center py-6 space-y-2">
-                                        <div className="text-xs text-slate-500">No saved domains yet.</div>
-                                        <div className="text-xs text-slate-600">Upload a new domain and it will be saved here automatically.</div>
-                                      </div>
-                                    )}
-                                    {savedDomainsQuery.data?.map(sd => {
-                                      const isSel = selectedSavedDomainId === sd.id;
-                                      return (
-                                        <motion.div
-                                          key={sd.id}
-                                          whileTap={{ scale: 0.98 }}
-                                          whileHover={!isSel ? { x: 2 } : undefined}
-                                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border group"
-                                          style={isSel
-                                            ? { background: "rgba(168,85,247,0.1)", borderColor: "rgba(168,85,247,0.35)" }
-                                            : { borderColor: "transparent" }
-                                          }
-                                        >
-                                          {/* Main click region — selecting the saved domain. */}
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setSelectedSavedDomainId(sd.id);
-                                              setCustomDomainName(sd.domainName);
-                                            }}
-                                            className="flex-1 flex items-center gap-3 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer"
-                                          >
-                                            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                                              style={{ background: isSel ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.06)" }}>
-                                              <FileCodeIcon className={`w-5 h-5 ${isSel ? "text-purple-400" : "text-slate-500"}`} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                              <div className="text-sm font-medium leading-none transition-colors"
-                                                style={{ fontFamily: "'JetBrains Mono', monospace", color: isSel ? "#E9D5FF" : "#CBD5E1" }}>
-                                                {sd.displayName}
-                                              </div>
-                                              <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-                                                {sd.provider?.toLowerCase().includes("gemini") ? (
-                                                  <GeminiIcon className="w-3 h-3 flex-shrink-0" />
-                                                ) : sd.provider?.toLowerCase().includes("claude") ? (
-                                                  <ClaudeIcon className="w-3 h-3 flex-shrink-0" />
-                                                ) : null}
-                                                <span className="truncate">{sd.provider} &middot; {new Date(sd.createdAt).toLocaleDateString()}</span>
-                                              </div>
-                                              {(sd.transformerHash || sd.rendererHash) && (
-                                                <div className="flex gap-1 mt-1">
-                                                  {sd.transformerHash && (
-                                                    <span
-                                                      title={`Transformer hash: ${sd.transformerHash}`}
-                                                      className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
-                                                    >
-                                                      T:{sd.transformerHash.slice(0, 8)}
-                                                    </span>
-                                                  )}
-                                                  {sd.rendererHash && (
-                                                    <span
-                                                      title={`Renderer hash: ${sd.rendererHash}`}
-                                                      className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
-                                                    >
-                                                      R:{sd.rendererHash.slice(0, 8)}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              )}
-                                            </div>
-                                            {isSel && (
-                                              <motion.div
-                                                layoutId="saved-domain-dot"
-                                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                                style={{ background: "#A855F7", boxShadow: "0 0 8px rgba(168,85,247,0.7)" }}
-                                              />
-                                            )}
-                                          </button>
-                                          {/* Delete button — opens confirmation modal. Stop
-                                              propagation so it doesn't double-fire the row select. */}
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setDeleteConfirmModal({
-                                                show: true,
-                                                id: sd.id,
-                                                displayName: sd.displayName,
-                                              });
-                                            }}
-                                            title={`Delete ${sd.displayName}`}
-                                            className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-slate-600 hover:text-red-300 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                          >
-                                            <CloseIcon className="w-4 h-4" />
-                                          </button>
-                                        </motion.div>
-                                      );
-                                    })}
-                                      </div>
+                                      <SavedDomainsList
+                                        savedDomains={savedDomainsQuery.data}
+                                        isLoading={savedDomainsQuery.isLoading}
+                                        selectedSavedDomainId={selectedSavedDomainId}
+                                        onSelect={(sd) => {
+                                          setSelectedSavedDomainId(sd.id);
+                                          setCustomDomainName(sd.domainName);
+                                        }}
+                                        onDelete={(sd) => setDeleteConfirmModal({
+                                          show: true,
+                                          id: sd.id,
+                                          displayName: sd.displayName,
+                                        })}
+                                      />
                                     </CollapseSection>
 
                                     {/* When a saved domain is selected, show domain definition + problem upload */}
                                     <AnimatePresence>
                                       {selectedSavedDomainId && loadSavedDomainQuery.data && (
-                                        <motion.div
-                                          initial={{ opacity: 0, height: 0 }}
-                                          animate={{ opacity: 1, height: "auto" }}
-                                          exit={{ opacity: 0, height: 0 }}
-                                          transition={{ duration: 0.2, ease: easeOut }}
-                                          className="overflow-hidden space-y-3 pt-2"
-                                        >
-                                          {/* Domain Definition Preview */}
-                                          <div>
-                                            <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain Definition</label>
-                                            <div className="w-full h-28 text-xs font-mono bg-white/[0.04] border border-white/[0.08] rounded-lg p-2 overflow-auto text-slate-400">
-                                              <pre className="whitespace-pre-wrap">{loadSavedDomainQuery.data.domainPddl}</pre>
-                                            </div>
-                                          </div>
-                                          {/* Generated Code (transformer + renderer artifacts) */}
-                                          <div>
-                                            <button
-                                              type="button"
-                                              onClick={() => setShowGeneratedCode(v => !v)}
-                                              className="flex items-center justify-between w-full text-xs font-medium text-slate-400 hover:text-slate-300 mb-1.5"
-                                            >
-                                              <span>Generated Code</span>
-                                              <span className="font-mono text-[10px] text-slate-500">
-                                                {showGeneratedCode ? "▾ hide" : "▸ show"}
-                                              </span>
-                                            </button>
-                                            <AnimatePresence>
-                                              {showGeneratedCode && (
-                                                <motion.div
-                                                  initial={{ opacity: 0, height: 0 }}
-                                                  animate={{ opacity: 1, height: "auto" }}
-                                                  exit={{ opacity: 0, height: 0 }}
-                                                  transition={{ duration: 0.18, ease: easeOut }}
-                                                  className="overflow-hidden space-y-2"
-                                                >
-                                                  {(["transformer", "renderer"] as const).map(kind => {
-                                                    const code = kind === "transformer"
-                                                      ? loadSavedDomainQuery.data.transformerCode
-                                                      : loadSavedDomainQuery.data.rendererCode;
-                                                    const hash = kind === "transformer"
-                                                      ? loadSavedDomainQuery.data.transformerHash
-                                                      : loadSavedDomainQuery.data.rendererHash;
-                                                    return (
-                                                      <div key={kind} className="bg-white/[0.04] border border-white/[0.08] rounded-lg p-2">
-                                                        <div className="flex items-center gap-2 mb-1.5">
-                                                          <span className="text-xs font-medium text-slate-300 capitalize">{kind}</span>
-                                                          <span
-                                                            title={hash || "(no hash)"}
-                                                            className="font-mono text-[10px] text-slate-500 truncate flex-1 min-w-0"
-                                                          >
-                                                            {hash ? hash.slice(0, 16) + "…" : "(legacy, no hash)"}
-                                                          </span>
-                                                          <span className="font-mono text-[10px] text-slate-500 flex-shrink-0">
-                                                            {formatBytes(code?.length || 0)}
-                                                          </span>
-                                                          <button
-                                                            type="button"
-                                                            onClick={() => { if (code) navigator.clipboard.writeText(code); }}
-                                                            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-400 hover:text-slate-200 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08]"
-                                                            title="Copy code to clipboard"
-                                                          >
-                                                            copy
-                                                          </button>
-                                                        </div>
-                                                        <pre className="text-[10px] font-mono text-slate-400 whitespace-pre overflow-auto max-h-48 leading-relaxed">
-                                                          {code || "(no code)"}
-                                                        </pre>
-                                                      </div>
-                                                    );
-                                                  })}
-                                                </motion.div>
-                                              )}
-                                            </AnimatePresence>
-                                          </div>
-                                          {/* Problem PDDL */}
-                                          <div>
-                                            <label className="text-xs font-medium text-slate-400 block mb-1.5">Problem PDDL</label>
-                                            <div className="flex gap-1 mb-2">
-                                              {(["file", "text"] as const).map(m => (
-                                                <button key={m} onClick={() => setCustomProblemInputMode(m)}
-                                                  className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
-                                                  style={{ background: customProblemInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customProblemInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customProblemInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
-                                                  {m === "file" ? "Upload File" : "Paste Text"}
-                                                </button>
-                                              ))}
-                                            </div>
-                                            {customProblemInputMode === "file" ? (
-                                              <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
-                                                style={{ borderColor: customProblemFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customProblemFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
-                                                <span style={{ color: customProblemFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
-                                                <span className="text-xs text-center" style={{ color: customProblemFile ? "#c084fc" : "#475569" }}>
-                                                  {customProblemFile ? customProblemFile.name : "Click to upload problem.pddl"}
-                                                </span>
-                                                <input type="file" accept=".pddl,.txt" className="hidden"
-                                                  onChange={e => setCustomProblemFile(e.target.files?.[0] || null)} />
-                                              </label>
-                                            ) : (
-                                              <Textarea value={customProblemText} onChange={e => setCustomProblemText(e.target.value)}
-                                                placeholder="(define (problem my-problem)&#10;  (:domain my-domain)&#10;  ...)"
-                                                className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
-                                              />
-                                            )}
-                                          </div>
-                                          {/* Info banner */}
-                                          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: "rgba(168,85,247,0.08)", border: "1px solid rgba(168,85,247,0.15)" }}>
-                                            <SparklesIcon className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-                                            <span className="text-purple-300/80">Pre-trained renderer will be used. No LLM call needed.</span>
-                                          </div>
-                                        </motion.div>
+                                        <SavedDomainDetail
+                                          domainPddl={loadSavedDomainQuery.data.domainPddl}
+                                          transformerCode={loadSavedDomainQuery.data.transformerCode}
+                                          rendererCode={loadSavedDomainQuery.data.rendererCode}
+                                          transformerHash={loadSavedDomainQuery.data.transformerHash}
+                                          rendererHash={loadSavedDomainQuery.data.rendererHash}
+                                          showGeneratedCode={showGeneratedCode}
+                                          onToggleGeneratedCode={() => setShowGeneratedCode(v => !v)}
+                                          problemInputMode={customProblemInputMode}
+                                          onProblemInputModeChange={setCustomProblemInputMode}
+                                          problemFile={customProblemFile}
+                                          onProblemFileChange={setCustomProblemFile}
+                                          problemText={customProblemText}
+                                          onProblemTextChange={setCustomProblemText}
+                                        />
                                       )}
                                     </AnimatePresence>
                                   </motion.div>
@@ -2156,110 +1815,25 @@ export default function Visualizer() {
 
                                 {/* Upload New panel */}
                                 {customMode === "new" && (
-                                  <motion.div
+                                  <CustomDomainUpload
                                     key="upload-new"
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.2, ease: easeOut }}
-                                    className="overflow-hidden space-y-3"
-                                  >
-                              {/* LLM-only notice */}
-                              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-500/[0.08] border border-purple-500/20">
-                                <SparklesIcon className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
-                                <span className="text-[11px] text-purple-300/80 leading-relaxed">
-                                  LLM rendering is used automatically for custom domains.
-                                </span>
-              </div>
-              {/* LLM Provider selector */}
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500 flex-shrink-0">LLM Model</span>
-                <div className="flex items-center gap-1 flex-1">
-                  {[
-                    { id: "claude", label: "Claude", Icon: ClaudeIcon, active: "bg-orange-500/15 border-orange-500/30 text-orange-400" },
-                    { id: "gemini", label: "Gemini", Icon: GeminiIcon, active: "bg-blue-500/15 border-blue-500/30 text-blue-400" },
-                  ].map(m => (
-                    <button key={m.id} onClick={() => setLlmProvider(m.id as any)}
-                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
-                        llmProvider === m.id ? m.active : "bg-white/[0.03] border-white/[0.07] text-slate-600 hover:text-slate-400 hover:border-white/[0.12]"
-                      }`}>
-                      <m.Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                      {m.label}
-                    </button>
-                  ))}
-                </div>
-                              </div>
-                              {/* Domain Name */}
-                              <div>
-                                <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain Name</label>
-                                <input
-                                  type="text"
-                                  value={customDomainName}
-                                  onChange={e => setCustomDomainName(e.target.value)}
-                                  placeholder="e.g. logistics, ferry, floortile..."
-                                  className="w-full px-3 py-2 rounded-lg text-sm text-slate-200 placeholder-slate-600 border border-white/[0.08] bg-white/[0.04] focus:outline-none focus:border-purple-500/40 focus:bg-white/[0.06] transition-all"
-                                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                                />
-                              </div>
-                              {/* Domain PDDL */}
-                              <div>
-                                <label className="text-xs font-medium text-slate-400 block mb-1.5">Domain PDDL</label>
-                                <div className="flex gap-1 mb-2">
-                                  {(["file", "text"] as const).map(m => (
-                                    <button key={m} onClick={() => setCustomDomainInputMode(m)}
-                                      className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
-                                      style={{ background: customDomainInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customDomainInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customDomainInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
-                                      {m === "file" ? "Upload File" : "Paste Text"}
-                                    </button>
-                                  ))}
-                                </div>
-                                {customDomainInputMode === "file" ? (
-                                  <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
-                                    style={{ borderColor: customDomainFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customDomainFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
-                                    <span style={{ color: customDomainFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
-                                    <span className="text-xs text-center" style={{ color: customDomainFile ? "#c084fc" : "#475569" }}>
-                                      {customDomainFile ? customDomainFile.name : "Click to upload domain.pddl"}
-                                    </span>
-                                    <input type="file" accept=".pddl,.txt" className="hidden"
-                                      onChange={e => setCustomDomainFile(e.target.files?.[0] || null)} />
-                                  </label>
-                                ) : (
-                                  <Textarea value={customDomainText} onChange={e => setCustomDomainText(e.target.value)}
-                                    placeholder="(define (domain my-domain)&#10;  (:requirements :strips)&#10;  ...)"
-                                    className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
+                                    llmProvider={llmProvider}
+                                    onProviderChange={setLlmProvider}
+                                    domainName={customDomainName}
+                                    onDomainNameChange={setCustomDomainName}
+                                    domainInputMode={customDomainInputMode}
+                                    onDomainInputModeChange={setCustomDomainInputMode}
+                                    domainFile={customDomainFile}
+                                    onDomainFileChange={setCustomDomainFile}
+                                    domainText={customDomainText}
+                                    onDomainTextChange={setCustomDomainText}
+                                    problemInputMode={customProblemInputMode}
+                                    onProblemInputModeChange={setCustomProblemInputMode}
+                                    problemFile={customProblemFile}
+                                    onProblemFileChange={setCustomProblemFile}
+                                    problemText={customProblemText}
+                                    onProblemTextChange={setCustomProblemText}
                                   />
-                                )}
-                              </div>
-                              {/* Problem PDDL */}
-                              <div>
-                                <label className="text-xs font-medium text-slate-400 block mb-1.5">Problem PDDL</label>
-                                <div className="flex gap-1 mb-2">
-                                  {(["file", "text"] as const).map(m => (
-                                    <button key={m} onClick={() => setCustomProblemInputMode(m)}
-                                      className="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
-                                      style={{ background: customProblemInputMode === m ? "rgba(168,85,247,0.2)" : "rgba(255,255,255,0.05)", color: customProblemInputMode === m ? "#c084fc" : "#64748B", border: `1px solid ${customProblemInputMode === m ? "rgba(168,85,247,0.3)" : "transparent"}` }}>
-                                      {m === "file" ? "Upload File" : "Paste Text"}
-                                    </button>
-                                  ))}
-                                </div>
-                                {customProblemInputMode === "file" ? (
-                                  <label className="flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-purple-500/40 hover:bg-white/[0.03]"
-                                    style={{ borderColor: customProblemFile ? "rgba(168,85,247,0.4)" : "rgba(255,255,255,0.08)", background: customProblemFile ? "rgba(168,85,247,0.06)" : "transparent" }}>
-                                    <span style={{ color: customProblemFile ? "#c084fc" : "#475569" }}><UploadIcon className="w-5 h-5" /></span>
-                                    <span className="text-xs text-center" style={{ color: customProblemFile ? "#c084fc" : "#475569" }}>
-                                      {customProblemFile ? customProblemFile.name : "Click to upload problem.pddl"}
-                                    </span>
-                                    <input type="file" accept=".pddl,.txt" className="hidden"
-                                      onChange={e => setCustomProblemFile(e.target.files?.[0] || null)} />
-                                  </label>
-                                ) : (
-                                  <Textarea value={customProblemText} onChange={e => setCustomProblemText(e.target.value)}
-                                    placeholder="(define (problem my-problem)&#10;  (:domain my-domain)&#10;  ...)"
-                                    className="w-full h-28 text-xs font-mono resize-none bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder-slate-600 focus:border-purple-500/30"
-                                  />
-                                )}
-                              </div>
-                                  </motion.div>
                                 )}
                               </AnimatePresence>
                             </motion.div>
@@ -2283,82 +1857,18 @@ export default function Visualizer() {
                         className="overflow-hidden"
                       >
                   {/* ── Step 2: Problem ── */}
-                  <div>
-                    <div className="px-4 py-3.5 flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{ background: "rgba(14,165,233,0.15)", border: "1px solid rgba(14,165,233,0.3)" }}>
-                        <span className="text-[11px] font-bold"
-                          style={{ fontFamily: "'JetBrains Mono', monospace", color: "#38BDF8" }}>2</span>
-                      </div>
-                      <span className="text-sm font-semibold text-slate-200"
-                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>Problem</span>
-                    </div>
-                    <div className="px-4 pb-5 space-y-3">
-                      <PillToggle
-                        options={[{ id: "example", label: "Example" }, { id: "custom", label: "Custom" }]}
-                        value={problemType}
-                        onChange={v => setProblemType(v as any)}
-                      />
-
-                      <AnimatePresence mode="wait">
-                        {problemType === "example" ? (
-                          <motion.div key="ex" {...fadeInUp} transition={{ duration: 0.16, ease: easeOut }} className="space-y-3">
-                            <div className="p-3 bg-green-500/[0.07] rounded-xl border border-green-500/[0.15]">
-                              <p className="text-xs text-green-300/80 leading-relaxed">
-                                Using default problem for <strong className="text-green-300">{currentDomain?.name}</strong>
-                              </p>
-                            </div>
-                            <button onClick={() => setShowExampleProblem(true)}
-                              className="w-full px-3 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/[0.04] transition-all duration-150 flex items-center justify-center gap-1.5">
-                              <FileCodeIcon className="w-3 h-3" />
-                              View Example Problem
-                            </button>
-                          </motion.div>
-                        ) : (
-                          <motion.div key="cu" {...fadeInUp} transition={{ duration: 0.16, ease: easeOut }} className="space-y-3">
-                            <PillToggle
-                              options={[
-                                { id: "file", label: <><UploadIcon className="w-3 h-3" />Upload</> },
-                                { id: "text", label: <><FileCodeIcon className="w-3 h-3" />Paste</> },
-                              ]}
-                              value={inputMode}
-                              onChange={v => { setInputMode(v as any); if (v === "file") setProblemText(""); else setProblemFile(null); }}
-                            />
-                            {inputMode === "file" ? (
-                              <div className="relative">
-                                <input type="file" accept=".pddl"
-                                  onChange={e => setProblemFile(e.target.files?.[0] || null)}
-                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                <div className={`border-2 border-dashed rounded-xl p-5 text-center transition-all ${
-                                  problemFile
-                                    ? "border-green-500/40 bg-green-500/[0.06]"
-                                    : "border-white/[0.08] hover:border-green-500/30 hover:bg-green-500/[0.04]"
-                                }`}>
-                                  {problemFile ? (
-                                    <><CheckCircleIcon className="w-6 h-6 text-green-500 mx-auto mb-1.5" />
-                                    <p className="text-xs text-green-400 font-medium truncate px-2">{problemFile.name}</p></>
-                                  ) : (
-                                    <><UploadIcon className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
-                                    <p className="text-xs text-slate-600">Drop .pddl file or click to browse</p></>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div>
-                                <Textarea
-                                  value={problemText}
-                                  onChange={e => setProblemText(e.target.value)}
-                                  placeholder={"(define (problem ...)\n  (:domain ...)\n  ...\n)"}
-                                  className="font-mono text-xs min-h-[260px] bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder:text-slate-700 focus:border-green-500/40 rounded-xl resize-none"
-                                />
-                                {problemText && <p className="text-[11px] text-slate-500 mt-1.5">{problemText.split("\n").length} lines</p>}
-                              </div>
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
+                  <ProblemInput
+                    domainName={currentDomain?.name}
+                    problemType={problemType}
+                    onProblemTypeChange={setProblemType}
+                    inputMode={inputMode}
+                    onInputModeChange={setInputMode}
+                    problemFile={problemFile}
+                    onProblemFileChange={setProblemFile}
+                    problemText={problemText}
+                    onProblemTextChange={setProblemText}
+                    onViewExample={() => setShowExampleProblem(true)}
+                  />
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -2367,177 +1877,31 @@ export default function Visualizer() {
                   <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)" }} />
 
                   {/* ── Step 3: Strategy ── */}
-                  <div>
-                    <button onClick={() => setIsStrategyOpen(!isStrategyOpen)}
-                      className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-all duration-150">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{ background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.3)" }}>
-                        <span className="text-[11px] font-bold"
-                          style={{ fontFamily: "'JetBrains Mono', monospace", color: "#A78BFA" }}>3</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>Strategy</span>
-                        <span className="text-xs text-slate-500 truncate">{currentStrategy?.name}</span>
-                      </div>
-                      <motion.div animate={{ rotate: isStrategyOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }} className="flex-shrink-0">
-                        <ChevronDownIcon className="w-4 h-4 text-slate-600" />
-                      </motion.div>
-                    </button>
-
-                    <CollapseSection open={isStrategyOpen}>
-                      <div className="px-3 pb-4 pt-1 border-t border-white/[0.04]">
-                        <motion.div className="space-y-0.5" variants={listStagger} initial="initial" animate="animate">
-                          {strategiesQuery.data?.map((strategy: SearchStrategy) => {
-                            const sel = selectedStrategy === strategy.id;
-                            return (
-                              <motion.button
-                                key={strategy.id}
-                                variants={listItem}
-                                transition={{ duration: 0.18, ease: easeOut }}
-                                onClick={() => setSelectedStrategy(strategy.id)}
-                                whileTap={{ scale: 0.98 }}
-                                whileHover={!sel ? { x: 2 } : undefined}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${
-                                  sel ? "bg-green-500/10 border border-green-500/[0.22] shadow-sm shadow-green-500/5" : "border border-transparent hover:bg-white/[0.04] hover:border-white/[0.06]"
-                                }`}
-                              >
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className={`text-sm font-medium ${sel ? "text-green-300" : "text-slate-300"}`}>
-                                      {strategy.name}
-                                    </span>
-                                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                                      strategy.isOptimal ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"
-                                    }`}>
-                                      {strategy.isOptimal ? "Optimal" : "Satisficing"}
-                                    </span>
-                                    {getSpeedBadge(strategy.speed)}
-                                  </div>
-                                  <div className="text-xs text-slate-500 leading-relaxed mt-0.5">{strategy.description}</div>
-                                  {strategy.whenToUse && (
-                                    <div className="text-xs text-slate-600 leading-relaxed mt-0.5 italic">{strategy.whenToUse}</div>
-                                  )}
-                                </div>
-                                {sel && <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0"
-                                  style={{ boxShadow: "0 0 6px rgba(34,197,94,0.8)" }} />}
-                              </motion.button>
-                            );
-                          })}
-                        </motion.div>
-                        {currentStrategy?.warning && (
-                          <div className="mt-2 p-3 bg-amber-500/[0.08] border border-amber-500/20 rounded-xl flex items-start gap-2">
-                            <AlertIcon className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs text-amber-300/80 leading-relaxed">{currentStrategy.warning}</p>
-                          </div>
-                        )}
-                      </div>
-                    </CollapseSection>
-                  </div>
+                  <StrategyPicker
+                    isOpen={isStrategyOpen}
+                    onToggle={() => setIsStrategyOpen(!isStrategyOpen)}
+                    strategies={strategiesQuery.data}
+                    selectedStrategy={selectedStrategy}
+                    onSelect={setSelectedStrategy}
+                    currentStrategy={currentStrategy}
+                  />
                 </motion.div>
 
                 {/* ── Render Mode Panel (hidden for custom domains — LLM is automatic) ── */}
-                <AnimatePresence>
-                {!isCustomDomain && (
-                <motion.div
-                  key="render-mode-panel"
-                  className="rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden"
-                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(0,0,0,0.18)" }}
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.25, ease: easeOut }}
-                >
-                  <button onClick={() => setIsRenderModeOpen(!isRenderModeOpen)}
-                    className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-all duration-150">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}>
-                      <BrainIcon className="w-3.5 h-3.5 text-green-400" />
-                    </div>
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
-                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>Render Mode</span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        renderMode === "llm"
-                          ? "bg-green-500/15 text-green-400 border border-green-500/25"
-                          : "bg-white/[0.08] text-slate-400 border border-white/[0.08]"
-                      }`}>{renderMode === "llm" ? "LLM" : "Basic"}</span>
-                    </div>
-                    <motion.div animate={{ rotate: isRenderModeOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }}>
-                      <ChevronDownIcon className="w-4 h-4 text-slate-600" />
-                    </motion.div>
-                  </button>
-                  <CollapseSection open={isRenderModeOpen}>
-                    <div className="px-4 pb-4 pt-1 border-t border-white/[0.04] space-y-3">
-                      {/* Basic / LLM toggle */}
-                      <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06]">
-                        {[
-                          { id: "basic", label: "Basic" },
-                          { id: "llm",   label: "LLM" },
-                        ].map(m => (
-                          <button key={m.id} onClick={() => setRenderMode(m.id as any)}
-                            className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all duration-150 ${
-                              renderMode === m.id
-                                ? m.id === "llm" ? "bg-green-600 text-white shadow-sm" : "bg-white/[0.08] text-slate-200 shadow-sm"
-                                : "text-slate-600 hover:text-slate-400"
-                            }`}>
-                            {m.label}
-                          </button>
-                        ))}
-                      </div>
-                      {/* LLM options */}
-                      <CollapseSection open={renderMode === "llm"}>
-                        <div className="space-y-3">
-                          {/* Model selector */}
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs text-slate-500 flex-shrink-0">Model</span>
-                            <div className="flex items-center gap-1 flex-1">
-                              {[
-                                { id: "claude", label: "Claude", active: "bg-orange-500/15 border-orange-500/30 text-orange-400" },
-                                { id: "gemini", label: "Gemini", active: "bg-blue-500/15 border-blue-500/30 text-blue-400" },
-                              ].map(m => (
-                                <button key={m.id} onClick={() => setLlmProvider(m.id as any)}
-                                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
-                                    llmProvider === m.id ? m.active : "bg-white/[0.03] border-white/[0.07] text-slate-600 hover:text-slate-400 hover:border-white/[0.12]"
-                                  }`}>
-                                  {m.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          {/* Generate LLM renderer button */}
-                          <button onClick={handleLlmGenerate} disabled={isLlmGenerating}
-                            className={`w-full py-2 px-4 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${
-                              isLlmGenerating ? "bg-green-500/10 text-green-400/50 cursor-wait" : "btn-primary-green text-[#0B1524]"
-                            }`}>
-                            {isLlmGenerating ? (
-                              <><div className="w-3.5 h-3.5 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />Generating renderer...</>
-                            ) : llmRendererCode ? (
-                              <><RefreshIcon className="w-3 h-3" />Regenerate</>
-                            ) : (
-                              <><WandIcon className="w-3 h-3" />Generate LLM Renderer</>
-                            )}
-                          </button>
-                          {/* Status indicators */}
-                          {llmRendererCode && (
-                            <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/8 px-3 py-2 rounded-lg border border-green-500/20">
-                              <CheckCircleIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                              LLM renderer active{llmModelInfo && ` — ${llmModelInfo}`}
-                            </div>
-                          )}
-                          {llmError && (
-                            <div className="flex items-start gap-2 text-xs text-red-400 bg-red-500/8 px-3 py-2 rounded-lg border border-red-500/20">
-                              <AlertIcon className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-                              <span className="leading-relaxed">{llmError}</span>
-                            </div>
-                          )}
-                        </div>
-                      </CollapseSection>
-                    </div>
-                  </CollapseSection>
-                </motion.div>
-                )}
-                </AnimatePresence>
+                <RenderModePicker
+                  isCustomDomain={isCustomDomain}
+                  isOpen={isRenderModeOpen}
+                  onToggle={() => setIsRenderModeOpen(!isRenderModeOpen)}
+                  renderMode={renderMode}
+                  onRenderModeChange={setRenderMode}
+                  llmProvider={llmProvider}
+                  onProviderChange={setLlmProvider}
+                  onGenerate={handleLlmGenerate}
+                  isGenerating={isLlmGenerating}
+                  rendererCode={llmRendererCode}
+                  modelInfo={llmModelInfo}
+                  error={llmError}
+                />
                 {/* ── Step 4: Generate ── */}
                 <div>
                   <div className="flex items-center gap-2 mb-2 px-1">
@@ -2713,7 +2077,7 @@ export default function Visualizer() {
                         <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
                           plannerInfo.strategy.isOptimal ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"
                         }`}>{plannerInfo.strategy.name}</span>
-                        {getSpeedBadge(plannerInfo.strategy.speed)}
+                        <SpeedBadge speed={plannerInfo.strategy.speed} />
                       </div>
                     )}
 
@@ -2799,56 +2163,18 @@ export default function Visualizer() {
                   })()}
 
                   {/* Controls */}
-                  <div className="px-6 py-4 border-t border-white/[0.05] bg-black/[0.15] space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1 bg-white/[0.04] rounded-xl border border-white/[0.06] p-1">
-                        <motion.button onClick={handlePrevious} disabled={currentStateIndex === 0}
-                          whileTap={{ scale: 0.92 }}
-                          className="p-2.5 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-all duration-150">
-                          <SkipBackIcon className="w-4 h-4 text-slate-400" />
-                        </motion.button>
-                        {isPlaying ? (
-                          <motion.button onClick={handlePause} whileTap={{ scale: 0.92 }}
-                            className="p-2.5 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-all duration-150">
-                            <PauseIcon className="w-4 h-4" />
-                          </motion.button>
-                        ) : (
-                          <motion.button onClick={handlePlay} disabled={currentStateIndex >= renderedStates.length - 1}
-                            whileTap={{ scale: 0.92 }}
-                            className="p-2.5 rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-25 transition-all duration-150">
-                            <PlayIcon className="w-4 h-4" />
-                          </motion.button>
-                        )}
-                        <motion.button onClick={handleNext} disabled={currentStateIndex >= renderedStates.length - 1}
-                          whileTap={{ scale: 0.92 }}
-                          className="p-2.5 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-all duration-150">
-                          <SkipForwardIcon className="w-4 h-4 text-slate-400" />
-                        </motion.button>
-                      </div>
-
-                      <div className="flex-1 px-1">
-                        <input type="range" min="0" max={renderedStates.length - 1} value={currentStateIndex}
-                          onChange={e => setCurrentStateIndex(Number(e.target.value))}
-                          className="w-full" />
-                      </div>
-
-                      <div className="text-xs font-medium text-slate-500 bg-white/[0.04] px-2.5 py-1.5 rounded-lg border border-white/[0.06]"
-                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                        <AnimatedNumber value={currentStateIndex + 1} />
-                        <span className="text-slate-700"> / {renderedStates.length}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-slate-500 font-medium">Speed</span>
-                      <input type="range" min="200" max="2000" step="200"
-                        value={2200 - playbackSpeed}
-                        onChange={e => setPlaybackSpeed(2200 - Number(e.target.value))}
-                        className="w-28" />
-                      <span className="text-xs text-slate-500 font-medium tabular-nums"
-                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>{playbackSpeed}ms</span>
-                    </div>
-                  </div>
+                  <PlaybackControls
+                    currentStateIndex={currentStateIndex}
+                    totalStates={renderedStates.length}
+                    isPlaying={isPlaying}
+                    playbackSpeed={playbackSpeed}
+                    onPrevious={handlePrevious}
+                    onPlay={handlePlay}
+                    onPause={handlePause}
+                    onNext={handleNext}
+                    onSeek={setCurrentStateIndex}
+                    onSpeedChange={setPlaybackSpeed}
+                  />
 
                 </div>
 
@@ -2876,13 +2202,7 @@ export default function Visualizer() {
                         // ticker.
                         const handleJumpToAction = () => {
                           setCurrentStateIndex(idx + 1);
-                          if (isPlaying) {
-                            setIsPlaying(false);
-                          }
-                          if (playbackIntervalRef.current) {
-                            clearInterval(playbackIntervalRef.current);
-                            playbackIntervalRef.current = null;
-                          }
+                          stopPlayback();
                         };
                         return (
                           <motion.div key={idx}
@@ -2999,289 +2319,68 @@ export default function Visualizer() {
       </footer>
 
       {/* ── Modals ── */}
-      <AnimatePresence>
-        {errorModal.show && (
-          <ModalBackdrop onClose={() => setErrorModal({ show: false, title: "", message: "" })}>
-            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-md w-full overflow-hidden"
-              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
-              <div className={`px-6 py-4 border-b ${
-                errorModal.errorType?.includes("mismatch")
-                  ? "border-amber-500/20 bg-amber-500/[0.06]"
-                  : "border-red-500/20 bg-red-500/[0.06]"
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                      errorModal.errorType?.includes("mismatch") ? "bg-amber-500/15" : "bg-red-500/15"
-                    }`}>
-                      <AlertIcon className={`w-4 h-4 ${errorModal.errorType?.includes("mismatch") ? "text-amber-400" : "text-red-400"}`} />
-                    </div>
-                    <h3 className={`text-sm font-semibold ${errorModal.errorType?.includes("mismatch") ? "text-amber-300" : "text-red-300"}`}
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {errorModal.title}
-                    </h3>
-                  </div>
-                  <button onClick={() => setErrorModal({ show: false, title: "", message: "" })}
-                    className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
-                    <CloseIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-              <div className="px-6 py-5">
-                <p className="text-sm text-slate-400 whitespace-pre-wrap leading-relaxed">{errorModal.message}</p>
-                {errorModal.suggestedDomain && errorModal.suggestedDomainName && (
-                  <div className="mt-4 p-4 bg-green-500/[0.07] rounded-xl border border-green-500/20">
-                    <p className="text-xs text-green-300/70 font-medium mb-3">Would you like to switch to the suggested domain?</p>
-                    <button
-                      onClick={() => { setSelectedDomain(errorModal.suggestedDomain!); setErrorModal({ show: false, title: "", message: "" }); }}
-                      className="w-full px-4 py-2.5 btn-primary-green text-[#0B1524] rounded-xl text-sm font-semibold">
-                      Switch to {errorModal.suggestedDomainName}
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-end">
-                <button onClick={() => setErrorModal({ show: false, title: "", message: "" })}
-                  className="px-5 py-2.5 text-sm text-slate-400 hover:text-slate-200 font-medium transition-all duration-150 rounded-xl hover:bg-white/[0.08]">
-                  Close
-                </button>
-              </div>
-            </div>
-          </ModalBackdrop>
-        )}
-      </AnimatePresence>
+      <ErrorModal
+        state={errorModal}
+        onClose={() => setErrorModal({ show: false, title: "", message: "" })}
+        onSwitchDomain={(d) => { setSelectedDomain(d); setErrorModal({ show: false, title: "", message: "" }); }}
+      />
 
       {/* "Domain already exists" — surfaces when an upload's PDDL hash
           matches one or more entries in the saved-domains library. The
           user picks a specific existing version to reuse, or generates a
           new versioned entry. Dismissing the modal cancels the action. */}
-      <AnimatePresence>
-        {duplicateModal.show && (
-          <ModalBackdrop onClose={handleDismissDuplicateModal}>
-            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-lg w-full overflow-hidden"
-              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
-              <div className="px-6 py-4 border-b border-purple-500/20 bg-purple-500/[0.06]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-500/15">
-                      <SparklesIcon className="w-4 h-4 text-purple-400" />
-                    </div>
-                    <h3 className="text-sm font-semibold text-purple-300"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      Domain already exists
-                    </h3>
-                  </div>
-                  <button onClick={handleDismissDuplicateModal}
-                    className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
-                    <CloseIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-              <div className="px-6 py-5">
-                <p className="text-sm text-slate-400 leading-relaxed mb-4">
-                  Found <span className="text-slate-200 font-semibold">{duplicateModal.matches.length}</span>{" "}
-                  existing version{duplicateModal.matches.length === 1 ? "" : "s"} of this PDDL in your library.
-                  Pick one to reuse, or generate a new version.
-                </p>
-                <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                  {duplicateModal.matches.map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => handleReuseExistingVersion(m.id)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border border-transparent hover:border-purple-500/30 hover:bg-purple-500/[0.08]"
-                    >
-                      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.06]">
-                        <FileCodeIcon className="w-5 h-5 text-slate-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium leading-none text-slate-200"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                          {m.displayName}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          {m.provider} &middot; {new Date(m.createdAt).toLocaleDateString()}
-                        </div>
-                        {(m.transformerHash || m.rendererHash) && (
-                          <div className="flex gap-1 mt-1">
-                            {m.transformerHash && (
-                              <span
-                                title={`Transformer hash: ${m.transformerHash}`}
-                                className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
-                              >
-                                T:{m.transformerHash.slice(0, 8)}
-                              </span>
-                            )}
-                            {m.rendererHash && (
-                              <span
-                                title={`Renderer hash: ${m.rendererHash}`}
-                                className="px-1.5 py-0.5 rounded bg-white/[0.04] text-slate-400 font-mono text-[10px]"
-                              >
-                                R:{m.rendererHash.slice(0, 8)}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-between gap-3">
-                <button
-                  onClick={handleDismissDuplicateModal}
-                  className="px-5 py-2.5 text-sm text-slate-400 hover:text-slate-200 font-medium transition-all duration-150 rounded-xl hover:bg-white/[0.08]"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateNewVersion}
-                  className="px-5 py-2.5 text-sm font-semibold transition-all duration-150 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/30"
-                >
-                  Create new version
-                </button>
-              </div>
-            </div>
-          </ModalBackdrop>
-        )}
-      </AnimatePresence>
+      <DuplicateDomainModal
+        show={duplicateModal.show}
+        matches={duplicateModal.matches}
+        onDismiss={handleDismissDuplicateModal}
+        onReuse={handleReuseExistingVersion}
+        onCreateNew={handleCreateNewVersion}
+      />
 
       {/* Delete-saved-domain confirmation. Mirrors errorModal styling
           but with a red action button — destructive operations should
           look distinct from informational ones. */}
-      <AnimatePresence>
-        {deleteConfirmModal.show && (
-          <ModalBackdrop onClose={() => setDeleteConfirmModal({ show: false, id: null, displayName: "" })}>
-            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-md w-full overflow-hidden"
-              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
-              <div className="px-6 py-4 border-b border-red-500/20 bg-red-500/[0.06]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-red-500/15">
-                      <AlertIcon className="w-4 h-4 text-red-400" />
-                    </div>
-                    <h3 className="text-sm font-semibold text-red-300"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      Delete saved domain
-                    </h3>
-                  </div>
-                  <button onClick={() => setDeleteConfirmModal({ show: false, id: null, displayName: "" })}
-                    className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
-                    <CloseIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-              <div className="px-6 py-5">
-                <p className="text-sm text-slate-400 leading-relaxed">
-                  Are you sure you want to delete{" "}
-                  <span className="text-slate-200 font-semibold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                    {deleteConfirmModal.displayName}
-                  </span>
-                  {" "}from your library?
-                </p>
-                <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-                  The entry is removed from the saved-domains list. The underlying generated code stays on disk —
-                  it's content-addressed and may be shared with other entries.
-                </p>
-              </div>
-              <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-between gap-3">
-                <button
-                  onClick={() => setDeleteConfirmModal({ show: false, id: null, displayName: "" })}
-                  className="px-5 py-2.5 text-sm text-slate-400 hover:text-slate-200 font-medium transition-all duration-150 rounded-xl hover:bg-white/[0.08]"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmDeleteSavedDomain}
-                  disabled={deleteSavedDomainMutation.isPending}
-                  className="px-5 py-2.5 text-sm font-semibold transition-all duration-150 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {deleteSavedDomainMutation.isPending ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-            </div>
-          </ModalBackdrop>
-        )}
-      </AnimatePresence>
+      <DeleteDomainModal
+        show={deleteConfirmModal.show}
+        displayName={deleteConfirmModal.displayName}
+        isDeleting={deleteSavedDomainMutation.isPending}
+        onCancel={() => setDeleteConfirmModal({ show: false, id: null, displayName: "" })}
+        onConfirm={handleConfirmDeleteSavedDomain}
+      />
 
-      <AnimatePresence>
-        {showExampleProblem && (
-          <ModalBackdrop onClose={() => setShowExampleProblem(false)}>
-            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
-              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
-              <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                    Example Problem
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">{currentDomain?.name}</p>
-                </div>
-                <button onClick={() => setShowExampleProblem(false)}
-                  aria-label="Close modal"
-                  className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
-                  <CloseIcon className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-6 overflow-y-auto flex-1">
-                <pre className="text-xs font-mono bg-black/[0.3] text-green-300/80 p-4 rounded-xl border border-white/[0.05] whitespace-pre-wrap leading-relaxed">
-                  {getDefaultProblem(selectedDomain)}
-                </pre>
-              </div>
-              <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-end">
-                <button onClick={() => setShowExampleProblem(false)}
-                  className="px-5 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-sm text-slate-300 font-medium rounded-xl transition-all duration-150 border border-white/[0.06] hover:border-white/[0.1]">
-                  Close
-                </button>
-              </div>
-            </div>
-          </ModalBackdrop>
-        )}
-      </AnimatePresence>
+      <PddlViewerModal
+        show={showExampleProblem}
+        onClose={() => setShowExampleProblem(false)}
+        title="Example Problem"
+        subtitle={currentDomain?.name}
+      >
+        <pre className="text-xs font-mono bg-black/[0.3] text-green-300/80 p-4 rounded-xl border border-white/[0.05] whitespace-pre-wrap leading-relaxed">
+          {getDefaultProblem(selectedDomain)}
+        </pre>
+      </PddlViewerModal>
 
-      <AnimatePresence>
-        {showDomainDefinition && (
-          <ModalBackdrop onClose={() => setShowDomainDefinition(false)}>
-            <div className="bg-[#111E30] rounded-2xl border border-white/[0.08] max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col"
-              style={{ boxShadow: "0 25px 60px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.05) inset" }}>
-              <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                    Domain Definition
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">{currentDomain?.name}</p>
-                </div>
-                <button onClick={() => setShowDomainDefinition(false)}
-                  aria-label="Close modal"
-                  className="text-slate-500 hover:text-slate-200 transition-all duration-150 p-2 rounded-xl hover:bg-white/[0.08]">
-                  <CloseIcon className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-6 overflow-y-auto flex-1">
-                {domainDefinitionQuery.isLoading && (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="w-7 h-7 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
-                  </div>
-                )}
-                {domainDefinitionQuery.error && (
-                  <div className="p-4 bg-red-500/[0.08] border border-red-500/20 rounded-xl text-sm text-red-400">
-                    Failed to load domain definition
-                  </div>
-                )}
-                {domainDefinitionQuery.data && (
-                  <pre className="text-xs font-mono bg-black/[0.3] text-green-300/80 p-4 rounded-xl border border-white/[0.05] whitespace-pre-wrap leading-relaxed">
-                    {domainDefinitionQuery.data.content}
-                  </pre>
-                )}
-              </div>
-              <div className="px-6 py-4 border-t border-white/[0.05] bg-white/[0.02] flex justify-end">
-                <button onClick={() => setShowDomainDefinition(false)}
-                  className="px-5 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] text-sm text-slate-300 font-medium rounded-xl transition-all duration-150 border border-white/[0.06] hover:border-white/[0.1]">
-                  Close
-                </button>
-              </div>
-            </div>
-          </ModalBackdrop>
+      <PddlViewerModal
+        show={showDomainDefinition}
+        onClose={() => setShowDomainDefinition(false)}
+        title="Domain Definition"
+        subtitle={currentDomain?.name}
+      >
+        {domainDefinitionQuery.isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-7 h-7 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
+          </div>
         )}
-      </AnimatePresence>
+        {domainDefinitionQuery.error && (
+          <div className="p-4 bg-red-500/[0.08] border border-red-500/20 rounded-xl text-sm text-red-400">
+            Failed to load domain definition
+          </div>
+        )}
+        {domainDefinitionQuery.data && (
+          <pre className="text-xs font-mono bg-black/[0.3] text-green-300/80 p-4 rounded-xl border border-white/[0.05] whitespace-pre-wrap leading-relaxed">
+            {domainDefinitionQuery.data.content}
+          </pre>
+        )}
+      </PddlViewerModal>
 
     </div>
   );

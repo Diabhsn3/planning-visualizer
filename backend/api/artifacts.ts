@@ -14,17 +14,10 @@
 import { readFile, writeFile, mkdir, access } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
-import { fileURLToPath } from "url";
+import { dataPath } from "./ndjson-store";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// In production (dist/index.js), __dirname is .../dist, so go up one level.
-const DATA_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "data")
-  : path.join(__dirname, "data");
-
-const ARTIFACTS_DIR = path.join(DATA_DIR, "artifacts");
+// Runtime data dir is resolved (incl. the DATA_DIR env override) in one place.
+const ARTIFACTS_DIR = dataPath("artifacts");
 
 /** Compute the sha256 hex digest of the code (used as the artifact id). */
 export function hashCode(code: string): string {

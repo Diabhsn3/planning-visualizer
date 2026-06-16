@@ -21,14 +21,12 @@ import type { PredicateSchemaEntry, PddlObject } from "./llm-verifier";
 import { setMetrics } from "./verifier-metrics";
 import { findCachedExtraction, appendVerifierRun } from "./verifier-storage";
 import type { AppendVerifierRunInput, RunKind } from "./verifier-storage";
+import { DATA_DIR, dataPath } from "./ndjson-store";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "data")
-  : path.join(__dirname, "data");
-const VERIFIER_IMAGES_DIR = path.join(DATA_DIR, "verifier-images");
+const VERIFIER_IMAGES_DIR = dataPath("verifier-images");
 
 const PLANNER_DIR = __dirname.endsWith("dist")
   ? path.join(__dirname, "..", "..", "planner")

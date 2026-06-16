@@ -11,23 +11,15 @@
  */
 
 import { readFile, writeFile, mkdir } from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
 import { writeArtifact, readArtifact } from "./artifacts";
 import { createMutex } from "./async-mutex";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { DATA_DIR, dataPath } from "./ndjson-store";
 
 // Serializes load -> mutate -> save on basic_renderers.json so concurrent
 // renderer generations for different domains can't lose each other's entry.
 const writeLock = createMutex();
 
-const DATA_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "data")
-  : path.join(__dirname, "data");
-
-const INDEX_FILE = path.join(DATA_DIR, "basic_renderers.json");
+const INDEX_FILE = dataPath("basic_renderers.json");
 
 interface BasicRendererEntry {
   domain: string;

@@ -23,14 +23,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
- * Single source of truth for the runtime data directory. In a prod build the
- * server bundles to dist/index.js, so __dirname is the bundle dir and `data/`
- * lives one level up; in dev (tsx) this module sits in backend/api/, so `data/`
- * is the sibling directory.
+ * Single source of truth for the runtime data directory (SUS results,
+ * feedback, telemetry, verifier runs, saved domains, artifacts, and their
+ * images). Every module that persists runtime data resolves its path from
+ * here, so the location is configured in exactly one place.
+ *
+ * Resolution order:
+ *   1. `DATA_DIR` env var (absolute or relative to CWD) — set this on the
+ *      server to a folder OUTSIDE the repo (e.g. /home/you/pv-data) so that
+ *      git pull/reset/clean can never overwrite real participant data.
+ *   2. Default for local dev: a `data/` folder next to this module. In a prod
+ *      build the server bundles to dist/index.js, so `data/` is one level up.
  */
-export const DATA_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "data")
-  : path.join(__dirname, "data");
+export const DATA_DIR = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : __dirname.endsWith("dist")
+    ? path.join(__dirname, "..", "data")
+    : path.join(__dirname, "data");
 
 /** Join one or more segments onto the runtime data dir. */
 export function dataPath(...segments: string[]): string {

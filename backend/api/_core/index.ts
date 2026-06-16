@@ -8,12 +8,12 @@ import { fileURLToPath } from "url";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { DATA_DIR } from "../ndjson-store";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "data")
-  : path.join(__dirname, "..", "data");
+// DATA_DIR (incl. the DATA_DIR env override) is resolved in ndjson-store, so
+// the static image routes below serve from the same folder the stores write to.
 // Vite removed - frontend runs separately
 
 function isPortAvailable(port: number): Promise<boolean> {
