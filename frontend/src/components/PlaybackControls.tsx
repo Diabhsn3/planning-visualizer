@@ -89,8 +89,8 @@ export function PlaybackControls({
 
         <div className="text-xs font-medium text-slate-500 bg-white/[0.04] px-2.5 py-1.5 rounded-lg border border-white/[0.06]"
           style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          <AnimatedNumber value={currentStateIndex + 1} />
-          <span className="text-slate-700"> / {totalStates}</span>
+          <AnimatedNumber value={currentStateIndex} />
+          <span className="text-slate-700"> / {totalStates - 1}</span>
         </div>
       </div>
 

@@ -7,8 +7,11 @@
  * code share one artifact file.
  *
  * Two layers of caching/dedup:
- *   1. pddlHash → if the same domain PDDL is saved twice, return the
- *      existing entry instead of creating a duplicate.
+ *   1. canonicalHash → if a domain that is the SAME modulo cosmetics
+ *      (comments, whitespace, casing, declared domain name) is saved
+ *      twice, the lookups treat it as a match so the UI can suggest
+ *      reuse instead of silently creating yet another version. The exact
+ *      `pddlHash` is still stored for display ("identical" vs "equivalent").
  *   2. transformerHash / rendererHash → if two different PDDLs happen to
  *      produce the same code, the artifact is shared on disk.
  *
@@ -40,8 +43,15 @@ export interface SavedDomainRecord {
   id: number;
   displayName: string;
   domainName: string;
-  /** SHA-256 (first 12 chars) of the trimmed domain PDDL — dedup key. */
+  /** SHA-256 (first 12 chars) of the trimmed domain PDDL — exact-match key. */
   pddlHash: string;
+  /**
+   * SHA-256 (first 12 chars) of the CANONICAL domain PDDL (comments,
+   * whitespace, casing and the declared domain name normalized away). This
+   * is the dedup key the lookups match on. Lazily backfilled on load for
+   * legacy entries that predate the field.
+   */
+  canonicalHash?: string;
   domainPddl: string;
   /** SHA-256 hex of the generated transformer JS. */
   transformerHash: string;
@@ -61,6 +71,8 @@ export interface SavedDomain {
   displayName: string;
   domainName: string;
   pddlHash: string;
+  /** Groups versions of the same domain (cosmetics ignored). */
+  canonicalHash: string;
   domainPddl: string;
   transformerCode: string;
   rendererCode: string;
@@ -81,6 +93,45 @@ function hashPddl(pddlText: string): string {
   return crypto
     .createHash("sha256")
     .update(pddlText.trim())
+    .digest("hex")
+    .slice(0, 12);
+}
+
+/**
+ * Canonicalize a domain PDDL down to a form that ignores purely cosmetic
+ * differences, so two uploads of the same domain hash identically even when
+ * they differ in:
+ *   - comments (`; …` to end of line)
+ *   - whitespace / indentation / newlines
+ *   - letter case (PDDL identifiers and keywords are case-insensitive)
+ *   - the declared domain name in `(domain <name>)`
+ *
+ * It does NOT attempt structural equivalence (renamed predicates/types, or
+ * reordered clauses are intentionally treated as different). Because the
+ * output is just the original token stream with the domain name neutralized,
+ * two PDDLs only collide when they are genuinely the same domain — there are
+ * no false positives.
+ */
+export function canonicalizeDomainPddl(pddlText: string): string {
+  // 1. Strip line comments.
+  const noComments = pddlText.replace(/;[^\n]*/g, " ");
+  // 2. Lowercase (PDDL is case-insensitive).
+  const lowered = noComments.toLowerCase();
+  // 3. Pad parens so tokenizing on whitespace keeps structure, then collapse
+  //    all runs of whitespace to a single space.
+  const tokenized = lowered
+    .replace(/\(/g, " ( ")
+    .replace(/\)/g, " ) ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // 4. Neutralize the declared domain name: `( domain foo )` → `( domain _ )`.
+  return tokenized.replace(/\(\s*domain\s+[^\s()]+/g, "( domain _");
+}
+
+function hashCanonical(pddlText: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(canonicalizeDomainPddl(pddlText))
     .digest("hex")
     .slice(0, 12);
 }
@@ -119,6 +170,12 @@ async function migrateLegacy(store: SavedDomainsStore): Promise<boolean> {
     if (!entry.rendererHash && entry.rendererCode) {
       entry.rendererHash = await writeArtifact(entry.rendererCode);
       delete entry.rendererCode;
+      changed = true;
+    }
+    // Backfill the canonical dedup hash for entries saved before the field
+    // existed, so equivalent-domain lookups work for the whole library.
+    if (!entry.canonicalHash && entry.domainPddl) {
+      entry.canonicalHash = hashCanonical(entry.domainPddl);
       changed = true;
     }
   }
@@ -167,6 +224,7 @@ async function hydrate(record: SavedDomainRecord): Promise<SavedDomain> {
     displayName: record.displayName,
     domainName: record.domainName,
     pddlHash: record.pddlHash,
+    canonicalHash: record.canonicalHash || hashCanonical(record.domainPddl),
     domainPddl: record.domainPddl,
     transformerCode,
     rendererCode,
@@ -195,6 +253,7 @@ export async function listSavedDomains(): Promise<
     displayName: d.displayName,
     domainName: d.domainName,
     pddlHash: d.pddlHash,
+    canonicalHash: d.canonicalHash || hashCanonical(d.domainPddl),
     domainPddlPreview:
       d.domainPddl.slice(0, 200) + (d.domainPddl.length > 200 ? "..." : ""),
     transformerHash: d.transformerHash || "",
@@ -214,18 +273,19 @@ export async function getSavedDomain(id: number): Promise<SavedDomain | null> {
 }
 
 /**
- * Look up a saved domain by the hash of its PDDL text. Returns the latest
- * matching entry (sorted by createdAt) or null.
+ * Look up a saved domain EQUIVALENT to `domainPddl` (matched on the canonical
+ * hash, so cosmetic differences don't matter). Returns the latest matching
+ * entry (sorted by createdAt) or null.
  *
- * This is the cache-hit path: if a user re-submits the same PDDL, we can
- * skip both LLM calls entirely.
+ * This is the cache-hit path: if a user re-submits the same domain — even
+ * reformatted or renamed — we can skip both LLM calls entirely.
  */
 export async function findSavedDomainByPddl(
   domainPddl: string
 ): Promise<SavedDomain | null> {
-  const targetHash = hashPddl(domainPddl);
+  const targetHash = hashCanonical(domainPddl);
   const store = await loadStore();
-  const matches = store.domains.filter((d) => d.pddlHash === targetHash);
+  const matches = store.domains.filter((d) => d.canonicalHash === targetHash);
   if (matches.length === 0) return null;
   // Newest first
   matches.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -233,10 +293,11 @@ export async function findSavedDomainByPddl(
 }
 
 /**
- * Light-weight metadata listing of every saved domain whose pddlHash
- * matches `domainPddl`. Newest-first. Code is NOT hydrated — used by the
- * "duplicate detected" modal which only needs to render rows, then loads
- * the full code for the chosen one separately via getSavedDomain().
+ * Light-weight metadata listing of every saved domain EQUIVALENT to
+ * `domainPddl` (matched on the canonical hash). Newest-first. Code is NOT
+ * hydrated — used by the "duplicate detected" modal which only needs to
+ * render rows, then loads the full code for the chosen one separately via
+ * getSavedDomain().
  */
 export async function findAllSavedDomainsByPddl(
   domainPddl: string
@@ -251,9 +312,9 @@ export async function findAllSavedDomainsByPddl(
     rendererHash: string;
   }>
 > {
-  const targetHash = hashPddl(domainPddl);
+  const targetHash = hashCanonical(domainPddl);
   const store = await loadStore();
-  const matches = store.domains.filter((d) => d.pddlHash === targetHash);
+  const matches = store.domains.filter((d) => d.canonicalHash === targetHash);
   matches.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return matches.map((d) => ({
     id: d.id,
@@ -285,6 +346,7 @@ export async function saveDomain(params: {
   return writeLock(async () => {
     const store = await loadStore();
     const pddlHash = hashPddl(params.domainPddl);
+    const canonicalHash = hashCanonical(params.domainPddl);
 
     // Write code to artifacts (deduped by content hash)
     const transformerHash = await writeArtifact(params.transformerCode);
@@ -298,6 +360,7 @@ export async function saveDomain(params: {
       displayName,
       domainName: params.domainName,
       pddlHash,
+      canonicalHash,
       domainPddl: params.domainPddl,
       transformerHash,
       rendererHash,

@@ -5,6 +5,7 @@ import { generateRenderer, type LLMProvider } from "./llm-renderer";
 import { generateTransformer } from "./llm-domain-interpreter";
 import { listSavedDomains, getSavedDomain, saveDomain, findSavedDomainByPddl, findAllSavedDomainsByPddl, deleteSavedDomain } from "./saved-domains";
 import { saveBasicRenderer, findBasicRenderer } from "./basic-renderer-cache";
+import { checkProblemSimplicity, checkPlanSimplicity, TOO_COMPLEX_PREFIX } from "./pddl-simplicity";
 import { logEventSafe } from "./events";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -493,7 +494,37 @@ export const visualizerRouter = router({
       let domainPath: string = "";
       let problemPath: string = "";
 
+      // Is this a brand-new domain (no equivalent already in the library)?
+      // The simplicity gate only applies to first-time setup; reusing an
+      // existing domain skips it entirely. Computed once, reused for the
+      // post-solve plan check below.
+      const existingEquivalents = await findAllSavedDomainsByPddl(input.domainContent);
+      const isNewDomain = existingEquivalents.length === 0;
+
       try {
+        // STATIC simplicity gate — reject an oversized first problem before we
+        // even pay for the solve (new domains only).
+        if (isNewDomain) {
+          const verdict = checkProblemSimplicity(input.problemContent);
+          if (!verdict.ok) {
+            await logEventSafe({
+              clientId: ctx.clientId,
+              sessionId,
+              type: "solve_attempt",
+              data: {
+                success: false,
+                custom: true,
+                domain: input.domainName,
+                searchStrategy: input.searchStrategy,
+                errorType: verdict.errorType,
+                durationMs: Date.now() - startedAt,
+              },
+            });
+            outcomeLogged = true;
+            throw new Error(TOO_COMPLEX_PREFIX + verdict.message);
+          }
+        }
+
         const uploadsDir = path.join(__dirname, "uploads");
         await mkdir(uploadsDir, { recursive: true });
         // Unique per-request token (uuid) to avoid simultaneous-upload collisions.
@@ -551,6 +582,37 @@ export const visualizerRouter = router({
           });
           outcomeLogged = true;
           throw new Error(data.error || "Failed to solve custom problem");
+        }
+
+        // PLAN simplicity gate — the problem solved, but if it took too many
+        // steps it's a poor first problem to set the renderer up against.
+        // Reject here, BEFORE the frontend kicks off LLM renderer generation
+        // (new domains only).
+        if (isNewDomain) {
+          const planLength = Array.isArray(data.plan) ? data.plan.length : 0;
+          const verdict = checkPlanSimplicity(planLength);
+          if (!verdict.ok) {
+            await logEventSafe({
+              clientId: ctx.clientId,
+              sessionId,
+              type: "solve_attempt",
+              data: {
+                success: false,
+                custom: true,
+                domain: input.domainName,
+                searchStrategy: input.searchStrategy,
+                errorType: verdict.errorType,
+                planLength,
+                durationMs: Date.now() - startedAt,
+              },
+            });
+            outcomeLogged = true;
+            try {
+              await unlink(domainPath);
+              await unlink(problemPath);
+            } catch { /* ignore cleanup errors */ }
+            throw new Error(TOO_COMPLEX_PREFIX + verdict.message);
+          }
         }
 
         await logEventSafe({

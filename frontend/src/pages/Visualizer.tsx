@@ -8,7 +8,7 @@ import { PlaybackControls } from "@/components/PlaybackControls";
 import { CollapseSection } from "@/components/CollapseSection";
 import { SpeedBadge } from "@/components/SpeedBadge";
 import { StrategyPicker, type SearchStrategy } from "@/components/StrategyPicker";
-import { RenderModePicker, type RenderMode, type LlmProvider } from "@/components/RenderModePicker";
+import { type RenderMode, type LlmProvider } from "@/components/RenderModePicker";
 import { ErrorModal, type ErrorModalState } from "@/components/ErrorModal";
 import { PddlViewerModal } from "@/components/PddlViewerModal";
 import { DuplicateDomainModal, type DuplicateMatch } from "@/components/DuplicateDomainModal";
@@ -621,7 +621,6 @@ export default function Visualizer() {
   const cancelledRef = useRef(false);
   const [isDomainOpen, setIsDomainOpen]         = useState(true);
   const [isStrategyOpen, setIsStrategyOpen]     = useState(false);
-  const [isRenderModeOpen, setIsRenderModeOpen] = useState(false);
   const [showExampleProblem, setShowExampleProblem]     = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed]     = useState(false);
@@ -636,7 +635,9 @@ export default function Visualizer() {
   const [llmRendererCode, setLlmRendererCode] = useState<string | null>(null);
   const [isLlmGenerating, setIsLlmGenerating] = useState(false);
   const [llmError, setLlmError]               = useState<string | null>(null);
-  const [llmModelInfo, setLlmModelInfo]       = useState<string | null>(null);
+  // Setter kept (written by the custom-domain LLM flow) but the value is no
+  // longer surfaced in basic mode since the Render Mode picker was removed.
+  const [, setLlmModelInfo]                   = useState<string | null>(null);
   const [errorModal, setErrorModal] = useState<ErrorModalState>({ show: false, title: "", message: "" });
 
   // "Domain already exists" modal — surfaces when an upload's PDDL hash
@@ -897,13 +898,18 @@ export default function Visualizer() {
   }, [selectedDomain]);
 
   useEffect(() => {
-    if (planStepsRef.current && plan.length > 0 && currentStateIndex > 0) {
+    if (planStepsRef.current && plan.length > 0) {
       const container = planStepsRef.current;
-      const el = container.children[currentStateIndex - 1] as HTMLElement;
-      if (el) {
-        const elRect = el.getBoundingClientRect(), cRect = container.getBoundingClientRect();
-        if (elRect.top < cRect.top || elRect.bottom > cRect.bottom)
-          container.scrollTop = el.offsetTop - container.offsetTop;
+      if (currentStateIndex === 0) {
+        container.scrollTop = 0;
+      } else {
+        // +1 because children[0] is the "State 0" initial-state row
+        const el = container.children[currentStateIndex] as HTMLElement;
+        if (el) {
+          const elRect = el.getBoundingClientRect(), cRect = container.getBoundingClientRect();
+          if (elRect.top < cRect.top || elRect.bottom > cRect.bottom)
+            container.scrollTop = el.offsetTop - container.offsetTop;
+        }
       }
     }
   }, [currentStateIndex, plan.length]);
@@ -1107,33 +1113,6 @@ export default function Visualizer() {
     onError: (error: any) => { setIsLlmGenerating(false); setLlmError(error.message || "Failed to generate LLM renderer"); },
   });
 
-  const handleLlmGenerate = async () => {
-    if (renderedStates.length === 0) { setLlmError("Generate states first, then switch to LLM mode."); return; }
-    setIsLlmGenerating(true); setLlmError(null); setLlmRendererCode(null);
-
-    // Cache-first: if we've previously generated this (domain, provider)
-    // pair, reuse it and skip the LLM call.
-    try {
-      const url = `/api/trpc/visualizer.lookupBasicRenderer?input=${encodeURIComponent(
-        JSON.stringify({ json: { domain: selectedDomain, provider: llmProvider } })
-      )}`;
-      const res = await fetch(url);
-      const json = await res.json();
-      const hit = json?.result?.data?.json;
-      if (hit && hit.code) {
-        console.log(`[BasicRenderer] HIT — (${selectedDomain}, ${llmProvider}) → reusing cached artifact ${hit.artifactHash.slice(0, 12)}…`);
-        setIsLlmGenerating(false);
-        setLlmRendererCode(hit.code);
-        setLlmModelInfo(`Cached (${hit.provider})`);
-        return;
-      }
-      console.log(`[BasicRenderer] MISS — no cached renderer for (${selectedDomain}, ${llmProvider}); calling LLM`);
-    } catch (err) {
-      console.warn("[BasicRenderer] Lookup failed, proceeding with LLM:", err);
-    }
-
-    llmGenerateMutation.mutate({ domainName: selectedDomain, states: renderedStates.slice(0, 3), domainPddl: "", transformerCode: "", provider: llmProvider, sessionId: getSessionId() });
-  };
 
   useEffect(() => { setLlmRendererCode(null); setLlmError(null); setLlmModelInfo(null); }, [selectedDomain]);
   // Custom domain upload mutation
@@ -1167,6 +1146,18 @@ export default function Visualizer() {
       setIsProcessing(false);
       if (cancelledRef.current || error?.message === "CANCELLED") {
         cancelledRef.current = false;
+        return;
+      }
+      // First-upload simplicity gate: a brand-new domain's starter problem was
+      // too large/complex. Show a friendly "start smaller" message rather than
+      // a generic error.
+      const msg: string = error?.message || "";
+      if (msg.startsWith("TOO_COMPLEX::")) {
+        setErrorModal({
+          show: true,
+          title: "Start with a smaller problem",
+          message: msg.slice("TOO_COMPLEX::".length),
+        });
         return;
       }
       setErrorModal({ show: true, title: "Error", message: error.message || "Failed to solve custom problem" });
@@ -1354,6 +1345,9 @@ export default function Visualizer() {
   useEffect(() => {
     if (!isCustomDomain) {
       setLlmTransformerCode(null); setTransformerError(null); setTransformerModelInfo(null);
+      // Built-in domains always use the basic renderer (no render-mode picker),
+      // so clear any "llm" mode left over from a prior custom-domain session.
+      setRenderMode("basic");
     }
   }, [isCustomDomain]);
 
@@ -1926,23 +1920,9 @@ export default function Visualizer() {
                   />
                 </motion.div>
 
-                {/* ── Render Mode Panel (hidden for custom domains — LLM is automatic) ── */}
-                <div className={`transition-opacity duration-200 ${isBusy ? "opacity-60 pointer-events-none select-none" : ""}`} aria-busy={isBusy}>
-                <RenderModePicker
-                  isCustomDomain={isCustomDomain}
-                  isOpen={isRenderModeOpen}
-                  onToggle={() => setIsRenderModeOpen(!isRenderModeOpen)}
-                  renderMode={renderMode}
-                  onRenderModeChange={setRenderMode}
-                  llmProvider={llmProvider}
-                  onProviderChange={setLlmProvider}
-                  onGenerate={handleLlmGenerate}
-                  isGenerating={isLlmGenerating}
-                  rendererCode={llmRendererCode}
-                  modelInfo={llmModelInfo}
-                  error={llmError}
-                />
-                </div>
+                {/* Render Mode picker removed for basic (built-in) domains — they
+                    always use the built-in basic renderer. Custom domains use the
+                    LLM renderer automatically (provider chosen in the upload panel). */}
                 {/* ── Step 4: Generate ── */}
                 <div>
                   <div className="flex items-center gap-2 mb-2 px-1">
@@ -2250,6 +2230,26 @@ export default function Visualizer() {
                     <div ref={planStepsRef}
                       className="p-3 space-y-0.5 max-h-[600px] overflow-y-auto overscroll-contain"
                       style={{ scrollBehavior: "smooth" }}>
+                      {/* State 0 — initial state (before any action fires) */}
+                      <motion.div
+                        initial={false}
+                        animate={currentStateIndex === 0 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
+                        transition={{ duration: 0.2 }}
+                        onClick={() => { setCurrentStateIndex(0); stopPlayback(); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCurrentStateIndex(0); stopPlayback(); } }}
+                        role="button"
+                        tabIndex={0}
+                        title="Show initial state (before any action)"
+                        className={`text-xs px-3 py-2 rounded-lg transition-colors font-mono cursor-pointer focus:outline-none focus:ring-1 focus:ring-green-500/40 ${
+                          currentStateIndex === 0
+                            ? "text-green-300 font-medium border-l-[2px] border-green-500"
+                            : "text-slate-700 hover:bg-white/[0.03] hover:text-slate-500"
+                        }`}>
+                        <span className={`mr-2 tabular-nums ${currentStateIndex === 0 ? "text-green-600" : "text-slate-700"}`}>
+                          00.
+                        </span>
+                        Initial State
+                      </motion.div>
                       {plan.map((action, idx) => {
                         // Jump the canvas to the state PRODUCED by this action.
                         // plan[idx] transitions state[idx] → state[idx+1], so to

@@ -22,8 +22,9 @@ interface DuplicateDomainModalProps {
   onCreateNew: () => void;
 }
 
-/** "Domain already exists" — shown when an uploaded PDDL hash matches saved
- *  entries. The user reuses a specific version or creates a new one. */
+/** "Domain already exists" — shown when an uploaded domain is EQUIVALENT
+ *  (canonical-hash match, ignoring cosmetics) to saved entries. The user
+ *  reuses a specific version or creates a new one. */
 export function DuplicateDomainModal({ show, matches, onDismiss, onReuse, onCreateNew }: DuplicateDomainModalProps) {
   return (
     <AnimatePresence>
@@ -51,8 +52,9 @@ export function DuplicateDomainModal({ show, matches, onDismiss, onReuse, onCrea
             <div className="px-6 py-5">
               <p className="text-sm text-slate-400 leading-relaxed mb-4">
                 Found <span className="text-slate-200 font-semibold">{matches.length}</span>{" "}
-                existing version{matches.length === 1 ? "" : "s"} of this PDDL in your library.
-                Pick one to reuse, or generate a new version.
+                equivalent domain{matches.length === 1 ? "" : "s"} already in your library
+                (a match ignores comments, formatting, and the domain name).
+                Reuse one to skip regenerating its visualizer, or create a new version.
               </p>
               <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                 {matches.map(m => (
