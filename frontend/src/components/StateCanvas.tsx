@@ -8,12 +8,32 @@ import { renderRovers, renderRoversBackground, renderRoversLegend } from "@/comp
 type BackgroundRenderer = ((ctx: CanvasRenderingContext2D, width: number, height: number) => void) | undefined;
 type LegendRenderer = ((ctx: CanvasRenderingContext2D, x: number, y: number) => void) | undefined;
 
+// A legend row rendered as a collapsible HTML panel beside the canvas — the
+// replacement for the old on-canvas legend. LLM renderers now export this as
+// `render<Domain>Legend: LegendEntry[]`; built-ins below provide it as data too.
+export interface LegendEntry {
+  label: string;
+  color?: string;
+  shape?: "circle" | "square" | "line" | "diamond" | "badge";
+}
+
 // Domain renderer configuration
 interface DomainRenderer {
   render: (ctx: CanvasRenderingContext2D, state: RenderedState) => void;
   background?: BackgroundRenderer;
+  /** Legacy on-canvas legend — kept only for old saved renderers. */
   legend?: LegendRenderer;
+  /** HTML legend data — preferred. When present, the canvas legend is NOT drawn. */
+  legendData?: LegendEntry[];
 }
+
+// Shared legend for the imaging domains (rovers & satellite): a target
+// progresses Pending → Imaged → Sent.
+const IMAGING_LEGEND: LegendEntry[] = [
+  { label: "Pending — target not yet imaged", color: "#FF9800", shape: "circle" },
+  { label: "Imaged — image captured", color: "#2196F3", shape: "circle" },
+  { label: "Sent — image transmitted", color: "#4CAF50", shape: "circle" },
+];
 
 // Map of domain names to their renderer configurations
 // Note: blocks-world and gripper are defined later in this file
@@ -27,6 +47,7 @@ const domainRenderers: Record<string, DomainRenderer> = {
     render: renderSatellite,
     background: renderSatelliteBackground,
     legend: renderSatelliteLegend,
+    legendData: IMAGING_LEGEND,
   },
   "hanoi": {
     render: renderHanoi,
@@ -37,6 +58,7 @@ const domainRenderers: Record<string, DomainRenderer> = {
     render: renderRovers,
     background: renderRoversBackground,
     legend: renderRoversLegend,
+    legendData: IMAGING_LEGEND,
   },
   // blocks-world and gripper are added after their functions are defined
 };
@@ -103,7 +125,10 @@ interface StateCanvasProps {
 interface CompiledLlmRenderer {
   render: ((ctx: CanvasRenderingContext2D, state: RenderedState) => void) | null;
   background: ((ctx: CanvasRenderingContext2D, width: number, height: number) => void) | null;
+  /** Legacy on-canvas legend (old saved renderers). */
   legend: ((ctx: CanvasRenderingContext2D, x: number, y: number) => void) | null;
+  /** New contract: legend DATA, rendered as HTML. */
+  legendData: LegendEntry[] | null;
 }
 
 const llmRendererCache = new Map<string, CompiledLlmRenderer>();
@@ -130,7 +155,7 @@ function compileLlmRenderer(code: string): CompiledLlmRenderer {
   const cached = llmRendererCache.get(cacheKey);
   if (cached) return cached;
 
-  const result: CompiledLlmRenderer = { render: null, background: null, legend: null };
+  const result: CompiledLlmRenderer = { render: null, background: null, legend: null, legendData: null };
 
   try {
     // The backend already transpiles TypeScript to JavaScript using the TS compiler API,
@@ -183,28 +208,28 @@ function compileLlmRenderer(code: string): CompiledLlmRenderer {
     
     // Main render function: the one that's NOT background and NOT legend
     for (const key of keys) {
-      if (typeof exports[key] !== 'function') continue;
-      
-      if (key.toLowerCase().includes('background')) {
-        result.background = exports[key];
-      } else if (key.toLowerCase().includes('legend')) {
-        result.legend = exports[key];
-      } else if (key.startsWith('render')) {
-        result.render = exports[key];
+      const val = exports[key];
+      // Legend: the new contract is DATA (an array); legacy is a draw function.
+      if (key.toLowerCase().includes('legend')) {
+        if (Array.isArray(val)) {
+          result.legendData = val as LegendEntry[];
+        } else if (typeof val === 'function') {
+          result.legend = val;
+        }
+        continue;
       }
-    }
-
-    // Handle legend = undefined exports (const renderXLegend = undefined)
-    for (const key of keys) {
-      if (key.toLowerCase().includes('legend') && exports[key] === undefined) {
-        result.legend = null;
+      if (typeof val !== 'function') continue;
+      if (key.toLowerCase().includes('background')) {
+        result.background = val;
+      } else if (key.startsWith('render')) {
+        result.render = val;
       }
     }
 
     // Cache the result
     llmRendererCache.set(cacheKey, result);
 
-    console.log("[LLM Renderer] Compilation success. render:", !!result.render, "background:", !!result.background, "legend:", !!result.legend);
+    console.log("[LLM Renderer] Compilation success. render:", !!result.render, "background:", !!result.background, "legend:", !!result.legend, "legendData:", result.legendData?.length ?? 0);
 
   } catch (error) {
     console.error("[LLM Renderer] Compilation failed:", error);
@@ -253,6 +278,26 @@ function compileTransformer(code: string): ((state: RenderedState) => RenderedSt
   }
 }
 
+// A small swatch drawn beside each legend label in the HTML legend panel.
+function LegendSwatch({ shape, color }: { shape?: string; color?: string }) {
+  const c = color || "#94a3b8";
+  const base: React.CSSProperties = { width: 14, height: 14, flexShrink: 0, display: "inline-block" };
+  const border = "1px solid rgba(255,255,255,0.3)";
+  switch (shape) {
+    case "circle":
+      return <span style={{ ...base, background: c, borderRadius: "50%", border }} />;
+    case "line":
+      return <span style={{ ...base, height: 3, background: c, borderRadius: 2 }} />;
+    case "diamond":
+      return <span style={{ ...base, background: c, transform: "rotate(45deg)", borderRadius: 2, border }} />;
+    case "badge":
+      return <span style={{ ...base, width: 18, height: 12, background: c, borderRadius: 6, border }} />;
+    case "square":
+    default:
+      return <span style={{ ...base, background: c, borderRadius: 3, border }} />;
+  }
+}
+
 export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmRendererCode, transformerCode, onLlmError }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -272,6 +317,24 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
   });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  // Legend visibility (HTML panel). Default shown; user can collapse it.
+  const [showLegend, setShowLegend] = useState(true);
+
+  // Pick the active legend the SAME way the draw effect picks its renderer: an
+  // LLM renderer wins only if it actually has a main render fn. New renderers
+  // expose legend DATA (rendered as the HTML panel below); old saved renderers
+  // only have a canvas legend fn (drawn on the canvas as a legacy fallback).
+  // compileLlmRenderer is cached, so this is cheap on every render.
+  const bodyLlm = llmRendererCode ? compileLlmRenderer(llmRendererCode) : null;
+  const bodyUseLlm = !!bodyLlm?.render;
+  const bodyDomainCfg = domainRenderers[state.domain];
+  const activeLegendData: LegendEntry[] | null = bodyUseLlm
+    ? bodyLlm!.legendData
+    : (bodyDomainCfg?.legendData ?? null);
+  const hasLegacyCanvasLegend = bodyUseLlm
+    ? !!bodyLlm!.legend && !bodyLlm!.legendData
+    : !!bodyDomainCfg?.legend && !bodyDomainCfg?.legendData;
+  const hasLegend = !!activeLegendData?.length || hasLegacyCanvasLegend;
   
   // Wrapper functions that update both React state and persistent storage
   const setScale = useCallback((newScale: number | ((prev: number) => number)) => {
@@ -446,18 +509,23 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     ctx.restore();
 
     // ============================================
-    // 4. DRAW LEGEND (AFTER restoring transform - fixed position)
+    // 4. DRAW LEGEND — LEGACY on-canvas path only.
+    // New renderers (and built-ins with legendData) render the legend as an
+    // HTML panel in the JSX below, so we skip the canvas draw when legendData
+    // exists. We also skip it when the user has collapsed the legend.
     // ============================================
-    if (useLlm && llmRenderer?.legend) {
-      try {
-        llmRenderer.legend(ctx, 20, 70);
-      } catch (err) {
-        console.error("[LLM Renderer] Legend error:", err);
+    if (showLegend) {
+      if (useLlm && llmRenderer?.legend && !llmRenderer?.legendData) {
+        try {
+          llmRenderer.legend(ctx, 20, 70);
+        } catch (err) {
+          console.error("[LLM Renderer] Legend error:", err);
+        }
+      } else if (!useLlm && domainConfig?.legend && !domainConfig?.legendData) {
+        domainConfig.legend(ctx, 20, 70);
       }
-    } else if (!useLlm && domainConfig?.legend) {
-      domainConfig.legend(ctx, 20, 70);
     }
-  }, [state, width, height, scale, offset, isFirst, isLast, llmRendererCode, transformerCode]);
+  }, [state, width, height, scale, offset, isFirst, isLast, llmRendererCode, transformerCode, showLegend]);
 
   // Default background with grid pattern
   function drawDefaultBackground(ctx: CanvasRenderingContext2D, w: number, h: number) {
@@ -592,20 +660,79 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
         }}>
           {Math.round(scale * 100)}%
         </span>
+        {hasLegend && (
+          <button
+            onClick={() => setShowLegend(s => !s)}
+            title={showLegend ? "Hide legend" : "Show legend"}
+            style={{
+              padding: "6px 12px",
+              background: showLegend ? "#6366F1" : "#e2e8f0",
+              color: showLegend ? "white" : "#333",
+              border: "none",
+              borderRadius: "6px",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: 500,
+              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            }}
+          >
+            {showLegend ? "Hide Legend" : "Legend"}
+          </button>
+        )}
       </div>
-      
-      {/* Canvas */}
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        className="border border-gray-300 rounded-lg shadow-sm"
-        style={{ cursor: isDragging ? "grabbing" : "grab" }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-      />
+
+      {/* Canvas + HTML legend overlay (replaces the old on-canvas legend) */}
+      <div style={{ position: "relative", width: "fit-content" }}>
+        <canvas
+          ref={canvasRef}
+          width={width}
+          height={height}
+          className="border border-gray-300 rounded-lg shadow-sm"
+          style={{ cursor: isDragging ? "grabbing" : "grab" }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        />
+        {showLegend && activeLegendData && activeLegendData.length > 0 && (
+          <div
+            style={{
+              position: "absolute",
+              top: 12,
+              left: 12,
+              maxWidth: 250,
+              maxHeight: 230,
+              overflowY: "auto",
+              background: "rgba(17, 30, 48, 0.92)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 10,
+              padding: "8px 10px",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+              zIndex: 5,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#94a3b8" }}>Legend</span>
+              <button
+                onClick={() => setShowLegend(false)}
+                title="Hide legend"
+                aria-label="Hide legend"
+                style={{ border: "none", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 2 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {activeLegendData.map((entry, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <LegendSwatch shape={entry.shape} color={entry.color} />
+                  <span style={{ fontSize: 11, color: "#cbd5e1", lineHeight: 1.3 }}>{entry.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

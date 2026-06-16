@@ -41,3 +41,21 @@ export interface RenderedState {
   /** All active relations/predicates in the current state */
   relations: VisualRelation[];
 }
+
+/**
+ * One row of the legend. The legend is exported as DATA (an array of these),
+ * NOT a drawing function — the app renders it as a compact, collapsible HTML
+ * panel beside the canvas, so it can never cover the scene.
+ */
+export interface LegendEntry {
+  /**
+   * Human-readable text. DECODE the relation encodings here, not just object
+   * names — e.g. "Vehicle inside a Location box = (at vehicle location)",
+   * "Person nested in a Vehicle = (in person vehicle)", "dashed area = Unplaced".
+   */
+  label: string;
+  /** Swatch color (hex or rgb), e.g. "#4E79A7". Optional. */
+  color?: string;
+  /** Swatch shape drawn beside the label. Optional; defaults to "square". */
+  shape?: "circle" | "square" | "line" | "diamond" | "badge";
+}

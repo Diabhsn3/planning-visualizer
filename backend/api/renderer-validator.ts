@@ -5,7 +5,7 @@
  *
  *   1. render<DomainName>(ctx, state, width, height)            — main renderer
  *   2. render<DomainName>Background(ctx, width, height)         — background renderer
- *   3. render<DomainName>Legend(ctx, x, y) OR = undefined       — legend renderer
+ *   3. render<DomainName>Legend: LegendEntry[] OR = undefined   — legend DATA (or none)
  *
  * Used by:
  *   - Unit tests (__tests__/unit/renderer-validator.test.ts)
@@ -118,7 +118,7 @@ export function validateRendererExports(
   if (!legend.found) {
     issues.push({
       export: "legend",
-      reason: `Missing required export \`${legendExportName}\`. Export it as a function or as \`undefined\`.`,
+      reason: `Missing required export \`${legendExportName}\`. Export it as a \`LegendEntry[]\` data array or as \`undefined\`.`,
     });
   }
 

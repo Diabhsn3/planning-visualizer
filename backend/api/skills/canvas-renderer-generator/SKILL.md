@@ -73,18 +73,26 @@ export function renderDomainNameBackground(ctx: CanvasRenderingContext2D, width:
 - Draws the static background (floor, grid, scenery, etc.)
 - Called once before the main render function
 
-### Function 3: Legend (or undefined)
+### Function 3: Legend (DATA array, or undefined)
+
+The legend is **DATA, not a drawing function**. The app renders it as a compact, collapsible HTML panel beside the canvas — so you never touch `ctx`, and it can never cover the scene. Export either:
 ```
 export const renderDomainNameLegend = undefined;
 ```
-OR
+OR an array of `LegendEntry` (see `interfaces.ts`):
 ```
-export function renderDomainNameLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void
+export const renderDomainNameLegend: LegendEntry[] = [
+  { label: "Vehicle inside a Location box = (at vehicle location)", color: "#F28E2B", shape: "square" },
+  { label: "Person nested in a Vehicle = (in person vehicle)", color: "#59A14F", shape: "circle" },
+  { label: "Dashed area = Unplaced (no location this step)", color: "#9AA0A6", shape: "square" },
+];
 ```
+- `LegendEntry = { label: string; color?: string; shape?: "circle" | "square" | "line" | "diamond" | "badge" }`
 - If the domain is self-explanatory, export `undefined`
-- If a legend helps, draw it at the given (x, y) coordinates
-- Legend must be consistent across all states
-- If the domain encodes any relation by containment or nesting (e.g. `at`/`in`/`on`), PREFER a legend (not `undefined`) and make it decode those encodings — e.g. "X inside Y's box = `at`", "P nested in vehicle V = `in`", "dashed gray area = Unplaced" — not just the object glyphs
+- Each `label` must DECODE the relation encodings (containment/nesting), not just name a glyph — e.g. "X inside Y's box = `at`", "P nested in vehicle V = `in`", "dashed area = Unplaced"
+- The legend is consistent across all states. Do NOT draw on the canvas — return data only
+- If the domain encodes any relation by containment or nesting (`at`/`in`/`on`), PREFER a legend (not `undefined`)
+- Keep it to at most ~6 entries; never one row per state/property predicate — cover those with one "badges = object flags" row
 
 ## Quality Criteria
 

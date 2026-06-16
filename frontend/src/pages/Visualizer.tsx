@@ -614,6 +614,11 @@ export default function Visualizer() {
   const [plannerInfo, setPlannerInfo]           = useState<{ used_planner: boolean; info: string; strategy?: { id: string; name: string; isOptimal: boolean; speed: string } | null } | null>(null);
   const [elapsedTime, setElapsedTime]           = useState(0);
   const [isProcessing, setIsProcessing]         = useState(false);
+  // Per-solve id (one per Generate click) so Stop can cancel the exact
+  // in-flight solve on the backend. cancelledRef suppresses the error modal
+  // when a rejection is the result of our own cancel.
+  const solveIdRef = useRef<string | null>(null);
+  const cancelledRef = useRef(false);
   const [isDomainOpen, setIsDomainOpen]         = useState(true);
   const [isStrategyOpen, setIsStrategyOpen]     = useState(false);
   const [isRenderModeOpen, setIsRenderModeOpen] = useState(false);
@@ -1038,6 +1043,12 @@ export default function Visualizer() {
     },
     onError: (error: any) => {
       setIsProcessing(false);
+      // Solve was cancelled by the user (Stop) — the backend rejects with
+      // "CANCELLED". Don't surface the error modal for an intentional cancel.
+      if (cancelledRef.current || error?.message === "CANCELLED") {
+        cancelledRef.current = false;
+        return;
+      }
       let errorMessage = error.message || "An unknown error occurred";
       let errorType = "general", title = "Error";
       let suggestedDomain: string | undefined, suggestedDomainName: string | undefined;
@@ -1154,6 +1165,10 @@ export default function Visualizer() {
     },
     onError: (error: any) => {
       setIsProcessing(false);
+      if (cancelledRef.current || error?.message === "CANCELLED") {
+        cancelledRef.current = false;
+        return;
+      }
       setErrorModal({ show: true, title: "Error", message: error.message || "Failed to solve custom problem" });
     },
   });
@@ -1342,8 +1357,29 @@ export default function Visualizer() {
     }
   }, [isCustomDomain]);
 
+  const cancelSolveMutation = trpc.visualizer.cancelSolve.useMutation();
+
+  // True whenever a solve is in flight — used to lock config controls and
+  // the sidebar toggle so the user can't change inputs or hide Stop mid-solve.
+  const isBusy = isProcessing || uploadMutation.isPending || uploadCustomMutation.isPending;
+
+  // Stop an in-flight solve: tell the backend to kill the planner tree, drop
+  // the processing state immediately, and reset the mutations. The upload
+  // mutation then rejects with "CANCELLED" — onError suppresses the modal.
+  const handleStop = () => {
+    cancelledRef.current = true;
+    if (solveIdRef.current) {
+      cancelSolveMutation.mutate({ solveId: solveIdRef.current });
+    }
+    setIsProcessing(false);
+    uploadMutation.reset();
+    uploadCustomMutation.reset();
+  };
+
   const handleGenerate = () => {
     setIsProcessing(true);
+    cancelledRef.current = false;
+    solveIdRef.current = crypto.randomUUID();
     // Always scroll the page to the top when the user hits Generate.
     //
     // Why two scrolls + instant behavior: the saved-domain branch (and
@@ -1389,6 +1425,7 @@ export default function Visualizer() {
             domainName: savedDomain.domainName,
             searchStrategy: selectedStrategy as any,
             sessionId: getSessionId(),
+            solveId: solveIdRef.current ?? undefined,
           });
         };
         run();
@@ -1409,6 +1446,7 @@ export default function Visualizer() {
           domainName: customDomainName.trim(),
           searchStrategy: selectedStrategy as any,
           sessionId: getSessionId(),
+          solveId: solveIdRef.current ?? undefined,
         });
       };
       run();
@@ -1420,11 +1458,11 @@ export default function Visualizer() {
       if (inputMode === "text" && !problemText.trim()) { setIsProcessing(false); alert("Please paste PDDL content"); return; }
       const reader = new FileReader();
       const process = (content: string) =>
-        uploadMutation.mutate({ domainContent: "", problemContent: content, domainName: selectedDomain as any, searchStrategy: selectedStrategy as any, sessionId: getSessionId() });
+        uploadMutation.mutate({ domainContent: "", problemContent: content, domainName: selectedDomain as any, searchStrategy: selectedStrategy as any, sessionId: getSessionId(), solveId: solveIdRef.current ?? undefined });
       if (inputMode === "file" && problemFile) { reader.onload = (e) => process(e.target?.result as string); reader.readAsText(problemFile); }
       else if (inputMode === "text") process(problemText);
     } else {
-      uploadMutation.mutate({ domainContent: "", problemContent: getDefaultProblem(selectedDomain), domainName: selectedDomain as any, searchStrategy: selectedStrategy as any, sessionId: getSessionId() });
+      uploadMutation.mutate({ domainContent: "", problemContent: getDefaultProblem(selectedDomain), domainName: selectedDomain as any, searchStrategy: selectedStrategy as any, sessionId: getSessionId(), solveId: solveIdRef.current ?? undefined });
     }
   };
 
@@ -1588,7 +1626,8 @@ export default function Visualizer() {
 
                 {/* ── Unified Configuration Panel ── */}
                 <motion.div
-                  className="rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden"
+                  className={`rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden transition-opacity duration-200 ${isBusy ? "opacity-60 pointer-events-none select-none" : ""}`}
+                  aria-busy={isBusy}
                   style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(0,0,0,0.18)" }}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1888,6 +1927,7 @@ export default function Visualizer() {
                 </motion.div>
 
                 {/* ── Render Mode Panel (hidden for custom domains — LLM is automatic) ── */}
+                <div className={`transition-opacity duration-200 ${isBusy ? "opacity-60 pointer-events-none select-none" : ""}`} aria-busy={isBusy}>
                 <RenderModePicker
                   isCustomDomain={isCustomDomain}
                   isOpen={isRenderModeOpen}
@@ -1902,6 +1942,7 @@ export default function Visualizer() {
                   modelInfo={llmModelInfo}
                   error={llmError}
                 />
+                </div>
                 {/* ── Step 4: Generate ── */}
                 <div>
                   <div className="flex items-center gap-2 mb-2 px-1">
@@ -1942,6 +1983,20 @@ export default function Visualizer() {
                     </span>
                   )}
                   </motion.button>
+                  {/* Stop — halts the in-flight solve (kills the planner). */}
+                  {isProcessing && (
+                    <motion.button
+                      onClick={handleStop}
+                      whileTap={{ scale: 0.98 }}
+                      whileHover={{ y: -1 }}
+                      transition={{ duration: 0.15 }}
+                      className="w-full mt-2 py-3 px-6 rounded-2xl font-semibold text-sm tracking-wide bg-red-600/90 hover:bg-red-600 text-white transition-all duration-200 flex items-center justify-center gap-2"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                      Stop
+                    </motion.button>
+                  )}
                 </div>
 
                 <AnimatePresence>
@@ -1962,9 +2017,11 @@ export default function Visualizer() {
             {/* Sidebar toggle */}
             <div className="mb-4">
               <motion.button
-                whileTap={{ scale: 0.96 }}
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-slate-400 hover:text-slate-200 hover:border-white/[0.14] hover:bg-white/[0.05] text-xs font-medium transition-all duration-150"
+                whileTap={!isBusy ? { scale: 0.96 } : undefined}
+                onClick={() => { if (!isBusy) setIsSidebarCollapsed(!isSidebarCollapsed); }}
+                disabled={isBusy}
+                title={isBusy ? "Can't hide options while solving" : undefined}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-slate-400 text-xs font-medium transition-all duration-150 ${isBusy ? "opacity-40 cursor-not-allowed" : "hover:text-slate-200 hover:border-white/[0.14] hover:bg-white/[0.05]"}`}
               >
                 <MenuIcon className="w-4 h-4" />
                 {isSidebarCollapsed ? "Show Options" : "Hide Options"}
@@ -2123,6 +2180,20 @@ export default function Visualizer() {
                     )}
                   </div>
 
+                  {/* Controls — directly under the visualization */}
+                  <PlaybackControls
+                    currentStateIndex={currentStateIndex}
+                    totalStates={renderedStates.length}
+                    isPlaying={isPlaying}
+                    playbackSpeed={playbackSpeed}
+                    onPrevious={handlePrevious}
+                    onPlay={handlePlay}
+                    onPause={handlePause}
+                    onNext={handleNext}
+                    onSeek={setCurrentStateIndex}
+                    onSpeedChange={setPlaybackSpeed}
+                  />
+
                   {renderedStates.length > 0 && !isTransformerGenerating && !isLlmGenerating && !llmError && !transformerError && (
                     <FeedbackBox
                       context={{
@@ -2161,20 +2232,6 @@ export default function Visualizer() {
                       />
                     );
                   })()}
-
-                  {/* Controls */}
-                  <PlaybackControls
-                    currentStateIndex={currentStateIndex}
-                    totalStates={renderedStates.length}
-                    isPlaying={isPlaying}
-                    playbackSpeed={playbackSpeed}
-                    onPrevious={handlePrevious}
-                    onPlay={handlePlay}
-                    onPause={handlePause}
-                    onNext={handleNext}
-                    onSeek={setCurrentStateIndex}
-                    onSpeedChange={setPlaybackSpeed}
-                  />
 
                 </div>
 

@@ -9,11 +9,109 @@ import { logEventSafe } from "./events";
 import path from "path";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
-import { exec, execFile } from "child_process";
+import { exec, spawn, type ChildProcess } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
+
+/**
+ * Run the planner in its OWN detached process group and reproduce the parts of
+ * execFile we relied on — utf-8 buffering, a maxBuffer cap, and a timeout-kill —
+ * plus the error shape (`killed`/`signal`/`stdout`/`stderr`) the solve catch
+ * blocks inspect. execFile can't set `detached`, but cancelSolve needs the group
+ * so `process.kill(-pid, "SIGTERM")` can take down the whole tree (python3 +
+ * Fast Downward) rather than orphaning the grandchild. POSIX-only, matching the
+ * cancelSolve group-kill (the planner only runs on the Linux/macOS lab server).
+ */
+function runPlannerDetached(
+  cmd: string,
+  args: string[],
+  opts: { maxBuffer: number; timeout: number; env: NodeJS.ProcessEnv },
+): Promise<{ stdout: string; stderr: string }> & { child: ChildProcess } {
+  const child = spawn(cmd, args, {
+    detached: true,
+    env: opts.env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  const promise = new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let killedByTimeout = false;
+
+    const killGroup = (signal: NodeJS.Signals) => {
+      try {
+        if (child.pid) process.kill(-child.pid, signal);
+        else child.kill(signal);
+      } catch {
+        child.kill(signal);
+      }
+    };
+
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+
+    const timer = setTimeout(() => {
+      killedByTimeout = true;
+      killGroup("SIGTERM");
+    }, opts.timeout);
+
+    const onChunk = (which: "out" | "err") => (buf: Buffer) => {
+      if (which === "out") stdout += buf.toString("utf8");
+      else stderr += buf.toString("utf8");
+      if (stdout.length + stderr.length > opts.maxBuffer) {
+        killGroup("SIGTERM");
+        settle(() => reject(new Error(`Planner output exceeded maxBuffer (${opts.maxBuffer} bytes)`)));
+      }
+    };
+    child.stdout?.on("data", onChunk("out"));
+    child.stderr?.on("data", onChunk("err"));
+
+    child.on("error", (err) => settle(() => reject(err)));
+
+    child.on("close", (code, signal) => {
+      settle(() => {
+        if (code === 0 && !signal) {
+          resolve({ stdout, stderr });
+          return;
+        }
+        // Non-zero exit, or killed by signal (cancel / timeout). Mirror the
+        // execFile error shape so the catch blocks classify it correctly.
+        const err = new Error(
+          `Planner exited with ${signal ? `signal ${signal}` : `code ${code}`}`
+        ) as Error & {
+          killed: boolean;
+          signal: NodeJS.Signals | null;
+          code: number | null;
+          stdout: string;
+          stderr: string;
+        };
+        err.killed = killedByTimeout || signal != null;
+        err.signal = signal ?? (killedByTimeout ? "SIGTERM" : null);
+        err.code = code;
+        err.stdout = stdout;
+        err.stderr = stderr;
+        reject(err);
+      });
+    });
+  });
+
+  return Object.assign(promise, { child });
+}
+
+// In-flight planner subprocesses, keyed by the per-solve `solveId` the
+// frontend generates. cancelSolve looks a child up here and SIGTERMs its
+// process group. `cancelledSolves` lets the solve mutation recognize that
+// its rejection was a user cancel (vs a real failure) and surface a benign
+// "CANCELLED" error. This is a single-process Express server, so a module
+// map is shared across the solve and cancel requests.
+const runningSolves = new Map<string, ChildProcess>();
+const cancelledSolves = new Set<string>();
 
 // Node-side hard kill for the planner subprocess. Defaults to the Python-side
 // PLANNER_TIMEOUT (seconds) + a 10-minute buffer so Node never kills the planner
@@ -166,6 +264,7 @@ export const visualizerRouter = router({
         domainName: z.enum(["blocks-world", "gripper", "depot", "hanoi", "rovers", "satellite"]),
         searchStrategy: z.enum(VALID_STRATEGY_IDS).optional().default("lazy-greedy-ff"),
         sessionId: z.string().optional(),
+        solveId: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -216,7 +315,10 @@ export const visualizerRouter = router({
         // Pass search strategy as 4th argument
         // execFile (argv array, no shell) so domain/problem/strategy args are
         // passed literally — no shell parsing/injection surface.
-        const { stdout, stderr } = await execFileAsync(
+        // detached:true puts the planner in its own process group so a cancel
+        // can SIGTERM the whole tree (python3 + Fast Downward). We await the
+        // promise (never unref) so stdout/stderr/timeout behave as before.
+        const plannerProc = runPlannerDetached(
           PYTHON_CMD,
           [pythonScript, domainPath, problemPath, input.domainName, input.searchStrategy],
           {
@@ -229,6 +331,8 @@ export const visualizerRouter = router({
             },
           }
         );
+        if (input.solveId) runningSolves.set(input.solveId, plannerProc.child);
+        const { stdout, stderr } = await plannerProc;
         console.log('[uploadAndGenerate] Python script completed');
         console.log('[uploadAndGenerate] stdout length:', stdout.length);
         console.log('[uploadAndGenerate] stderr:', stderr || 'none');
@@ -312,6 +416,12 @@ export const visualizerRouter = router({
           search_strategy: data.search_strategy,
         };
       } catch (error) {
+        // Was this a user cancel (cancelSolve killed the planner group)?
+        // Either we flagged the solveId, or the rejection carries the SIGTERM
+        // we sent. Surface a benign, recognizable error instead of a failure.
+        const wasCancelled =
+          (input.solveId != null && cancelledSolves.has(input.solveId)) ||
+          ((error as any)?.killed === true && (error as any)?.signal === "SIGTERM");
         // Clean up files even on error
         try {
           if (problemPath) {
@@ -335,16 +445,23 @@ export const visualizerRouter = router({
               custom: false,
               domain: input.domainName,
               searchStrategy: input.searchStrategy,
-              errorType: "exception",
+              errorType: wasCancelled ? "cancelled" : "exception",
               durationMs: Date.now() - startedAt,
             },
           });
         }
         throw new Error(
-          error instanceof Error
+          wasCancelled
+            ? "CANCELLED"
+            : error instanceof Error
             ? error.message
             : "Failed to process uploaded files"
         );
+      } finally {
+        if (input.solveId) {
+          runningSolves.delete(input.solveId);
+          cancelledSolves.delete(input.solveId);
+        }
       }
     }),
 
@@ -362,6 +479,7 @@ export const visualizerRouter = router({
         domainName: z.string().min(1, "Domain name is required"),
         searchStrategy: z.enum(VALID_STRATEGY_IDS).optional().default("lazy-greedy-ff"),
         sessionId: z.string().optional(),
+        solveId: z.string().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -391,7 +509,8 @@ export const visualizerRouter = router({
 
         // Pass "custom" as domain_name to skip domain mismatch detection.
         // execFile (argv array, no shell) — no shell injection surface.
-        const { stdout, stderr } = await execFileAsync(
+        // detached:true → own process group so cancelSolve can kill the tree.
+        const plannerProc = runPlannerDetached(
           PYTHON_CMD,
           [pythonScript, domainPath, problemPath, "custom", input.searchStrategy],
           {
@@ -404,6 +523,8 @@ export const visualizerRouter = router({
             },
           }
         );
+        if (input.solveId) runningSolves.set(input.solveId, plannerProc.child);
+        const { stdout, stderr } = await plannerProc;
 
         console.log('[uploadAndGenerateCustom] Python script completed');
         if (stderr && !stdout) {
@@ -469,6 +590,9 @@ export const visualizerRouter = router({
           search_strategy: data.search_strategy,
         };
       } catch (error) {
+        const wasCancelled =
+          (input.solveId != null && cancelledSolves.has(input.solveId)) ||
+          ((error as any)?.killed === true && (error as any)?.signal === "SIGTERM");
         try {
           if (domainPath) await unlink(domainPath).catch(() => {});
           if (problemPath) await unlink(problemPath).catch(() => {});
@@ -484,17 +608,51 @@ export const visualizerRouter = router({
               custom: true,
               domain: input.domainName,
               searchStrategy: input.searchStrategy,
-              errorType: "exception",
+              errorType: wasCancelled ? "cancelled" : "exception",
               durationMs: Date.now() - startedAt,
             },
           });
         }
         throw new Error(
-          error instanceof Error
+          wasCancelled
+            ? "CANCELLED"
+            : error instanceof Error
             ? error.message
             : "Failed to process custom domain files"
         );
+      } finally {
+        if (input.solveId) {
+          runningSolves.delete(input.solveId);
+          cancelledSolves.delete(input.solveId);
+        }
       }
+    }),
+
+  /**
+   * Cancel an in-flight solve. The frontend passes the same per-solve
+   * `solveId` it sent to uploadAndGenerate(Custom); we look up that solve's
+   * child process and SIGTERM its entire process group (python3 + the Fast
+   * Downward search child), freeing the box immediately. The killed planner
+   * makes the original mutation reject; that path recognizes the cancel and
+   * surfaces a benign "CANCELLED" error.
+   */
+  cancelSolve: publicProcedure
+    .input(z.object({ solveId: z.string() }))
+    .mutation(async ({ input }) => {
+      const child = runningSolves.get(input.solveId);
+      if (!child || !child.pid) {
+        // Already finished (or never registered) between request and cancel.
+        return { cancelled: false };
+      }
+      cancelledSolves.add(input.solveId);
+      try {
+        // Negative pid → signal the whole process group from detached:true.
+        process.kill(-child.pid, "SIGTERM");
+      } catch {
+        // ESRCH: the process exited between the lookup and the kill. Benign.
+      }
+      runningSolves.delete(input.solveId);
+      return { cancelled: true };
     }),
 
   /**

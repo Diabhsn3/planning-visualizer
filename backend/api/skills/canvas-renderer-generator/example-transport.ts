@@ -49,6 +49,13 @@ export interface RenderedState {
   relations: VisualRelation[];
 }
 
+/** A legend row (DATA, not drawn). Mirrors the shared LegendEntry in interfaces.ts. */
+export interface LegendEntry {
+  label: string;
+  color?: string;
+  shape?: "circle" | "square" | "line" | "diamond" | "badge";
+}
+
 // ─── Small Canvas helpers (pure Canvas 2D, no external assets) ────────────────
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -259,45 +266,14 @@ export function renderTransportBackground(ctx: CanvasRenderingContext2D, width: 
   }
 }
 
-// ─── Legend — decodes the icons AND the relation ENCODINGS (containment) ─────
+// ─── Legend — DATA that decodes the icons AND the relation ENCODINGS ─────────
+// NOT a drawing function: export a LegendEntry[] (the app renders it as a
+// compact, collapsible HTML panel, so it never covers the scene). Each label
+// decodes a containment/nesting encoding, not just an object glyph.
 
-export function renderTransportLegend(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-  ctx.save();
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.font = "bold 13px Arial";
-  ctx.fillStyle = "#1a1a1a";
-  ctx.fillText("Legend", x, y);
-  let ly = y + 24;
-  const line = 30;
-
-  ctx.setLineDash([]);
-  ctx.strokeStyle = "#4E79A7";
-  ctx.fillStyle = hexToRgba("#4E79A7", 0.1);
-  ctx.lineWidth = 2;
-  roundRect(ctx, x, ly - 10, 28, 20, 4); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#333";
-  ctx.font = "12px Arial";
-  ctx.fillText("Location  (a box = a place)", x + 38, ly);
-
-  ly += line;
-  drawPlane(ctx, { x: x - 2, y: ly - 12, w: 34, h: 24 }, "#F28E2B");
-  ctx.fillStyle = "#333";
-  ctx.fillText("Vehicle inside a Location  =  (at vehicle location)", x + 38, ly);
-
-  ly += line;
-  drawPerson(ctx, x + 14, ly, 12, "#59A14F");
-  ctx.fillStyle = "#333";
-  ctx.fillText("Person inside a Vehicle  =  (in person vehicle)", x + 38, ly);
-
-  ly += line;
-  ctx.setLineDash([6, 4]);
-  ctx.strokeStyle = "#9aa0a6";
-  ctx.fillStyle = "rgba(154,160,166,0.08)";
-  ctx.lineWidth = 2;
-  roundRect(ctx, x, ly - 10, 28, 20, 4); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = "#333";
-  ctx.fillText("Unplaced  (no location this step)", x + 38, ly);
-
-  ctx.restore();
-}
+export const renderTransportLegend: LegendEntry[] = [
+  { label: "Location  (a box = a place)", color: "#4E79A7", shape: "square" },
+  { label: "Vehicle inside a Location box = (at vehicle location)", color: "#F28E2B", shape: "square" },
+  { label: "Person nested in a Vehicle = (in person vehicle)", color: "#59A14F", shape: "circle" },
+  { label: "Dashed area = Unplaced (no location this step)", color: "#9AA0A6", shape: "square" },
+];
