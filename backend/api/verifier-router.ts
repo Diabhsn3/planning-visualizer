@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import { verifyImage } from "./verifier";
 import { listVerifierRuns } from "./verifier-storage";
 import { listFeedback } from "./feedback";
@@ -83,7 +83,7 @@ export const verifierRouter = router({
       return verifyImage({ ...input, pngBase64 });
     }),
 
-  listVerifierRuns: publicProcedure
+  listVerifierRuns: adminProcedure
     .input(
       z
         .object({
@@ -97,7 +97,7 @@ export const verifierRouter = router({
     )
     .query(async ({ input }) => listVerifierRuns(input)),
 
-  aggregateVerifierRuns: publicProcedure
+  aggregateVerifierRuns: adminProcedure
     .input(
       z
         .object({
@@ -122,7 +122,7 @@ export const verifierRouter = router({
    * their per-problem averages (equal weight per problem). Nulls are
    * excluded from their respective averages at both levels.
    */
-  aggregateByDomainAndProblem: publicProcedure
+  aggregateByDomainAndProblem: adminProcedure
     .input(
       z
         .object({
@@ -211,7 +211,7 @@ export const verifierRouter = router({
    * per-state detail (screenshot, agent score, human rating + comment).
    * Powers the unified verifier page.
    */
-  aggregateWithFeedback: publicProcedure.query(async () => {
+  aggregateWithFeedback: adminProcedure.query(async () => {
     const [runs, feedback] = await Promise.all([
       listVerifierRuns(),
       listFeedback(),
@@ -264,7 +264,7 @@ export const verifierRouter = router({
    * Drives the report page with sections for Basic / Claude / Gemini and
    * collapsable per-domain groups that contain per-version breakdowns.
    */
-  aggregateByMethodDomainAndVersion: publicProcedure
+  aggregateByMethodDomainAndVersion: adminProcedure
     .input(
       z
         .object({

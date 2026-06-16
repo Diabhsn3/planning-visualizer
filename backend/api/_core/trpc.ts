@@ -27,20 +27,28 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
+// One-time warning so an operator notices when admin endpoints are unguarded.
+let warnedAdminOpen = false;
+
+// Gates data-export endpoints behind an admin token. Active only when
+// ADMIN_TOKEN is configured (see context.ts); otherwise it stays open for
+// local/dev. Replaces the old check on ctx.user, which was always null.
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    if (!ctx.user) {
+    if (!ctx.adminEnforced && !warnedAdminOpen) {
+      warnedAdminOpen = true;
+      console.warn(
+        "[auth] ADMIN_TOKEN is not set — data-export endpoints are OPEN. " +
+          "Set ADMIN_TOKEN (server) + send the x-admin-token header to require auth.",
+      );
+    }
+
+    if (!ctx.isAdmin) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
-    // Note: role check removed as user is always null in visualizer app
 
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
-    });
+    return next({ ctx });
   }),
 );

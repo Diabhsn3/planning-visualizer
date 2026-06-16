@@ -9,10 +9,21 @@ import { logEventSafe } from "./events";
 import path from "path";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+// Node-side hard kill for the planner subprocess. Defaults to the Python-side
+// PLANNER_TIMEOUT (seconds) + a 10-minute buffer so Node never kills the planner
+// before Python's own timeout fires. Override directly with NODE_PLANNER_TIMEOUT_MS.
+const PLANNER_NODE_TIMEOUT_MS = (() => {
+  const explicit = process.env.NODE_PLANNER_TIMEOUT_MS;
+  if (explicit) return parseInt(explicit, 10);
+  const pyTimeoutSec = parseInt(process.env.PLANNER_TIMEOUT ?? "1800", 10);
+  return (pyTimeoutSec + 600) * 1000;
+})();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -203,11 +214,14 @@ export const visualizerRouter = router({
         console.log('[uploadAndGenerate] Using Python command:', PYTHON_CMD);
         
         // Pass search strategy as 4th argument
-        const { stdout, stderr } = await execAsync(
-          `"${PYTHON_CMD}" "${pythonScript}" "${domainPath}" "${problemPath}" "${input.domainName}" "${input.searchStrategy}"`,
+        // execFile (argv array, no shell) so domain/problem/strategy args are
+        // passed literally — no shell parsing/injection surface.
+        const { stdout, stderr } = await execFileAsync(
+          PYTHON_CMD,
+          [pythonScript, domainPath, problemPath, input.domainName, input.searchStrategy],
           {
             maxBuffer: 50 * 1024 * 1024, // 50 MB to handle large plans (1000+ actions)
-            timeout: 2400000, // 40 minute timeout for planner (Python default is 1800s/30min + buffer)
+            timeout: PLANNER_NODE_TIMEOUT_MS,
             env: {
               ...process.env,
               PYTHONPATH: '', // Clear PYTHONPATH to prevent Python 3.13 imports
@@ -227,6 +241,10 @@ export const visualizerRouter = router({
         console.log('[uploadAndGenerate] Parsing JSON output...');
         const data = JSON.parse(stdout);
         console.log('[uploadAndGenerate] JSON parsed successfully, success:', data.success);
+
+        if (Array.isArray(data.generation_warnings) && data.generation_warnings.length > 0) {
+          console.warn('[uploadAndGenerate] state-gen warnings:', data.generation_warnings.length, data.generation_warnings.slice(0, 5));
+        }
 
         if (!data.success) {
           await logEventSafe({
@@ -288,6 +306,7 @@ export const visualizerRouter = router({
           predicate_schema: data.predicate_schema ?? null,
           objects: data.objects ?? null,
           problem_hash: data.problem_hash ?? null,
+          generation_warnings: data.generation_warnings ?? [],
           used_planner: data.used_planner,
           planner_info: data.planner_info,
           search_strategy: data.search_strategy,
@@ -370,12 +389,14 @@ export const visualizerRouter = router({
         const pythonScript = path.join(PLANNER_DIR, "visualizer_api.py");
         console.log('[uploadAndGenerateCustom] Running Python script...');
 
-        // Pass "custom" as domain_name to skip domain mismatch detection
-        const { stdout, stderr } = await execAsync(
-          `"${PYTHON_CMD}" "${pythonScript}" "${domainPath}" "${problemPath}" "custom" "${input.searchStrategy}"`,
+        // Pass "custom" as domain_name to skip domain mismatch detection.
+        // execFile (argv array, no shell) — no shell injection surface.
+        const { stdout, stderr } = await execFileAsync(
+          PYTHON_CMD,
+          [pythonScript, domainPath, problemPath, "custom", input.searchStrategy],
           {
             maxBuffer: 50 * 1024 * 1024,
-            timeout: 2400000,
+            timeout: PLANNER_NODE_TIMEOUT_MS,
             env: {
               ...process.env,
               PYTHONPATH: '',
@@ -390,6 +411,9 @@ export const visualizerRouter = router({
         }
 
         const data = JSON.parse(stdout);
+        if (Array.isArray(data.generation_warnings) && data.generation_warnings.length > 0) {
+          console.warn('[uploadAndGenerateCustom] state-gen warnings:', data.generation_warnings.length, data.generation_warnings.slice(0, 5));
+        }
         if (!data.success) {
           await logEventSafe({
             clientId: ctx.clientId,
@@ -439,6 +463,7 @@ export const visualizerRouter = router({
           predicate_schema: data.predicate_schema ?? null,
           objects: data.objects ?? null,
           problem_hash: data.problem_hash ?? null,
+          generation_warnings: data.generation_warnings ?? [],
           used_planner: data.used_planner,
           planner_info: data.planner_info,
           search_strategy: data.search_strategy,

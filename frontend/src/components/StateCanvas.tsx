@@ -50,17 +50,6 @@ robotImage.onload = () => {
   robotImageLoaded = true;
 };
 
-// ============================================
-// PERSISTENT VIEW STATE (survives re-renders and re-mounts)
-// ============================================
-// Store view state outside of React to ensure it persists
-// across step navigation, play/pause, and component re-mounts
-const persistentViewState = {
-  scale: 1,
-  offsetX: 0,
-  offsetY: 0,
-};
-
 interface VisualObject {
   id: string;
   type: string;
@@ -119,9 +108,25 @@ interface CompiledLlmRenderer {
 
 const llmRendererCache = new Map<string, CompiledLlmRenderer>();
 
+// Fast 53-bit string hash (cyrb53). Hashes the FULL code so two LLM renderers
+// that share the same boilerplate prologue/epilogue (and happen to match on
+// length + first/last chars) can't collide to the wrong cached function.
+function hashCode(str: string): string {
+  let h1 = 0xdeadbeef,
+    h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
 function compileLlmRenderer(code: string): CompiledLlmRenderer {
-  // Check cache first (keyed by code hash)
-  const cacheKey = code.length + "_" + code.slice(0, 100) + code.slice(-100);
+  // Check cache first (keyed by a full-code hash)
+  const cacheKey = hashCode(code);
   const cached = llmRendererCache.get(cacheKey);
   if (cached) return cached;
 
@@ -217,7 +222,7 @@ function compileLlmRenderer(code: string): CompiledLlmRenderer {
 const transformerCache = new Map<string, ((state: RenderedState) => RenderedState) | null>();
 
 function compileTransformer(code: string): ((state: RenderedState) => RenderedState) | null {
-  const cacheKey = code.length + "_" + code.slice(0, 80) + code.slice(-80);
+  const cacheKey = hashCode(code);
   if (transformerCache.has(cacheKey)) return transformerCache.get(cacheKey)!;
   try {
     const fnRegex = /(?:function|const|let|var)\s+(transform\w*)/g;
@@ -251,12 +256,19 @@ function compileTransformer(code: string): ((state: RenderedState) => RenderedSt
 export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmRendererCode, transformerCode, onLlmError }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Initialize state from persistent storage to survive re-mounts
-  const [scale, setScaleState] = useState(persistentViewState.scale);
-  const [offset, setOffsetState] = useState({ 
-    x: persistentViewState.offsetX, 
-    y: persistentViewState.offsetY 
+
+  // Per-instance view state (zoom/pan). A ref mirrors the React state so the
+  // native wheel handler can read the current value synchronously. This used
+  // to be a module-level singleton, which leaked zoom/pan across concurrent
+  // canvases and across new-plan loads. New plans remount this component (it's
+  // keyed by the plan run in the parent), which resets the view to defaults.
+  const viewRef = useRef({ scale: 1, offsetX: 0, offsetY: 0 });
+
+  // Initialize from the per-instance defaults.
+  const [scale, setScaleState] = useState(viewRef.current.scale);
+  const [offset, setOffsetState] = useState({
+    x: viewRef.current.offsetX,
+    y: viewRef.current.offsetY,
   });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -265,14 +277,14 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
   const setScale = useCallback((newScale: number | ((prev: number) => number)) => {
     setScaleState(prev => {
       const nextScale = typeof newScale === 'function' ? newScale(prev) : newScale;
-      persistentViewState.scale = nextScale;
+      viewRef.current.scale = nextScale;
       return nextScale;
     });
   }, []);
   
   const setOffset = useCallback((newOffset: { x: number; y: number }) => {
-    persistentViewState.offsetX = newOffset.x;
-    persistentViewState.offsetY = newOffset.y;
+    viewRef.current.offsetX = newOffset.x;
+    viewRef.current.offsetY = newOffset.y;
     setOffsetState(newOffset);
   }, []);
 
@@ -292,19 +304,19 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
 
       // Calculate zoom
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      const currentScale = persistentViewState.scale;
+      const currentScale = viewRef.current.scale;
       const newScale = Math.min(Math.max(0.1, currentScale * zoomFactor), 5);
 
       // Adjust offset to zoom towards mouse position
       const scaleChange = newScale / currentScale;
-      const currentOffsetX = persistentViewState.offsetX;
-      const currentOffsetY = persistentViewState.offsetY;
+      const currentOffsetX = viewRef.current.offsetX;
+      const currentOffsetY = viewRef.current.offsetY;
       const newOffsetX = mouseX - (mouseX - currentOffsetX) * scaleChange;
       const newOffsetY = mouseY - (mouseY - currentOffsetY) * scaleChange;
 
-      persistentViewState.scale = newScale;
-      persistentViewState.offsetX = newOffsetX;
-      persistentViewState.offsetY = newOffsetY;
+      viewRef.current.scale = newScale;
+      viewRef.current.offsetX = newOffsetX;
+      viewRef.current.offsetY = newOffsetY;
       setScaleState(newScale);
       setOffsetState({ x: newOffsetX, y: newOffsetY });
     };
@@ -502,9 +514,9 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
 
   // Reset zoom and pan
   const handleReset = useCallback(() => {
-    persistentViewState.scale = 1;
-    persistentViewState.offsetX = 0;
-    persistentViewState.offsetY = 0;
+    viewRef.current.scale = 1;
+    viewRef.current.offsetX = 0;
+    viewRef.current.offsetY = 0;
     setScaleState(1);
     setOffsetState({ x: 0, y: 0 });
   }, []);

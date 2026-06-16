@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import { appendSus, listSus } from "./sus";
 
 export const susRouter = router({
@@ -35,5 +35,5 @@ export const susRouter = router({
       };
     }),
 
-  listSus: publicProcedure.query(async () => listSus()),
+  listSus: adminProcedure.query(async () => listSus()),
 });

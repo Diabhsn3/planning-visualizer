@@ -24,19 +24,14 @@
  * and `unlink` the old file.
  */
 
-import { readFile, writeFile, appendFile, mkdir, unlink, access } from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
+import {
+  createNdjsonStore,
+  migrateLegacyJsonToNdjson,
+  dataPath,
+} from "./ndjson-store";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const DATA_DIR = __dirname.endsWith("dist")
-  ? path.join(__dirname, "..", "data")
-  : path.join(__dirname, "data");
-
-const LEGACY_FILE = path.join(DATA_DIR, "verifier_runs.json");
-const NDJSON_FILE = path.join(DATA_DIR, "verifier_runs.jsonl");
+const LEGACY_FILE = dataPath("verifier_runs.json");
+const NDJSON_FILE = dataPath("verifier_runs.jsonl");
 
 export type RunKind = "verify" | "calibration";
 
@@ -96,128 +91,41 @@ function cacheKey(imageHash: string, version: string, model: string): string {
   return `${imageHash}::${version}::${model}`;
 }
 
-interface State {
-  items: VerifierRunRow[];
-  /** Newest-first lookup so cache hits return the most recent extraction. */
-  extractionCache: Map<string, VerifierRunRow>;
-  nextIdPromise: Promise<number>;
-}
-
-let statePromise: Promise<State> | null = null;
-
-async function fileExists(p: string): Promise<boolean> {
-  try {
-    await access(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function parseLines(text: string): VerifierRunRow[] {
-  if (!text) return [];
-  const out: VerifierRunRow[] = [];
-  for (const raw of text.split("\n")) {
-    const line = raw.trim();
-    if (!line) continue;
-    try {
-      out.push(JSON.parse(line) as VerifierRunRow);
-    } catch (err) {
-      console.warn(
-        `[VerifierStore] Skipping malformed NDJSON line: ${line.slice(0, 80)}${line.length > 80 ? "…" : ""} (${(err as Error).message})`
-      );
-    }
-  }
-  return out;
-}
-
-async function migrateLegacyIfNeeded(): Promise<void> {
-  if (await fileExists(NDJSON_FILE)) return;
-  if (!(await fileExists(LEGACY_FILE))) return;
-
-  console.log("[VerifierStore] Migrating legacy verifier_runs.json → verifier_runs.jsonl …");
-  const raw = await readFile(LEGACY_FILE, "utf-8");
-  let parsed: { items?: VerifierRunRow[]; nextId?: number };
-  try {
-    parsed = JSON.parse(raw);
-  } catch (err) {
-    console.error(
-      `[VerifierStore] Legacy verifier_runs.json is unparseable — leaving it. Error: ${(err as Error).message}`
-    );
-    return;
-  }
-  const items = Array.isArray(parsed.items) ? parsed.items : [];
-  await mkdir(DATA_DIR, { recursive: true });
-  const body = items.map((r) => JSON.stringify(r)).join("\n") + (items.length > 0 ? "\n" : "");
-  await writeFile(NDJSON_FILE, body, "utf-8");
-  await unlink(LEGACY_FILE);
-  console.log(`[VerifierStore] Migration complete — ${items.length} row(s) in NDJSON. Removed legacy file.`);
-}
-
-async function initState(): Promise<State> {
-  await mkdir(DATA_DIR, { recursive: true });
-  await migrateLegacyIfNeeded();
-
-  let items: VerifierRunRow[] = [];
-  if (await fileExists(NDJSON_FILE)) {
-    const text = await readFile(NDJSON_FILE, "utf-8");
-    items = parseLines(text);
-  }
-
-  // Build extraction cache. Newer rows overwrite older for same key, which
-  // is what we want (latest extraction wins).
-  const extractionCache = new Map<string, VerifierRunRow>();
-  for (const r of items) {
-    extractionCache.set(cacheKey(r.imageHash, r.extractorVersion, r.extractorModelId), r);
-  }
-
-  const maxId = items.reduce((m, r) => (r.id > m ? r.id : m), 0);
-  return {
-    items,
-    extractionCache,
-    nextIdPromise: Promise.resolve(maxId + 1),
-  };
-}
-
-async function getState(): Promise<State> {
-  if (statePromise === null) statePromise = initState();
-  return statePromise;
-}
-
 // ============================================================================
 // Public API
 // ============================================================================
 
 export type AppendVerifierRunInput = Omit<VerifierRunRow, "id" | "createdAt">;
 
+// Derived O(1) lookup for findCachedExtraction (hot: called per state-view).
+// Built lazily from the store on first use, then kept fresh in onAppended
+// (which runs inside the store's write lock). Newer rows win for the same key.
+let extractionCache: Map<string, VerifierRunRow> | null = null;
+
+const store = createNdjsonStore<VerifierRunRow, AppendVerifierRunInput>({
+  fileName: "verifier_runs.jsonl",
+  label: "VerifierStore",
+  getId: (r) => r.id,
+  maxLineBytes: 60_000,
+  migrate: () =>
+    migrateLegacyJsonToNdjson<VerifierRunRow>({
+      legacyFile: LEGACY_FILE,
+      ndjsonFile: NDJSON_FILE,
+      label: "VerifierStore",
+    }),
+  makeRecord: (input, id, createdAt) => ({ id, createdAt, ...input }),
+  onAppended: (row) => {
+    extractionCache?.set(
+      cacheKey(row.imageHash, row.extractorVersion, row.extractorModelId),
+      row
+    );
+  },
+});
+
 export async function appendVerifierRun(
   input: AppendVerifierRunInput
 ): Promise<VerifierRunRow> {
-  const state = await getState();
-
-  const myIdPromise = state.nextIdPromise;
-  state.nextIdPromise = myIdPromise.then((n) => n + 1);
-  const id = await myIdPromise;
-
-  const row: VerifierRunRow = {
-    id,
-    createdAt: new Date().toISOString(),
-    ...input,
-  };
-
-  const line = JSON.stringify(row);
-  if (line.length > 60_000) {
-    throw new Error(
-      `[VerifierStore] Refusing to append row id=${id}: serialized size ${line.length} > 60KB cap`
-    );
-  }
-  await appendFile(NDJSON_FILE, line + "\n", "utf-8");
-  state.items.push(row);
-  state.extractionCache.set(
-    cacheKey(row.imageHash, row.extractorVersion, row.extractorModelId),
-    row
-  );
-
+  const row = await store.append(input);
   console.log(
     `[VerifierStore] Recorded id=${row.id} runId=${row.runId} ` +
     `kind=${row.runKind} domain="${row.domainName}" state=${row.stateIndex} ` +
@@ -235,8 +143,15 @@ export interface FindCachedExtractionInput {
 export async function findCachedExtraction(
   input: FindCachedExtractionInput
 ): Promise<{ extracted: string[]; parseFailure: boolean } | null> {
-  const state = await getState();
-  const hit = state.extractionCache.get(
+  if (extractionCache === null) {
+    // Build once from the loaded rows; later rows arrive via onAppended.
+    const cache = new Map<string, VerifierRunRow>();
+    for (const r of await store.list()) {
+      cache.set(cacheKey(r.imageHash, r.extractorVersion, r.extractorModelId), r);
+    }
+    extractionCache = cache;
+  }
+  const hit = extractionCache.get(
     cacheKey(input.imageHash, input.extractorVersion, input.extractorModelId)
   );
   if (!hit) return null;
@@ -254,8 +169,8 @@ export interface ListVerifierRunsFilter {
 export async function listVerifierRuns(
   filter?: ListVerifierRunsFilter
 ): Promise<VerifierRunRow[]> {
-  const { items } = await getState();
-  if (!filter) return items.slice();
+  const items = await store.list();
+  if (!filter) return items;
   return items.filter(
     (r) =>
       (filter.runId === undefined || r.runId === filter.runId) &&

@@ -24,11 +24,16 @@ class StateGenerator:
         self.parser = PDDLParser(domain_path, problem_path)
         self.current_state: Set[Predicate] = set(self.parser.init_state)
         self.state_history: List[Set[Predicate]] = [set(self.current_state)]
-    
+        # Structured notices collected while applying the plan (precondition
+        # failures, unapplied actions). Surfaced in the API result so a
+        # physically-wrong animation isn't presented as a confident success.
+        self.generation_warnings: List[Dict] = []
+
     def reset(self):
         """Reset to initial state."""
         self.current_state = set(self.parser.init_state)
         self.state_history = [set(self.current_state)]
+        self.generation_warnings = []
     
     def get_current_state(self) -> Set[Predicate]:
         """Get the current state as a set of predicates."""
@@ -152,11 +157,17 @@ class StateGenerator:
             action = self.parser.get_action_by_name(action_name)
         except ValueError as e:
             print(f"Error: {e}", file=sys.stderr)
+            self.generation_warnings.append(
+                {"type": "action_not_found", "action": grounded_action, "message": str(e)}
+            )
             return False
-        
+
         # Create variable binding
         if len(params) != len(action.parameters):
             print(f"Error: Parameter count mismatch for action {action_name}", file=sys.stderr)
+            self.generation_warnings.append(
+                {"type": "param_count_mismatch", "action": grounded_action}
+            )
             return False
         
         binding = {}
@@ -168,8 +179,14 @@ class StateGenerator:
         if not preconditions_ok:
             if force_apply:
                 print(f"Warning: Preconditions not verified for action {grounded_action}, applying anyway (planner validated)", file=sys.stderr)
+                self.generation_warnings.append(
+                    {"type": "precondition_unverified", "action": grounded_action}
+                )
             else:
                 print(f"Warning: Preconditions not satisfied for action {grounded_action}", file=sys.stderr)
+                self.generation_warnings.append(
+                    {"type": "precondition_failed", "action": grounded_action}
+                )
                 return False
         
         # Apply effects
@@ -198,6 +215,9 @@ class StateGenerator:
             success = self.apply_action(action, force_apply=force_apply)
             if not success:
                 print(f"Failed to apply action {i}: {action}", file=sys.stderr)
+                self.generation_warnings.append(
+                    {"type": "action_not_applied", "index": i, "action": action}
+                )
                 # Don't break - try to continue with remaining actions
                 # This allows partial visualization even if some actions fail
         

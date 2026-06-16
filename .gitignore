@@ -27,7 +27,14 @@ backend/api/.claude-skill-id
 /.claude
 /backend/api/llm_renderers
 /backend/api/llm_transformers
-/backend/api/data/artifacts
+
+# Runtime data — study results (SUS), in-app feedback, telemetry, verifier
+# runs, generated artifacts, saved domains, and their images. Owned by the
+# DEPLOYED SERVER and must NOT be tracked, so `git pull` / deploys never
+# overwrite real participant data. Keep a backup of this dir on the server.
+# On a fresh clone it starts empty; the app re-creates it on first write.
+/backend/api/data/
+
 CLAUDE.md
 /graphify-out
 /frontend/.claude

@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """
 API wrapper for the planning visualizer pipeline.
-Integrates planner_runner, state_generator, and state_renderer.
+Integrates run_planner, state_generator, and state_renderer.
 """
 
 import sys
 import os
 
-# Suppress all warnings to prevent them from polluting JSON output
+# Quiet noisy third-party warnings so they don't clutter planner logs. Scope to
+# known-benign categories instead of silencing everything globally — a blanket
+# ignore would also hide real deprecations / runtime warnings while debugging.
+# (Warnings go to stderr; stdout stays clean JSON regardless.)
 import warnings
-warnings.filterwarnings('ignore')
-os.environ['PYTHONWARNINGS'] = 'ignore'
+for _benign in (DeprecationWarning, FutureWarning, UserWarning, ResourceWarning, ImportWarning):
+    warnings.filterwarnings('ignore', category=_benign)
 
 import json
 import hashlib
 import re
+import tempfile
 from pathlib import Path
 
 # Add modules to path
@@ -59,6 +63,9 @@ def visualize_plan(
     Returns:
         Dictionary with rendered states and metadata
     """
+    # Initialized before the try so the cleanup in `finally` is always safe,
+    # even if an early validation path returns before patching runs.
+    patched_problem_path = None
     try:
         # Validate strategy if provided
         if strategy_id and not validate_strategy(strategy_id):
@@ -73,36 +80,58 @@ def visualize_plan(
         if strategy_id is None:
             strategy_id = get_default_strategy_id()
         strategy = get_strategy(strategy_id)
-        
+
+        # Read the original problem PDDL once, up front. The problem_hash is
+        # computed from THIS unmodified content so the frontend's re-run
+        # detection stays stable even when we patch the (:domain ...) line for
+        # custom domains below.
+        try:
+            with open(problem_path, "r", encoding="utf-8") as _pf:
+                original_problem_text = _pf.read()
+            problem_hash = hashlib.sha256(
+                original_problem_text.strip().encode("utf-8")
+            ).hexdigest()[:12]
+        except Exception:
+            original_problem_text = None
+            problem_hash = None
+
+        # Path actually handed to the planner / state generator. For custom
+        # domains we patch into a TEMP copy rather than overwriting the user's
+        # uploaded problem file (which broke reproducibility).
+        effective_problem_path = problem_path
+        patched_problem_path = None
+
         # Step 0a: For custom domains, extract the actual domain name from the domain PDDL
         # and patch the problem PDDL so Fast Downward doesn't reject a name mismatch.
         is_custom_domain = domain_name == "custom" or domain_name not in DOMAIN_SIGNATURES
-        if is_custom_domain:
+        if is_custom_domain and original_problem_text is not None:
             try:
                 with open(domain_path, 'r') as f:
                     domain_content = f.read()
                 # Extract domain name from: (define (domain <name>) ...)
                 domain_name_match = re.search(
-                    r'\(\s*define\s*\(\s*domain\s+([\w\-]+)\s*\)', 
+                    r'\(\s*define\s*\(\s*domain\s+([\w\-]+)\s*\)',
                     domain_content, re.IGNORECASE
                 )
                 if domain_name_match:
                     actual_domain_name = domain_name_match.group(1)
-                    # Read problem PDDL and patch the (:domain ...) line to match
-                    with open(problem_path, 'r') as f:
-                        problem_content = f.read()
                     # Replace (:domain <anything>) with the actual domain name
                     patched_problem = re.sub(
                         r'(\(:domain\s+)[\w\-]+(\s*\))',
                         lambda m: m.group(1) + actual_domain_name + m.group(2),
-                        problem_content,
+                        original_problem_text,
                         flags=re.IGNORECASE
                     )
-                    if patched_problem != problem_content:
-                        with open(problem_path, 'w') as f:
+                    if patched_problem != original_problem_text:
+                        # Write the patched copy to a temp file; never mutate the original.
+                        _fd, patched_problem_path = tempfile.mkstemp(
+                            suffix=".pddl", prefix="patched_problem_"
+                        )
+                        with os.fdopen(_fd, "w") as f:
                             f.write(patched_problem)
+                        effective_problem_path = patched_problem_path
             except Exception:
-                pass  # If patching fails, let the planner report the error naturally
+                pass  # If patching fails, fall back to the original problem file.
 
         # Step 0b: Check for domain mismatch BEFORE running planner
         # Skip mismatch detection for custom domains (they are user-defined)
@@ -134,25 +163,18 @@ def visualize_plan(
                 # (don't block the user due to detection issues)
                 pass
         
-        # Step 1: Solve the problem using Fast Downward
+        # Step 1: Solve the problem using Fast Downward (uses the patched temp
+        # copy for custom domains; the original file is never modified).
         plan, used_planner, strategy_name = solve_problem(
-            domain_path, problem_path, domain_name, strategy_id
+            domain_path, effective_problem_path, domain_name, strategy_id
         )
-        
+
         # Step 2: Generate states
-        sg = StateGenerator(domain_path, problem_path)
+        sg = StateGenerator(domain_path, effective_problem_path)
         states = sg.apply_plan(plan)
 
-        # Compute a stable hash of the problem PDDL content. Used by the
-        # frontend to detect re-runs of the same problem and skip
-        # re-verification of states it has already graded.
-        try:
-            with open(problem_path, "r", encoding="utf-8") as _pf:
-                _problem_pddl_text = _pf.read().strip()
-            problem_hash = hashlib.sha256(_problem_pddl_text.encode("utf-8")).hexdigest()[:12]
-        except Exception:
-            problem_hash = None
-        
+        # problem_hash was computed up front from the ORIGINAL problem content.
+
         # Step 3: Render states
         renderer = RendererFactory.get_renderer(sg.parser.domain_name)
         rendered_states = renderer.render_sequence(states, sg.parser.objects, plan)
@@ -172,6 +194,10 @@ def visualize_plan(
             # built without re-parsing the PDDL on the TS side.
             "predicate_schema": serialize_predicate_schema(sg.parser.predicates_schema),
             "objects": serialize_objects(sg.parser.objects),
+            # Precondition / apply notices from state generation (empty list when
+            # the plan applied cleanly). Lets the UI flag a possibly-wrong
+            # animation instead of presenting a confident but incorrect result.
+            "generation_warnings": sg.generation_warnings,
             "problem_hash": problem_hash,
             "used_planner": used_planner,
             "planner_info": strategy_name,
@@ -294,6 +320,13 @@ def visualize_plan(
             ),
             "traceback": traceback.format_exc()
         }
+    finally:
+        # Remove the patched temp problem copy, if one was created.
+        if patched_problem_path:
+            try:
+                os.unlink(patched_problem_path)
+            except OSError:
+                pass
 
 
 def list_strategies() -> dict:

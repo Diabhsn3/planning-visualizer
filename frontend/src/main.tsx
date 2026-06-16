@@ -40,6 +40,13 @@ queryClient.getMutationCache().subscribe(event => {
 const fetchWithCredentials = (input: RequestInfo | URL, init?: RequestInit) =>
   globalThis.fetch(input, { ...(init ?? {}), credentials: "include" });
 
+// Sent only when VITE_ADMIN_TOKEN is configured at build time. The server gates
+// data-export endpoints behind this header when ADMIN_TOKEN is set; otherwise
+// the header is absent and those endpoints stay open (local/dev).
+const adminToken = import.meta.env.VITE_ADMIN_TOKEN as string | undefined;
+const adminHeaders = (): Record<string, string> =>
+  adminToken ? { "x-admin-token": adminToken } : {};
+
 const trpcClient = trpc.createClient({
   links: [
     splitLink({
@@ -49,11 +56,13 @@ const trpcClient = trpc.createClient({
         url: "/api/trpc",
         transformer: superjson,
         fetch: fetchWithCredentials,
+        headers: adminHeaders,
       }),
       false: httpBatchLink({
         url: "/api/trpc",
         transformer: superjson,
         fetch: fetchWithCredentials,
+        headers: adminHeaders,
       }),
     }),
   ],

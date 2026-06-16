@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import { appendEvent, listEvents } from "./events";
 
 export const eventsRouter = router({
@@ -27,5 +27,5 @@ export const eventsRouter = router({
     }),
 
   /** All events (for the facilitator's reliability rollup / CSV export). */
-  listEvents: publicProcedure.query(async () => listEvents()),
+  listEvents: adminProcedure.query(async () => listEvents()),
 });

@@ -654,6 +654,10 @@ export default function Visualizer() {
   const [problemHash, setProblemHash]           = useState<string | null>(null);
   const [plan, setPlan]                         = useState<string[]>([]);
   const [currentStateIndex, setCurrentStateIndex] = useState(0);
+  // Bumped on every new plan load. Used as the StateCanvas `key` so a new plan
+  // remounts the canvas (resetting its zoom/pan) while step navigation within
+  // the same plan keeps the same instance (preserving the view).
+  const [vizRunId, setVizRunId]                 = useState(0);
   const canvasContainerRef                        = useRef<HTMLDivElement>(null);
   // One runId per page session — groups verifier rows from the same
   // browser run so they can be filtered in the report later.
@@ -938,9 +942,27 @@ export default function Visualizer() {
     return () => { if (interval) clearInterval(interval); };
   }, [isProcessing]);
 
+  // Drives autoplay. The interval is recreated whenever isPlaying OR
+  // playbackSpeed changes, so moving the speed slider mid-playback takes effect
+  // immediately — previously the interval captured the speed at Play-click time
+  // and ignored slider changes until the user paused and replayed.
   useEffect(() => {
-    return () => { if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current); };
-  }, []);
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      setCurrentStateIndex((prev) => {
+        if (prev >= renderedStates.length - 1) {
+          setIsPlaying(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, playbackSpeed);
+    playbackIntervalRef.current = interval;
+    return () => {
+      clearInterval(interval);
+      if (playbackIntervalRef.current === interval) playbackIntervalRef.current = null;
+    };
+  }, [isPlaying, playbackSpeed, renderedStates.length]);
 
   useEffect(() => {
     // Only run when switching TO a real basic domain. An empty selectedDomain
@@ -1097,6 +1119,7 @@ export default function Visualizer() {
       setProblemHash((data as any).problem_hash ?? null);
       setPlan(data.plan);
       setCurrentStateIndex(0);
+      setVizRunId((n) => n + 1); // new plan → remount canvas (reset zoom/pan)
       setPlannerInfo({ used_planner: data.used_planner || false, info: data.planner_info || "Unknown", strategy: data.search_strategy });
       // New plan → fresh dedup set and a fresh runId so this run's rows
       // group together in the verifier report.
@@ -1208,6 +1231,7 @@ export default function Visualizer() {
       setProblemHash((data as any).problem_hash ?? null);
       setPlan(data.plan);
       setCurrentStateIndex(0);
+      setVizRunId((n) => n + 1); // new plan → remount canvas (reset zoom/pan)
       setPlannerInfo({ used_planner: data.used_planner || false, info: data.planner_info || "Unknown", strategy: data.search_strategy });
       verifiedKeysRef.current = new Set();
       verifyRunIdRef.current = `vfy-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -1498,20 +1522,10 @@ export default function Visualizer() {
     }
   };
 
-  const handlePlay = () => {
-    if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
-    setIsPlaying(true);
-    playbackIntervalRef.current = setInterval(() => {
-      setCurrentStateIndex(prev => {
-        if (prev >= renderedStates.length - 1) {
-          setIsPlaying(false);
-          if (playbackIntervalRef.current) { clearInterval(playbackIntervalRef.current); playbackIntervalRef.current = null; }
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, playbackSpeed);
-  };
+  // The autoplay interval itself is owned by the effect keyed on
+  // [isPlaying, playbackSpeed, renderedStates.length] above; these handlers
+  // just flip the flag.
+  const handlePlay = () => setIsPlaying(true);
 
   const handlePause = () => {
     setIsPlaying(false);
@@ -2720,6 +2734,7 @@ export default function Visualizer() {
                     ) : (
                       <div ref={canvasContainerRef}>
                         <StateCanvas
+                          key={vizRunId}
                           state={renderedStates[currentStateIndex]}
                           isFirst={currentStateIndex === 0}
                           isLast={currentStateIndex === renderedStates.length - 1}

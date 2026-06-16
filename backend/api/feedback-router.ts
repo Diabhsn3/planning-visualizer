@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import { appendFeedback, listFeedback } from "./feedback";
 import type { FeedbackRecord } from "./feedback";
 import { listVerifierRuns } from "./verifier-storage";
@@ -88,7 +88,7 @@ export const feedbackRouter = router({
       return { id: record.id, createdAt: record.createdAt };
     }),
 
-  listFeedback: publicProcedure
+  listFeedback: adminProcedure
     .input(
       z
         .object({
@@ -109,7 +109,7 @@ export const feedbackRouter = router({
    * (when a matching verifier run exists) the agent's precision/recall.
    * Newest first.
    */
-  listFeedbackWithScores: publicProcedure.query(async () => {
+  listFeedbackWithScores: adminProcedure.query(async () => {
     const [feedback, runs] = await Promise.all([
       listFeedback(),
       listVerifierRuns(),
