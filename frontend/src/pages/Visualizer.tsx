@@ -7,7 +7,6 @@ import { StateCanvas } from "@/components/StateCanvas";
 import { usePlayback } from "@/hooks/usePlayback";
 import { PlaybackControls } from "@/components/PlaybackControls";
 import { CollapseSection } from "@/components/CollapseSection";
-import { SpeedBadge } from "@/components/SpeedBadge";
 import { StrategyPicker, type SearchStrategy } from "@/components/StrategyPicker";
 import { type RenderMode, type LlmProvider } from "@/components/RenderModePicker";
 import { ErrorModal, type ErrorModalState } from "@/components/ErrorModal";
@@ -30,7 +29,6 @@ import { VerifyStatus } from "@/components/VerifyStatus";
 import { PDDLHeaderBackground } from "@/components/PDDLHeaderBackground";
 import {
   PlayIcon,
-  AlertIcon,
   CheckCircleIcon,
   ChevronDownIcon, WandIcon,
   MenuIcon, TerminalIcon,
@@ -152,21 +150,6 @@ const PlanningGraph = () => {
 };
 
 // ─── Processing scan beam ────────────────────────────────────────────────────
-const ScanBeam = () => (
-  <motion.div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ borderRadius: "inherit", zIndex: 2 }}>
-    <motion.div className="absolute left-0 right-0 h-px"
-      style={{ background: "linear-gradient(90deg, transparent 0%, rgba(34,197,94,0.5) 30%, rgba(34,197,94,0.9) 50%, rgba(34,197,94,0.5) 70%, transparent 100%)" }}
-      animate={{ top: ["0%", "100%"] }}
-      transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-    />
-    <motion.div className="absolute left-0 right-0 h-8"
-      style={{ background: "linear-gradient(180deg, rgba(34,197,94,0.04) 0%, transparent 100%)" }}
-      animate={{ top: ["-32px", "calc(100% + 32px)"] }}
-      transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-    />
-  </motion.div>
-);
-
 // ─── Collapsible wrapper ─────────────────────────────────────────────────────
 // (CollapseSection moved to @/components/CollapseSection — imported above.)
 
@@ -616,7 +599,9 @@ export default function Visualizer() {
     previous: handlePrevious,
     stop: stopPlayback,
   } = usePlayback({ totalStates: renderedStates.length, setCurrentStateIndex });
-  const [plannerInfo, setPlannerInfo]           = useState<{ used_planner: boolean; info: string; strategy?: { id: string; name: string; isOptimal: boolean; speed: string } | null } | null>(null);
+  // Planner metadata (used_planner / strategy) is captured on solve but no longer
+  // surfaced on the setup page after the redesign; keep the setter for the data flow.
+  const setPlannerInfo = useState<{ used_planner: boolean; info: string; strategy?: { id: string; name: string; isOptimal: boolean; speed: string } | null } | null>(null)[1];
   const [elapsedTime, setElapsedTime]           = useState(0);
   const [isProcessing, setIsProcessing]         = useState(false);
   // Per-solve id (one per Generate click) so Stop can cancel the exact
@@ -624,11 +609,10 @@ export default function Visualizer() {
   // when a rejection is the result of our own cancel.
   const solveIdRef = useRef<string | null>(null);
   const cancelledRef = useRef(false);
-  const [isDomainOpen, setIsDomainOpen]         = useState(true);
-  const [isStrategyOpen, setIsStrategyOpen]     = useState(false);
+  const [wizardStep, setWizardStep]             = useState(0);
   const [showExampleProblem, setShowExampleProblem]     = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
-  const [showSuccessFlash, setShowSuccessFlash]         = useState(false);
+  const setShowSuccessFlash = useState(false)[1];
   // Fullscreen visualization mode — a full-window overlay (covers nav + footer)
   // entered automatically on a successful Generate. The diagram is centered on a
   // dark field with floating playback, plan steps, and study panels over it.
@@ -1544,6 +1528,7 @@ export default function Visualizer() {
     setPddlObjects(null);
     setProblemName(null);
     setProblemHash(null);
+    setWizardStep(0); // back to the first wizard step (pick a domain)
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [stopPlayback, cancelSolveMutation, uploadMutation, uploadCustomMutation, llmTransformerMutation, llmGenerateMutation]);
 
@@ -1669,6 +1654,50 @@ export default function Visualizer() {
   };
 
   const currentDomain = domains.find(d => d.id === selectedDomain);
+
+  // ── Wizard step model ───────────────────────────────────────────────────
+  // Per-step validity mirrors handleGenerate's own checks so the stepper marks
+  // and the Generate gate can never disagree.
+  const builtinProblemValid =
+    problemType === "example" || (inputMode === "file" ? !!problemFile : !!problemText.trim());
+  const customProblemValid =
+    customProblemInputMode === "file" ? !!customProblemFile : !!customProblemText.trim();
+  const savedDomainValid =
+    customMode === "saved" && !!selectedSavedDomainId && !!loadSavedDomainQuery.data;
+  const newDomainValid =
+    customMode === "new" &&
+    !!customDomainName.trim() &&
+    (customDomainInputMode === "file" ? !!customDomainFile : !!customDomainText.trim());
+  const domainStepValid = isCustomDomain
+    ? (customMode === "saved" ? savedDomainValid : newDomainValid)
+    : true;
+  const customStep1Valid = domainStepValid && customProblemValid;
+  const canGenerate = isCustomDomain ? customStep1Valid : builtinProblemValid;
+
+  // Built-in domains get a standalone Problem step; custom domains bundle the
+  // problem into their domain components, so step 1 covers both ("Domain & Problem").
+  const problemSummary =
+    problemType === "example"
+      ? "Example problem"
+      : inputMode === "file"
+      ? (problemFile?.name ?? "Upload a file")
+      : (problemText.trim() ? "Pasted PDDL" : "Paste PDDL");
+  const wizardSteps = isCustomDomain
+    ? [
+        { key: "domainProblem", label: "Domain & Problem", summary: customDomainName || "Custom", valid: customStep1Valid },
+        { key: "strategy", label: "Strategy", summary: currentStrategy?.name ?? selectedStrategy, valid: true },
+      ]
+    : [
+        { key: "domain", label: "Domain", summary: currentDomain?.name ?? selectedDomain, valid: true },
+        { key: "problem", label: "Problem", summary: problemSummary, valid: builtinProblemValid },
+        { key: "strategy", label: "Strategy", summary: currentStrategy?.name ?? selectedStrategy, valid: true },
+      ];
+  const safeStep = Math.min(wizardStep, wizardSteps.length - 1);
+  const activeStep = wizardSteps[safeStep];
+
+  // Switching Basic↔Custom changes step 1's content and the problem pipeline,
+  // so walk the user back to the first step.
+  useEffect(() => { setWizardStep(0); }, [isCustomDomain]);
 
   // ──────────────────────────────────────────────────────────────────────────
   return (
@@ -1801,345 +1830,345 @@ export default function Visualizer() {
 
 
 
-        {/* ── Main layout ── */}
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* ── Setup wizard (the options page) ── */}
+        <div className="flex flex-col gap-5">
 
-          {/* ── Sidebar (the options page) ── */}
           <AnimatePresence mode="popLayout">
             {(
               <motion.div
-                layout
-                initial={{ opacity: 0, x: -16 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -16 }}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 12 }}
                 transition={spring}
-                className="w-full lg:w-[320px] lg:flex-shrink-0 flex flex-col gap-4"
+                className="w-full flex flex-col gap-5"
               >
 
-                {/* ── Unified Configuration Panel ── */}
-                <motion.div
+                {/* ── Decoration band: the planning-graph hero (kept as ambient art) ── */}
+                <div className="relative flex flex-col items-center gap-3 pt-1 pb-1 pointer-events-none select-none" aria-hidden="true">
+                  <div className="relative opacity-30">
+                    <div className="absolute inset-0 -m-12 rounded-full" style={{ background: "radial-gradient(ellipse at center, rgba(34,197,94,0.08) 0%, rgba(99,102,241,0.05) 50%, transparent 70%)" }} />
+                    <PlanningGraph />
+                  </div>
+                  <div className="px-4 py-2 rounded-xl border border-white/[0.07] font-mono text-xs text-slate-500" style={{ background: "rgba(11,21,36,0.7)" }}>
+                    <span className="text-green-500">$</span> planner --domain {isCustomDomain ? (customDomainName || "custom") : selectedDomain} --run<BlinkingCursor />
+                  </div>
+                </div>
+
+                {/* ── Stepper bar ── */}
+                <div className="flex items-stretch gap-2">
+                  {wizardSteps.map((step, i) => {
+                    const isActive = i === safeStep;
+                    const isDone = step.valid && !isActive;
+                    return (
+                      <button
+                        key={step.key}
+                        type="button"
+                        onClick={() => setWizardStep(i)}
+                        disabled={isBusy}
+                        className={`flex-1 min-w-0 flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all duration-150 disabled:cursor-not-allowed ${
+                          isActive
+                            ? "bg-[#111E30] border-white/[0.14]"
+                            : "bg-[#0E1A2B] border-white/[0.06] hover:border-white/[0.12]"
+                        }`}
+                        style={isActive ? { boxShadow: "0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(0,0,0,0.18)" } : undefined}
+                      >
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                          style={isActive
+                            ? { background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)" }
+                            : { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          {isDone
+                            ? <CheckCircleIcon className="w-4 h-4 text-green-400" />
+                            : <span className={`text-[11px] font-bold ${isActive ? "text-green-300" : "text-slate-500"}`} style={{ fontFamily: "'JetBrains Mono', monospace" }}>{i + 1}</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm font-semibold truncate ${isActive ? "text-slate-100" : "text-slate-400"}`} style={{ fontFamily: "'JetBrains Mono', monospace" }}>{step.label}</div>
+                          <div className="text-xs text-slate-500 truncate">{step.summary}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* ── Stage panel (active step's content) ── */}
+                <div
                   className={`rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden transition-opacity duration-200 ${isBusy ? "opacity-60 pointer-events-none select-none" : ""}`}
                   aria-busy={isBusy}
                   style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px rgba(0,0,0,0.18)" }}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.32, ease: easeOut }}
                 >
-                  {/* Panel header bar */}
-                  <div className="px-4 py-3 flex items-center gap-2 border-b border-white/[0.06]"
-                    style={{ background: "rgba(255,255,255,0.02)" }}>
-                    <span className="text-xs font-semibold tracking-[0.15em] uppercase text-slate-500"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}>Configure</span>
-                    <div className="flex-1" />
-                    {/* Step progress pips — live domain color for step 1 */}
-                    <div className="flex items-center gap-1.5">
-                      {[
-                        { c: domainColors[selectedDomain]?.dotColor ?? "#22c55e", key: "d" },
-                        { c: "#0EA5E9", key: "p" },
-                        { c: "#8B5CF6", key: "s" },
-                        { c: "#22C55E", key: "r" },
-                      ].map(({ c, key }) => (
-                        <div key={key} className="w-1.5 h-1.5 rounded-full transition-all duration-300"
-                          style={{ background: c, opacity: 0.7 }} />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* ── Step 1: Domain ── */}
-                  <div>
-                    <button onClick={() => setIsDomainOpen(!isDomainOpen)}
-                      className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-white/[0.03] transition-all duration-150">
-                      {/* Colorized step badge */}
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
-                        style={isCustomDomain
-                          ? { background: "rgba(168,85,247,0.15)", border: "1px solid rgba(168,85,247,0.3)" }
-                          : { background: domainColors[selectedDomain]?.iconBg ?? "rgba(34,197,94,0.15)", border: `1px solid ${domainColors[selectedDomain]?.selBorder ?? "rgba(34,197,94,0.3)"}` }}>
-                        <span className="text-[11px] font-bold"
-                          style={{ fontFamily: "'JetBrains Mono', monospace", color: isCustomDomain ? "#c084fc" : (domainColors[selectedDomain]?.iconColor ?? "#4ade80") }}>1</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="text-sm font-semibold text-slate-200 flex-shrink-0"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>Domain</span>
-                        <motion.span
-                          key={isCustomDomain ? "custom" : selectedDomain}
-                          initial={{ opacity: 0, y: -4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          className="text-xs font-semibold px-2 py-0.5 rounded-full truncate"
-                          style={isCustomDomain
-                            ? { color: "#c084fc", background: "rgba(168,85,247,0.12)", border: "1px solid rgba(168,85,247,0.3)" }
-                            : { color: domainColors[selectedDomain]?.nameColor ?? "#4ade80", background: domainColors[selectedDomain]?.selBg ?? "rgba(34,197,94,0.1)", border: `1px solid ${domainColors[selectedDomain]?.selBorder ?? "rgba(34,197,94,0.25)"}` }}
-                        >
-                          {isCustomDomain ? (customDomainName || "Custom") : currentDomain?.name}
-                        </motion.span>
-                      </div>
-                      <motion.div animate={{ rotate: isDomainOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }}>
-                        <ChevronDownIcon className="w-4 h-4 text-slate-600" />
-                      </motion.div>
-                    </button>
-
-                    <CollapseSection open={isDomainOpen}>
-                      <div className="px-3 pb-4 pt-2 border-t border-white/[0.04] space-y-3">
-                        {/* Basic / Custom domain type toggle */}
-                        <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06]">
-                          {[
-                            { id: "basic",  label: "Basic" },
-                            { id: "custom", label: "Custom" },
-                          ].map(t => (
-                            <button
-                              key={t.id}
-                              onClick={() => {
-                                // Per user request: clicking Basic/Custom in the configure
-                                // panel must NOT wipe the current visualization. The canvas
-                                // keeps showing the previous run until the user clicks
-                                // Generate. So we only reset the form / mode state here.
-                                if (t.id === "custom") {
-                                  setIsCustomDomain(true);
-                                  setSelectedDomain("");
-                                  setIsDomainOpen(true);
-                                } else {
-                                  setIsCustomDomain(false);
-                                  setCustomDomainName(""); setCustomDomainFile(null);
-                                  setCustomDomainText(""); setCustomProblemFile(null); setCustomProblemText("");
-                                  setLlmTransformerCode(null); setTransformerError(null); setTransformerModelInfo(null);
-                                  setIsDomainOpen(true);
-                                }
-                              }}
-                              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all duration-150 ${
-                                (t.id === "custom" ? isCustomDomain : !isCustomDomain)
-                                  ? t.id === "custom"
-                                    ? "bg-purple-600/80 text-white shadow-sm"
-                                    : "bg-white/[0.08] text-slate-200 shadow-sm"
-                                  : "text-slate-600 hover:text-slate-400"
-                              }`}
-                              style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                            >
-                              {t.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Basic: domain list */}
-                        <AnimatePresence mode="wait">
-                          {!isCustomDomain && (
-                            <DomainGrid
-                              key="basic-list"
-                              domains={domains}
-                              selectedDomain={selectedDomain}
-                              domainColors={domainColors}
-                              onSelect={(id) => { setSelectedDomain(id); setIsCustomDomain(false); }}
-                              onViewDefinition={() => setShowDomainDefinition(true)}
-                            />
-                          )}
-
-                          {/* Custom: Saved / Upload New sub-toggle + panels */}
-                          {isCustomDomain && (
-                            <motion.div
-                              key="custom-panel"
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              transition={{ duration: 0.2, ease: easeOut }}
-                              className="overflow-hidden space-y-3"
-                            >
-                              {/* Sub-toggle: Saved / Upload New */}
-                              <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: "rgba(255,255,255,0.04)" }}>
-                                {([{ id: "saved", label: "Saved Domains" }, { id: "new", label: "Upload New" }] as const).map(m => (
-                                  <button key={m.id} onClick={() => {
-                                    setCustomMode(m.id);
-                                    if (m.id === "new") {
-                                      setSelectedSavedDomainId(null);
-                                      // Clear saved domain code when switching to new
-                                      setLlmTransformerCode(null);
-                                      setLlmRendererCode(null);
-                                      setLlmError(null);
-                                      setTransformerError(null);
-                                    }
-                                    if (m.id === "saved") {
-                                      // Clear new domain code when switching to saved
-                                      setLlmTransformerCode(null);
-                                      setLlmRendererCode(null);
-                                      setLlmError(null);
-                                      setTransformerError(null);
+                  <div className="p-5 min-h-[460px]" style={{ maxHeight: "calc(100vh - 380px)", overflow: "auto" }}>
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={activeStep.key}
+                        initial={{ opacity: 0, x: 12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -12 }}
+                        transition={{ duration: 0.2, ease: easeOut }}
+                      >
+                        {/* ── Step: Domain (also Problem, for custom domains) ── */}
+                        {(activeStep.key === "domain" || activeStep.key === "domainProblem") && (
+                          <div className="space-y-4">
+                            {/* Basic / Custom domain type toggle */}
+                            <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06] max-w-[320px]">
+                              {[
+                                { id: "basic",  label: "Basic" },
+                                { id: "custom", label: "Custom" },
+                              ].map(t => (
+                                <button
+                                  key={t.id}
+                                  onClick={() => {
+                                    // Switching type only resets the form/mode state — the
+                                    // wizard step reset is handled by an effect on isCustomDomain.
+                                    if (t.id === "custom") {
+                                      setIsCustomDomain(true);
+                                      setSelectedDomain("");
+                                    } else {
+                                      setIsCustomDomain(false);
+                                      setCustomDomainName(""); setCustomDomainFile(null);
+                                      setCustomDomainText(""); setCustomProblemFile(null); setCustomProblemText("");
+                                      setLlmTransformerCode(null); setTransformerError(null); setTransformerModelInfo(null);
                                     }
                                   }}
-                                    className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                                      customMode === m.id
-                                        ? "bg-purple-500/20 text-purple-300 shadow-sm border border-purple-500/30"
-                                        : "text-slate-500 hover:text-slate-400 border border-transparent"
-                                    }`}
-                                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                                  >
-                                    {m.label}
-                                  </button>
-                                ))}
+                                  className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-all duration-150 ${
+                                    (t.id === "custom" ? isCustomDomain : !isCustomDomain)
+                                      ? t.id === "custom"
+                                        ? "bg-purple-600/80 text-white shadow-sm"
+                                        : "bg-white/[0.08] text-slate-200 shadow-sm"
+                                      : "text-slate-600 hover:text-slate-400"
+                                  }`}
+                                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                                >
+                                  {t.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Basic: domain list */}
+                            {!isCustomDomain && (
+                              <div className="max-w-[760px]">
+                                <DomainGrid
+                                  domains={domains}
+                                  selectedDomain={selectedDomain}
+                                  domainColors={domainColors}
+                                  onSelect={(id) => { setSelectedDomain(id); setIsCustomDomain(false); }}
+                                  onViewDefinition={() => setShowDomainDefinition(true)}
+                                />
                               </div>
+                            )}
 
-                              {/* Saved Domains List */}
-                              <AnimatePresence mode="wait">
-                                {customMode === "saved" && (
-                                  <motion.div
-                                    key="saved-list"
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={{ duration: 0.2, ease: easeOut }}
-                                    className="overflow-hidden space-y-1"
-                                  >
-                                    {/* Collapsible header — toggles the saved domains list. */}
-                                    <button
-                                      type="button"
-                                      onClick={() => setSavedDomainsListOpen(o => !o)}
-                                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-white/[0.03] transition-colors"
-                                    >
-                                      <motion.div animate={{ rotate: savedDomainsListOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }}>
-                                        <ChevronDownIcon className="w-4 h-4 text-slate-600" />
-                                      </motion.div>
-                                      <span className="text-xs font-semibold text-slate-400" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                                        Saved domains
-                                      </span>
-                                      {savedDomainsQuery.data && savedDomainsQuery.data.length > 0 && (
-                                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/[0.06] text-slate-500">
-                                          {savedDomainsQuery.data.length}
+                            {/* Custom: Saved / Upload New — two columns at full width */}
+                            {isCustomDomain && (
+                              <div className="flex flex-col lg:flex-row gap-6 items-start">
+                                <div className="w-full lg:w-[360px] lg:flex-shrink-0 space-y-3">
+                                  {/* Sub-toggle: Saved / Upload New */}
+                                  <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: "rgba(255,255,255,0.04)" }}>
+                                    {([{ id: "saved", label: "Saved Domains" }, { id: "new", label: "Upload New" }] as const).map(m => (
+                                      <button key={m.id} onClick={() => {
+                                        setCustomMode(m.id);
+                                        if (m.id === "new") {
+                                          setSelectedSavedDomainId(null);
+                                          setLlmTransformerCode(null);
+                                          setLlmRendererCode(null);
+                                          setLlmError(null);
+                                          setTransformerError(null);
+                                        }
+                                        if (m.id === "saved") {
+                                          setLlmTransformerCode(null);
+                                          setLlmRendererCode(null);
+                                          setLlmError(null);
+                                          setTransformerError(null);
+                                        }
+                                      }}
+                                        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                                          customMode === m.id
+                                            ? "bg-purple-500/20 text-purple-300 shadow-sm border border-purple-500/30"
+                                            : "text-slate-500 hover:text-slate-400 border border-transparent"
+                                        }`}
+                                        style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                                      >
+                                        {m.label}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {/* Saved Domains list */}
+                                  {customMode === "saved" && (
+                                    <div className="space-y-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSavedDomainsListOpen(o => !o)}
+                                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-white/[0.03] transition-colors"
+                                      >
+                                        <motion.div animate={{ rotate: savedDomainsListOpen ? 0 : -90 }} transition={{ duration: 0.18, ease: easeOut }}>
+                                          <ChevronDownIcon className="w-4 h-4 text-slate-600" />
+                                        </motion.div>
+                                        <span className="text-xs font-semibold text-slate-400" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                                          Saved domains
                                         </span>
-                                      )}
-                                    </button>
-
-                                    <CollapseSection open={savedDomainsListOpen}>
-                                      <SavedDomainsList
-                                        savedDomains={savedDomainsQuery.data}
-                                        isLoading={savedDomainsQuery.isLoading}
-                                        selectedSavedDomainId={selectedSavedDomainId}
-                                        onSelect={(sd) => {
-                                          setSelectedSavedDomainId(sd.id);
-                                          setCustomDomainName(sd.domainName);
-                                        }}
-                                        onDelete={(sd) => setDeleteConfirmModal({
-                                          show: true,
-                                          id: sd.id,
-                                          displayName: sd.displayName,
-                                        })}
-                                      />
-                                    </CollapseSection>
-
-                                    {/* When a saved domain is selected, show domain definition + problem upload */}
-                                    <AnimatePresence>
-                                      {selectedSavedDomainId && loadSavedDomainQuery.data && (
-                                        <SavedDomainDetail
-                                          domainPddl={loadSavedDomainQuery.data.domainPddl}
-                                          transformerCode={loadSavedDomainQuery.data.transformerCode}
-                                          rendererCode={loadSavedDomainQuery.data.rendererCode}
-                                          transformerHash={loadSavedDomainQuery.data.transformerHash}
-                                          rendererHash={loadSavedDomainQuery.data.rendererHash}
-                                          showGeneratedCode={showGeneratedCode}
-                                          onToggleGeneratedCode={() => setShowGeneratedCode(v => !v)}
-                                          problemInputMode={customProblemInputMode}
-                                          onProblemInputModeChange={setCustomProblemInputMode}
-                                          problemFile={customProblemFile}
-                                          onProblemFileChange={setCustomProblemFile}
-                                          problemText={customProblemText}
-                                          onProblemTextChange={setCustomProblemText}
+                                        {savedDomainsQuery.data && savedDomainsQuery.data.length > 0 && (
+                                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/[0.06] text-slate-500">
+                                            {savedDomainsQuery.data.length}
+                                          </span>
+                                        )}
+                                      </button>
+                                      <CollapseSection open={savedDomainsListOpen}>
+                                        <SavedDomainsList
+                                          savedDomains={savedDomainsQuery.data}
+                                          isLoading={savedDomainsQuery.isLoading}
+                                          selectedSavedDomainId={selectedSavedDomainId}
+                                          onSelect={(sd) => {
+                                            setSelectedSavedDomainId(sd.id);
+                                            setCustomDomainName(sd.domainName);
+                                          }}
+                                          onDelete={(sd) => setDeleteConfirmModal({
+                                            show: true,
+                                            id: sd.id,
+                                            displayName: sd.displayName,
+                                          })}
                                         />
-                                      )}
-                                    </AnimatePresence>
-                                  </motion.div>
-                                )}
+                                      </CollapseSection>
+                                    </div>
+                                  )}
+                                </div>
 
-                                {/* Upload New panel */}
-                                {customMode === "new" && (
-                                  <CustomDomainUpload
-                                    key="upload-new"
-                                    llmProvider={llmProvider}
-                                    onProviderChange={setLlmProvider}
-                                    domainName={customDomainName}
-                                    onDomainNameChange={setCustomDomainName}
-                                    domainInputMode={customDomainInputMode}
-                                    onDomainInputModeChange={setCustomDomainInputMode}
-                                    domainFile={customDomainFile}
-                                    onDomainFileChange={setCustomDomainFile}
-                                    domainText={customDomainText}
-                                    onDomainTextChange={setCustomDomainText}
-                                    problemInputMode={customProblemInputMode}
-                                    onProblemInputModeChange={setCustomProblemInputMode}
-                                    problemFile={customProblemFile}
-                                    onProblemFileChange={setCustomProblemFile}
-                                    problemText={customProblemText}
-                                    onProblemTextChange={setCustomProblemText}
-                                  />
-                                )}
-                              </AnimatePresence>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    </CollapseSection>
-                  </div>
+                                {/* Right column: detail / upload form */}
+                                <div className="flex-1 min-w-0 w-full max-w-[640px]">
+                                  {customMode === "saved" && selectedSavedDomainId && loadSavedDomainQuery.data && (
+                                    <SavedDomainDetail
+                                      domainPddl={loadSavedDomainQuery.data.domainPddl}
+                                      transformerCode={loadSavedDomainQuery.data.transformerCode}
+                                      rendererCode={loadSavedDomainQuery.data.rendererCode}
+                                      transformerHash={loadSavedDomainQuery.data.transformerHash}
+                                      rendererHash={loadSavedDomainQuery.data.rendererHash}
+                                      showGeneratedCode={showGeneratedCode}
+                                      onToggleGeneratedCode={() => setShowGeneratedCode(v => !v)}
+                                      problemInputMode={customProblemInputMode}
+                                      onProblemInputModeChange={setCustomProblemInputMode}
+                                      problemFile={customProblemFile}
+                                      onProblemFileChange={setCustomProblemFile}
+                                      problemText={customProblemText}
+                                      onProblemTextChange={setCustomProblemText}
+                                    />
+                                  )}
+                                  {customMode === "saved" && !selectedSavedDomainId && (
+                                    <div className="min-h-[200px] flex items-center justify-center text-center px-6 py-10 rounded-xl border border-dashed border-white/[0.08] text-sm text-slate-500">
+                                      Select a saved domain to load its renderer, then add a problem.
+                                    </div>
+                                  )}
+                                  {customMode === "new" && (
+                                    <CustomDomainUpload
+                                      llmProvider={llmProvider}
+                                      onProviderChange={setLlmProvider}
+                                      domainName={customDomainName}
+                                      onDomainNameChange={setCustomDomainName}
+                                      domainInputMode={customDomainInputMode}
+                                      onDomainInputModeChange={setCustomDomainInputMode}
+                                      domainFile={customDomainFile}
+                                      onDomainFileChange={setCustomDomainFile}
+                                      domainText={customDomainText}
+                                      onDomainTextChange={setCustomDomainText}
+                                      problemInputMode={customProblemInputMode}
+                                      onProblemInputModeChange={setCustomProblemInputMode}
+                                      problemFile={customProblemFile}
+                                      onProblemFileChange={setCustomProblemFile}
+                                      problemText={customProblemText}
+                                      onProblemTextChange={setCustomProblemText}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
-                  {/* Divider */}
-                  <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)" }} />
+                        {/* ── Step: Problem (built-in domains only) ── */}
+                        {activeStep.key === "problem" && (
+                          <div className="max-w-[760px]">
+                            <ProblemInput
+                              domainName={currentDomain?.name}
+                              problemType={problemType}
+                              onProblemTypeChange={setProblemType}
+                              inputMode={inputMode}
+                              onInputModeChange={setInputMode}
+                              problemFile={problemFile}
+                              onProblemFileChange={setProblemFile}
+                              problemText={problemText}
+                              onProblemTextChange={setProblemText}
+                              onViewExample={() => setShowExampleProblem(true)}
+                            />
+                          </div>
+                        )}
 
-                  {/* ── Step 2: Problem (hidden when custom domain is selected) ── */}
-                  <AnimatePresence>
-                    {!isCustomDomain && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2, ease: easeOut }}
-                        className="overflow-hidden"
-                      >
-                  {/* ── Step 2: Problem ── */}
-                  <ProblemInput
-                    domainName={currentDomain?.name}
-                    problemType={problemType}
-                    onProblemTypeChange={setProblemType}
-                    inputMode={inputMode}
-                    onInputModeChange={setInputMode}
-                    problemFile={problemFile}
-                    onProblemFileChange={setProblemFile}
-                    problemText={problemText}
-                    onProblemTextChange={setProblemText}
-                    onViewExample={() => setShowExampleProblem(true)}
-                  />
+                        {/* ── Step: Strategy ── */}
+                        {activeStep.key === "strategy" && (
+                          <div className="max-w-[760px]">
+                            <StrategyPicker
+                              isOpen={true}
+                              onToggle={() => {}}
+                              strategies={strategiesQuery.data}
+                              selectedStrategy={selectedStrategy}
+                              onSelect={setSelectedStrategy}
+                              currentStrategy={currentStrategy}
+                            />
+                          </div>
+                        )}
                       </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Divider */}
-                  <div className="h-px mx-4" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)" }} />
-
-                  {/* ── Step 3: Strategy ── */}
-                  <StrategyPicker
-                    isOpen={isStrategyOpen}
-                    onToggle={() => setIsStrategyOpen(!isStrategyOpen)}
-                    strategies={strategiesQuery.data}
-                    selectedStrategy={selectedStrategy}
-                    onSelect={setSelectedStrategy}
-                    currentStrategy={currentStrategy}
-                  />
-                </motion.div>
-
-                {/* Render Mode picker removed for basic (built-in) domains — they
-                    always use the built-in basic renderer. Custom domains use the
-                    LLM renderer automatically (provider chosen in the upload panel). */}
-                {/* ── Step 4: Generate ── */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2 px-1">
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.3)" }}>
-                      <span className="text-[11px] font-bold text-green-400"
-                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>4</span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Run</span>
+                    </AnimatePresence>
                   </div>
+                </div>
+
+                {/* ── Action bar (Back / Next / Generate) ── */}
+                <div className={`flex items-center gap-3 flex-wrap transition-opacity duration-200 ${isBusy ? "opacity-60 pointer-events-none select-none" : ""}`}>
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep(s => Math.max(0, s - 1))}
+                    disabled={safeStep === 0}
+                    className="py-3 px-5 rounded-2xl font-semibold text-sm tracking-wide border border-white/[0.08] text-slate-300 hover:bg-white/[0.04] disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                  >
+                    Back
+                  </button>
+                  {safeStep < wizardSteps.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setWizardStep(s => Math.min(wizardSteps.length - 1, s + 1))}
+                      disabled={!activeStep.valid}
+                      className="py-3 px-5 rounded-2xl font-semibold text-sm tracking-wide border border-white/[0.08] text-slate-200 hover:bg-white/[0.04] disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      Next
+                    </button>
+                  )}
+                  <div className="flex-1" />
+                  {!canGenerate && !isProcessing && (
+                    <span className="text-xs text-slate-600 hidden sm:block" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                      {isCustomDomain ? "Pick a domain and add a problem" : "Add a problem to continue"}
+                    </span>
+                  )}
+                  {/* Stop — halts the in-flight solve (kills the planner). */}
+                  {isProcessing && (
+                    <motion.button
+                      onClick={handleStop}
+                      whileTap={{ scale: 0.98 }}
+                      whileHover={{ y: -1 }}
+                      transition={{ duration: 0.15 }}
+                      className="py-3 px-6 rounded-2xl font-semibold text-sm tracking-wide bg-red-600/90 hover:bg-red-600 text-white transition-all duration-200 flex items-center justify-center gap-2"
+                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                      Stop
+                    </motion.button>
+                  )}
                   <motion.button
                     onClick={handleGenerate}
-                    disabled={uploadMutation.isPending || isProcessing}
-                    whileTap={!isProcessing ? { scale: 0.98 } : undefined}
-                    whileHover={!isProcessing ? { y: -1 } : undefined}
+                    disabled={!canGenerate || isBusy}
+                    whileTap={!isProcessing && canGenerate ? { scale: 0.98 } : undefined}
+                    whileHover={!isProcessing && canGenerate ? { y: -1 } : undefined}
                     transition={{ duration: 0.15 }}
-                    className={`w-full py-4 px-6 rounded-2xl font-semibold text-sm tracking-wide transition-all duration-200 ${
+                    className={`py-4 px-8 rounded-2xl font-semibold text-sm tracking-wide transition-all duration-200 ${
                       isProcessing
                         ? "bg-green-600/40 text-green-200/60 cursor-wait"
+                        : !canGenerate
+                        ? "bg-white/[0.05] text-slate-600 cursor-not-allowed"
                         : "btn-primary-green text-[#0B1524]"
                     }`}
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
@@ -2161,20 +2190,6 @@ export default function Visualizer() {
                     </span>
                   )}
                   </motion.button>
-                  {/* Stop — halts the in-flight solve (kills the planner). */}
-                  {isProcessing && (
-                    <motion.button
-                      onClick={handleStop}
-                      whileTap={{ scale: 0.98 }}
-                      whileHover={{ y: -1 }}
-                      transition={{ duration: 0.15 }}
-                      className="w-full mt-2 py-3 px-6 rounded-2xl font-semibold text-sm tracking-wide bg-red-600/90 hover:bg-red-600 text-white transition-all duration-200 flex items-center justify-center gap-2"
-                      style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                    >
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-                      Stop
-                    </motion.button>
-                  )}
                 </div>
 
                 <AnimatePresence>
@@ -2189,258 +2204,6 @@ export default function Visualizer() {
             )}
           </AnimatePresence>
 
-          {/* ── Visualization Column (options-page side; the visualize page is
-              the fullscreen overlay below) ── */}
-          <motion.div layout transition={spring} className="flex-1 min-w-0 w-full">
-
-            {renderedStates.length > 0 ? (
-              isFullscreen ? (
-                /* Under-overlay placeholder — keeps a single live canvas/refs. */
-                <div className="rounded-2xl border border-white/[0.08] bg-[#111E30] py-24 px-10 flex flex-col items-center justify-center text-center"
-                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
-                  <p className="text-sm text-slate-400">Visualization is open. Use “Change Domain” to return here.</p>
-                </div>
-              ) : (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: easeOut }}
-                className="flex gap-5"
-              >
-
-                {/* Viz card */}
-                <div className="relative rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden card-accent-top flex-1 min-w-0"
-                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
-
-                  {/* Processing scan beam */}
-                  <AnimatePresence>
-                    {isProcessing && <ScanBeam />}
-                  </AnimatePresence>
-
-                  {/* Success flash */}
-                  <AnimatePresence>
-                    {showSuccessFlash && (
-                      <motion.div
-                        className="absolute inset-0 pointer-events-none rounded-2xl"
-                        style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(34,197,94,0.18) 0%, transparent 65%)", zIndex: 3 }}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: [0, 1, 0] }}
-                        transition={{ duration: 0.9, times: [0, 0.2, 1] }}
-                      />
-                    )}
-                  </AnimatePresence>
-
-                  {/* Card Header */}
-                  <div className="px-6 py-4 border-b border-white/[0.05]">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-sm font-semibold text-slate-200"
-                          style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                          Visualization
-                        </h2>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {isCustomDomain ? (customDomainName || "Custom Domain") : currentDomain?.name} &middot; {plan.length} {plan.length === 1 ? "action" : "actions"}
-                        </p>
-                      </div>
-                      {/* Custom domain pipeline status badges */}
-                      {isCustomDomain && renderedStates.length > 0 && (
-                        <div className="flex items-center gap-2">
-                          {/* Step 1: Transformer */}
-                          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                            isTransformerGenerating
-                              ? "bg-purple-500/10 text-purple-300 border-purple-500/25 animate-pulse"
-                              : llmTransformerCode
-                              ? "bg-purple-500/10 text-purple-400 border-purple-500/25"
-                              : transformerError
-                              ? "bg-red-500/10 text-red-400 border-red-500/20"
-                              : "bg-white/[0.04] text-slate-500 border-white/[0.06]"
-                          }`}>
-                            {isTransformerGenerating ? (
-                              <><motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-3 h-3 border border-purple-400 border-t-transparent rounded-full" /><span>Analyzing domain…</span></>
-                            ) : llmTransformerCode ? (
-                              <><CheckCircleIcon className="w-3 h-3" /><span>Transformer ready</span></>
-                            ) : transformerError ? (
-                              <><AlertIcon className="w-3 h-3" /><span>Transformer failed</span></>
-                            ) : (
-                              <><span className="w-3 h-3 rounded-full bg-slate-600" /><span>Transformer pending</span></>
-                            )}
-                          </div>
-                          {/* Step 2: Canvas renderer */}
-                          {(llmTransformerCode || isLlmGenerating || llmRendererCode) && (
-                            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                              isLlmGenerating
-                                ? "bg-green-500/10 text-green-300 border-green-500/25 animate-pulse"
-                                : llmRendererCode
-                                ? "bg-green-500/10 text-green-400 border-green-500/25"
-                                : llmError
-                                ? "bg-red-500/10 text-red-400 border-red-500/20"
-                                : "bg-white/[0.04] text-slate-500 border-white/[0.06]"
-                            }`}>
-                              {isLlmGenerating ? (
-                                <><motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-3 h-3 border border-green-400 border-t-transparent rounded-full" /><span>Drawing…</span></>
-                              ) : llmRendererCode ? (
-                                <><CheckCircleIcon className="w-3 h-3" /><span>Renderer ready</span></>
-                              ) : llmError ? (
-                                <><AlertIcon className="w-3 h-3" /><span>Renderer failed</span></>
-                              ) : null}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {plannerInfo && (
-                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-                          plannerInfo.used_planner
-                            ? "bg-green-500/10 text-green-400 border-green-500/25"
-                            : "bg-amber-500/10 text-amber-400 border-amber-500/25"
-                        }`}>
-                          {plannerInfo.used_planner
-                            ? <CheckCircleIcon className="w-3 h-3" />
-                            : <AlertIcon       className="w-3 h-3" />}
-                          {plannerInfo.info}
-                        </div>
-                      )}
-                    </div>
-
-                    {plannerInfo?.strategy && (
-                      <div className="mt-2.5 flex items-center gap-2">
-                        <span className="text-xs text-slate-500">Strategy:</span>
-                        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
-                          plannerInfo.strategy.isOptimal ? "bg-purple-500/15 text-purple-400" : "bg-blue-500/15 text-blue-400"
-                        }`}>{plannerInfo.strategy.name}</span>
-                        <SpeedBadge speed={plannerInfo.strategy.speed} />
-                      </div>
-                    )}
-
-                  </div>
-                  {/* Canvas — replaced by a loading state while ANY LLM call
-                      is in flight. Two flows trigger this:
-                        - Custom domain: Stage 1 (transformer) → Stage 2 (renderer)
-                        - Basic domain in LLM render mode: Stage 2 only
-                      The CustomDomainLoading component handles both via the
-                      `stage` prop; basic-mode generation is always renderer-only,
-                      so isTransformerGenerating === false there. */}
-                  <div className="p-4" style={{ maxHeight: "500px", overflow: "auto" }}>
-                    {(isTransformerGenerating || isLlmGenerating) && !llmError && !transformerError ? (
-                      <CustomDomainLoading
-                        stage={isTransformerGenerating ? "transformer" : "renderer"}
-                        domainName={isCustomDomain ? customDomainName : selectedDomain}
-                      />
-                    ) : (
-                      <div ref={canvasContainerRef}>
-                        <StateCanvas
-                          key={vizRunId}
-                          state={renderedStates[currentStateIndex]}
-                          isFirst={currentStateIndex === 0}
-                          isLast={currentStateIndex === renderedStates.length - 1}
-                          llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
-                          transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
-                          onLlmError={handleCanvasLlmError}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Controls — directly under the visualization */}
-                  <PlaybackControls
-                    currentStateIndex={currentStateIndex}
-                    totalStates={renderedStates.length}
-                    isPlaying={isPlaying}
-                    playbackSpeed={playbackSpeed}
-                    onPrevious={handlePrevious}
-                    onPlay={handlePlay}
-                    onPause={handlePause}
-                    onNext={handleNext}
-                    onSeek={setCurrentStateIndex}
-                    onSpeedChange={setPlaybackSpeed}
-                  />
-
-                  {canvasReady && renderFeedbackBox()}
-
-                  {canvasReady && renderVerifyStatus()}
-
-                </div>
-
-                {/* Plan Steps — separate card (sidebar-collapsed mode) */}
-                {plan.length > 0 && (
-                  <PlanStepsList
-                    variant="card"
-                    plan={plan}
-                    currentStateIndex={currentStateIndex}
-                    onSelectIndex={handleSelectStep}
-                    listRef={planStepsRef}
-                  />
-                )}
-              </motion.div>
-              )
-
-            ) : (
-              /* ── Empty State ── */
-              <motion.div
-                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: easeOut }}
-                className="rounded-2xl border border-white/[0.08] bg-[#111E30]"
-                style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}
-              >
-                <div className="py-24 px-10 flex flex-col items-center text-center">
-
-                  {/* Animated planning tree */}
-                  <div className="mb-4 w-full flex flex-col items-center gap-3">
-                    <div className="relative">
-                      <div className="absolute inset-0 -m-12 rounded-full pointer-events-none" style={{ background: "radial-gradient(ellipse at center, rgba(34,197,94,0.08) 0%, rgba(99,102,241,0.05) 50%, transparent 70%)" }} />
-                      <PlanningGraph />
-                    </div>
-                    {/* Legend */}
-                    <motion.div
-                      className="flex items-center gap-4"
-                      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                      transition={{ delay: 1.1, duration: 0.4 }}
-                    >
-                      {[
-                        { color: "#6366F1", label: "Start" },
-                        { color: "rgba(226,232,240,0.5)", label: "State" },
-                        { color: "#22C55E", label: "Goal" },
-                      ].map(({ color, label }) => (
-                        <div key={label} className="flex items-center gap-1.5">
-                          <div className="w-3 h-3 rounded-full border border-white/20 flex-shrink-0"
-                            style={{ background: color }} />
-                          <span className="text-xs text-slate-500">{label}</span>
-                        </div>
-                      ))}
-                    </motion.div>
-                  </div>
-
-                  <motion.h3
-                    className="text-2xl font-semibold text-slate-100 mb-3"
-                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                    initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.7, duration: 0.3, ease: easeOut }}
-                  >
-                    Ready to Visualize
-                  </motion.h3>
-                  <motion.p
-                    className="text-sm text-slate-500 max-w-[340px] leading-relaxed"
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    transition={{ delay: 0.85, duration: 0.3 }}
-                  >
-                    {problemType === "custom"
-                      ? "Upload a PDDL problem file or paste your problem definition, then click Solve Problem"
-                      : "Configure the domain and strategy, then click Generate States"}
-                  </motion.p>
-
-                  {/* Terminal hint with blinking cursor */}
-                  <motion.div
-                    className="mt-8 px-4 py-3 rounded-xl border border-white/[0.07] font-mono text-xs text-slate-500"
-                    style={{ background: "rgba(11,21,36,0.7)" }}
-                    initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 1.0, duration: 0.3, ease: easeOut }}
-                  >
-                    <span className="text-green-500">$</span>
-                    {" "}planner --domain {selectedDomain} --run
-                    <BlinkingCursor />
-                  </motion.div>
-                </div>
-              </motion.div>
-            )}
-          </motion.div>
         </div>
       </main>
 
