@@ -54,55 +54,57 @@ export function PlaybackControls({
   const atEnd = currentStateIndex >= totalStates - 1;
 
   return (
-    <div className="px-6 py-4 border-t border-white/[0.05] bg-black/[0.15] space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1 bg-white/[0.04] rounded-xl border border-white/[0.06] p-1">
-          <motion.button onClick={onPrevious} disabled={atStart}
-            whileTap={{ scale: 0.92 }}
-            className="p-2.5 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-all duration-150">
-            <SkipBackIcon className="w-4 h-4 text-slate-400" />
+    <div className="px-4 py-3 border-t border-white/[0.05] bg-black/[0.15] flex items-center gap-3">
+      {/* Transport buttons */}
+      <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-xl border border-white/[0.06] p-1 shrink-0">
+        <motion.button onClick={onPrevious} disabled={atStart}
+          whileTap={{ scale: 0.92 }}
+          className="p-2 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-all duration-150">
+          <SkipBackIcon className="w-4 h-4 text-slate-400" />
+        </motion.button>
+        {isPlaying ? (
+          <motion.button onClick={onPause} whileTap={{ scale: 0.92 }}
+            className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-all duration-150">
+            <PauseIcon className="w-4 h-4" />
           </motion.button>
-          {isPlaying ? (
-            <motion.button onClick={onPause} whileTap={{ scale: 0.92 }}
-              className="p-2.5 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-all duration-150">
-              <PauseIcon className="w-4 h-4" />
-            </motion.button>
-          ) : (
-            <motion.button onClick={onPlay} disabled={atEnd}
-              whileTap={{ scale: 0.92 }}
-              className="p-2.5 rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-25 transition-all duration-150">
-              <PlayIcon className="w-4 h-4" />
-            </motion.button>
-          )}
-          <motion.button onClick={onNext} disabled={atEnd}
+        ) : (
+          <motion.button onClick={onPlay} disabled={atEnd}
             whileTap={{ scale: 0.92 }}
-            className="p-2.5 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-all duration-150">
-            <SkipForwardIcon className="w-4 h-4 text-slate-400" />
+            className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-25 transition-all duration-150">
+            <PlayIcon className="w-4 h-4" />
           </motion.button>
-        </div>
-
-        <div className="flex-1 px-1">
-          <input type="range" min="0" max={totalStates - 1} value={currentStateIndex}
-            onChange={e => onSeek(Number(e.target.value))}
-            className="w-full" />
-        </div>
-
-        <div className="text-xs font-medium text-slate-500 bg-white/[0.04] px-2.5 py-1.5 rounded-lg border border-white/[0.06]"
-          style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          <AnimatedNumber value={currentStateIndex} />
-          <span className="text-slate-700"> / {totalStates - 1}</span>
-        </div>
+        )}
+        <motion.button onClick={onNext} disabled={atEnd}
+          whileTap={{ scale: 0.92 }}
+          className="p-2 rounded-lg hover:bg-white/[0.06] disabled:opacity-25 transition-all duration-150">
+          <SkipForwardIcon className="w-4 h-4 text-slate-400" />
+        </motion.button>
       </div>
 
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-slate-500 font-medium">Speed</span>
-        <input type="range" min="200" max="2000" step="200"
-          value={2200 - playbackSpeed}
-          onChange={e => onSpeedChange(2200 - Number(e.target.value))}
-          className="w-28" />
-        <span className="text-xs text-slate-500 font-medium tabular-nums"
-          style={{ fontFamily: "'JetBrains Mono', monospace" }}>{playbackSpeed}ms</span>
+      {/* Scrubber */}
+      <div className="flex-1 min-w-0 px-1">
+        <input type="range" min="0" max={totalStates - 1} value={currentStateIndex}
+          onChange={e => onSeek(Number(e.target.value))}
+          className="w-full" />
       </div>
+
+      {/* Step counter */}
+      <div className="text-xs font-medium text-slate-500 bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.06] shrink-0"
+        style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <AnimatedNumber value={currentStateIndex} />
+        <span className="text-slate-700"> / {totalStates - 1}</span>
+      </div>
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-white/[0.1] shrink-0" />
+
+      {/* Speed */}
+      <input type="range" min="200" max="2000" step="200"
+        value={2200 - playbackSpeed}
+        onChange={e => onSpeedChange(2200 - Number(e.target.value))}
+        className="w-20 shrink-0" />
+      <span className="text-xs text-slate-500 tabular-nums shrink-0 w-[54px] text-right"
+        style={{ fontFamily: "'JetBrains Mono', monospace" }}>{playbackSpeed}ms</span>
     </div>
   );
 }

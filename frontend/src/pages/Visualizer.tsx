@@ -618,6 +618,7 @@ export default function Visualizer() {
   // dark field with floating playback, plan steps, and study panels over it.
   const [isFullscreen, setIsFullscreen]                 = useState(false);
   const [showNewProblemPanel, setShowNewProblemPanel]   = useState(false);
+  const [newProblemStrategyOpen, setNewProblemStrategyOpen] = useState(false);
   const [showFsPlanSteps, setShowFsPlanSteps]           = useState(true);
   // Live viewport size for the fullscreen canvas (so its background fills the
   // whole screen with the domain objects centered).
@@ -2344,7 +2345,7 @@ export default function Visualizer() {
 
           {/* (3) Floating playback bar (bottom-center) */}
           {canvasReady && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md shadow-2xl overflow-hidden w-[min(680px,92vw)]">
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md shadow-2xl overflow-hidden w-[min(480px,92vw)]">
               <PlaybackControls
                 currentStateIndex={currentStateIndex}
                 totalStates={renderedStates.length}
@@ -2383,7 +2384,7 @@ export default function Visualizer() {
           {/* (5) Feedback — bottom-left of the playback bar (always shown),
               a wide short bar matching the playback bar's height. */}
           {canvasReady && (
-            <div className="absolute left-4 bottom-6 w-[620px] max-w-[calc(50vw-360px)] pointer-events-auto rounded-2xl border border-white/[0.08] bg-[#111E30]/95 backdrop-blur-md shadow-2xl overflow-hidden">
+            <div className="absolute left-4 bottom-6 w-[500px] max-w-[calc(50vw-256px)] pointer-events-auto rounded-2xl border border-white/[0.08] bg-[#111E30]/95 backdrop-blur-md shadow-2xl overflow-hidden">
               {renderFeedbackBox(true)}
             </div>
           )}
@@ -2468,6 +2469,17 @@ export default function Visualizer() {
                     onViewExample={() => setShowExampleProblem(true)}
                   />
                 )}
+
+                <div className="border-t border-white/[0.06]">
+                  <StrategyPicker
+                    isOpen={newProblemStrategyOpen}
+                    onToggle={() => setNewProblemStrategyOpen(o => !o)}
+                    strategies={strategiesQuery.data}
+                    selectedStrategy={selectedStrategy}
+                    onSelect={setSelectedStrategy}
+                    currentStrategy={currentStrategy}
+                  />
+                </div>
 
                 <div className="px-4 py-3 border-t border-white/[0.06] sticky bottom-0 bg-[#111E30]/[0.97] backdrop-blur-xl">
                   <button onClick={submitNewProblem} disabled={isBusy}

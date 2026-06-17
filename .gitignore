@@ -49,3 +49,4 @@ playwright-report/
 test-results/
 .vitest-cache/
 /backend/planner/output/
+REORG_PROPOSAL.md
