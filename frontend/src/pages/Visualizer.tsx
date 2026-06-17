@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { getSessionId } from "@/lib/session";
@@ -18,6 +19,9 @@ import { SavedDomainsList } from "@/components/SavedDomainsList";
 import { CustomDomainUpload } from "@/components/CustomDomainUpload";
 import { ProblemInput } from "@/components/ProblemInput";
 import { SavedDomainDetail } from "@/components/SavedDomainDetail";
+import { PlanStepsList } from "@/components/PlanStepsList";
+import { Textarea } from "@/components/ui/textarea";
+import { PillToggle } from "@/components/PillToggle";
 import { easeOut, spring, fadeInUp } from "@/lib/animation";
 import { FeedbackBox } from "@/components/FeedbackBox";
 import { SusSurvey } from "@/components/SusSurvey";
@@ -30,6 +34,7 @@ import {
   CheckCircleIcon,
   ChevronDownIcon, WandIcon,
   MenuIcon, TerminalIcon,
+  CloseIcon, UploadIcon, FileCodeIcon,
   BlocksWorldIcon, GripperIcon, DepotIcon, HanoiIcon, RoverIcon, SatelliteIcon,
 } from "@/components/Icons";
 
@@ -623,8 +628,19 @@ export default function Visualizer() {
   const [isStrategyOpen, setIsStrategyOpen]     = useState(false);
   const [showExampleProblem, setShowExampleProblem]     = useState(false);
   const [showDomainDefinition, setShowDomainDefinition] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed]     = useState(false);
   const [showSuccessFlash, setShowSuccessFlash]         = useState(false);
+  // Fullscreen visualization mode — a full-window overlay (covers nav + footer)
+  // entered automatically on a successful Generate. The diagram is centered on a
+  // dark field with floating playback, plan steps, and study panels over it.
+  const [isFullscreen, setIsFullscreen]                 = useState(false);
+  const [showNewProblemPanel, setShowNewProblemPanel]   = useState(false);
+  const [showFsPlanSteps, setShowFsPlanSteps]           = useState(true);
+  // Live viewport size for the fullscreen canvas (so its background fills the
+  // whole screen with the domain objects centered).
+  const [fsSize, setFsSize] = useState(() => ({
+    w: typeof window !== "undefined" ? window.innerWidth : 1280,
+    h: typeof window !== "undefined" ? window.innerHeight : 800,
+  }));
 
   const planStepsRef        = useRef<HTMLDivElement>(null);
   const usingSavedDomainRef = useRef(false);  // tracks if current upload is from a saved domain
@@ -1027,6 +1043,9 @@ export default function Visualizer() {
 
   const uploadMutation = trpc.visualizer.uploadAndGenerate.useMutation({
     onSuccess: (data) => {
+      // Stop/Change-Domain was hit mid-solve — ignore this late result so it
+      // can't pull the user back into the visualize page.
+      if (cancelledRef.current) { cancelledRef.current = false; return; }
       setIsProcessing(false);
       setRenderedStates(data.states);
       setRawStates(data.raw_states ?? null);
@@ -1046,6 +1065,8 @@ export default function Visualizer() {
       // Success flash
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 900);
+      // Hand the whole window over to the visualization.
+      setIsFullscreen(true);
     },
     onError: (error: any) => {
       setIsProcessing(false);
@@ -1055,6 +1076,9 @@ export default function Visualizer() {
         cancelledRef.current = false;
         return;
       }
+      // A failed first generation has no states to show — drop back to the
+      // options page so the error modal isn't stranded over a blank overlay.
+      if (renderedStates.length === 0) setIsFullscreen(false);
       let errorMessage = error.message || "An unknown error occurred";
       let errorType = "general", title = "Error";
       let suggestedDomain: string | undefined, suggestedDomainName: string | undefined;
@@ -1080,6 +1104,10 @@ export default function Visualizer() {
   const llmGenerateMutation = trpc.visualizer.llmGenerateRenderer.useMutation({
     onSuccess: (data) => {
       setIsLlmGenerating(false);
+      // Stop/Change-Domain was hit mid-pipeline — ignore this late renderer
+      // result so we don't apply the code OR auto-save the domain after the
+      // user bailed back to the options page.
+      if (cancelledRef.current) { cancelledRef.current = false; return; }
       if (data.code) {
         setLlmRendererCode(data.code); setLlmError(null);
         setLlmModelInfo(`${data.provider} (${data.model})`);
@@ -1110,7 +1138,11 @@ export default function Visualizer() {
         }
       }
     },
-    onError: (error: any) => { setIsLlmGenerating(false); setLlmError(error.message || "Failed to generate LLM renderer"); },
+    onError: (error: any) => {
+      setIsLlmGenerating(false);
+      if (cancelledRef.current) { cancelledRef.current = false; return; }
+      setLlmError(error.message || "Failed to generate LLM renderer");
+    },
   });
 
 
@@ -1118,6 +1150,8 @@ export default function Visualizer() {
   // Custom domain upload mutation
   const uploadCustomMutation = trpc.visualizer.uploadAndGenerateCustom.useMutation({
     onSuccess: (data) => {
+      // Stop/Change-Domain was hit mid-solve — ignore this late result.
+      if (cancelledRef.current) { cancelledRef.current = false; return; }
       setIsProcessing(false);
       setRenderedStates(data.states);
       setRawStates(data.raw_states ?? null);
@@ -1134,6 +1168,9 @@ export default function Visualizer() {
       setVerifyByKey(new Map());
       setShowSuccessFlash(true);
       setTimeout(() => setShowSuccessFlash(false), 900);
+      // Hand the whole window over to the visualization. For the new-domain
+      // flow the canvas shows the LLM loading state first, then the diagram.
+      setIsFullscreen(true);
       // Auto-trigger transformer generation ONLY for new domain flow
       // Use ref (not state) to avoid React batching race condition
       if (data.states.length > 0 && !usingSavedDomainRef.current) {
@@ -1148,6 +1185,7 @@ export default function Visualizer() {
         cancelledRef.current = false;
         return;
       }
+      if (renderedStates.length === 0) setIsFullscreen(false);
       // First-upload simplicity gate: a brand-new domain's starter problem was
       // too large/complex. Show a friendly "start smaller" message rather than
       // a generic error.
@@ -1167,6 +1205,9 @@ export default function Visualizer() {
   const llmTransformerMutation = trpc.visualizer.llmGenerateTransformer.useMutation({
     onSuccess: (data) => {
       setIsTransformerGenerating(false);
+      // Stop/Change-Domain was hit mid-pipeline — ignore so we never kick off
+      // the renderer stage (Stage 2) after the user bailed.
+      if (cancelledRef.current) { cancelledRef.current = false; return; }
       if (data.code) {
         setLlmTransformerCode(data.code); setTransformerError(null);
         setTransformerModelInfo(`${data.provider} (${data.model})`);
@@ -1231,6 +1272,7 @@ export default function Visualizer() {
     },
     onError: (error: any) => {
       setIsTransformerGenerating(false);
+      if (cancelledRef.current) { cancelledRef.current = false; return; }
       setTransformerError(error.message || "Failed to generate state transformer");
     },
   });
@@ -1372,6 +1414,10 @@ export default function Visualizer() {
 
   const handleGenerate = () => {
     setIsProcessing(true);
+    // Switch to the visualize page immediately so the solving animation, the
+    // duplicate-domain modal, and the transformer/renderer stages all play out
+    // on the fullscreen page (reverted below if input validation fails).
+    setIsFullscreen(true);
     cancelledRef.current = false;
     solveIdRef.current = crypto.randomUUID();
     // Always scroll the page to the top when the user hits Generate.
@@ -1394,7 +1440,7 @@ export default function Visualizer() {
     // Custom domain flow
     if (isCustomDomain) {
       const hasProblem = customProblemInputMode === "file" ? !!customProblemFile : !!customProblemText.trim();
-      if (!hasProblem) { setIsProcessing(false); alert("Please provide the problem PDDL file"); return; }
+      if (!hasProblem) { setIsProcessing(false); setIsFullscreen(false); alert("Please provide the problem PDDL file"); return; }
 
       const readFile = (file: File): Promise<string> =>
         new Promise((resolve) => { const r = new FileReader(); r.onload = (e) => resolve(e.target?.result as string); r.readAsText(file); });
@@ -1428,8 +1474,8 @@ export default function Visualizer() {
 
       // Upload New flow: requires both domain.pddl and problem.pddl
       const hasDomain = customDomainInputMode === "file" ? !!customDomainFile : !!customDomainText.trim();
-      if (!customDomainName.trim()) { setIsProcessing(false); alert("Please enter a domain name"); return; }
-      if (!hasDomain) { setIsProcessing(false); alert("Please provide the domain PDDL file"); return; }
+      if (!customDomainName.trim()) { setIsProcessing(false); setIsFullscreen(false); alert("Please enter a domain name"); return; }
+      if (!hasDomain) { setIsProcessing(false); setIsFullscreen(false); alert("Please provide the domain PDDL file"); return; }
       const run = async () => {
         const domainContent = customDomainInputMode === "file" && customDomainFile
           ? await readFile(customDomainFile) : customDomainText;
@@ -1448,8 +1494,8 @@ export default function Visualizer() {
     }
     // Standard domain flow
     if (problemType === "custom") {
-      if (inputMode === "file" && !problemFile) { setIsProcessing(false); alert("Please select a problem file"); return; }
-      if (inputMode === "text" && !problemText.trim()) { setIsProcessing(false); alert("Please paste PDDL content"); return; }
+      if (inputMode === "file" && !problemFile) { setIsProcessing(false); setIsFullscreen(false); alert("Please select a problem file"); return; }
+      if (inputMode === "text" && !problemText.trim()) { setIsProcessing(false); setIsFullscreen(false); alert("Please paste PDDL content"); return; }
       const reader = new FileReader();
       const process = (content: string) =>
         uploadMutation.mutate({ domainContent: "", problemContent: content, domainName: selectedDomain as any, searchStrategy: selectedStrategy as any, sessionId: getSessionId(), solveId: solveIdRef.current ?? undefined });
@@ -1458,6 +1504,158 @@ export default function Visualizer() {
     } else {
       uploadMutation.mutate({ domainContent: "", problemContent: getDefaultProblem(selectedDomain), domainName: selectedDomain as any, searchStrategy: selectedStrategy as any, sessionId: getSessionId(), solveId: solveIdRef.current ?? undefined });
     }
+  };
+
+  // ── Two-page model: options page (sidebar) + visualize page (fullscreen) ─────
+  // "Change Domain" leaves the visualize page and returns to a clean options
+  // page (no states shown — just like first opening the app), so the user can
+  // pick a different domain/problem and Generate again.
+  const changeDomain = useCallback(() => {
+    // Abort any in-flight solve so a late success can't pull us back in.
+    cancelledRef.current = true;
+    if (solveIdRef.current) cancelSolveMutation.mutate({ solveId: solveIdRef.current });
+    uploadMutation.reset();
+    uploadCustomMutation.reset();
+    // Abort the two-phase LLM pipeline (transformer → renderer). The mutation
+    // guards (cancelledRef) drop any in-flight stage result so it can't apply
+    // code or auto-save the domain; these resets clear the client state so the
+    // options page comes back exactly as it was — nothing persisted/changed.
+    llmTransformerMutation.reset();
+    llmGenerateMutation.reset();
+    usingSavedDomainRef.current = false;
+    setLlmTransformerCode(null);
+    setLlmRendererCode(null);
+    setTransformerError(null);
+    setLlmError(null);
+    setTransformerModelInfo(null);
+    setLlmModelInfo(null);
+    setIsProcessing(false);
+    setIsTransformerGenerating(false);
+    setIsLlmGenerating(false);
+    setIsFullscreen(false);
+    setShowNewProblemPanel(false);
+    stopPlayback();
+    setRenderedStates([]);
+    setPlan([]);
+    setCurrentStateIndex(0);
+    setPlannerInfo(null);
+    setRawStates(null);
+    setPredicateSchema(null);
+    setPddlObjects(null);
+    setProblemName(null);
+    setProblemHash(null);
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [stopPlayback, cancelSolveMutation, uploadMutation, uploadCustomMutation, llmTransformerMutation, llmGenerateMutation]);
+
+  const handleSelectStep = (i: number) => {
+    setCurrentStateIndex(i);
+    stopPlayback();
+  };
+
+  // Open the "new problem, same domain" panel. For built-in domains the panel
+  // only shows the upload/paste UI, so force problemType to "custom".
+  const openNewProblemPanel = () => {
+    if (!isCustomDomain) setProblemType("custom");
+    setShowNewProblemPanel(true);
+  };
+
+  const submitNewProblem = () => {
+    setShowNewProblemPanel(false);
+    handleGenerate(); // reuses selectedDomain/isCustomDomain unchanged
+  };
+
+  // Lock body scroll while the visualize page owns the window. Depends ONLY on
+  // isFullscreen so it runs/cleans up exactly once per fullscreen session —
+  // mixing in changeDomain/showNewProblemPanel would re-run it mid-generation
+  // and corrupt the captured overflow value (leaving scroll locked after exit).
+  useEffect(() => {
+    if (!isFullscreen) return;
+    document.body.style.overflow = "hidden";
+    // Restore to the app default ("") — this effect is the only writer of
+    // body overflow, so an unconditional reset can't be corrupted by a stale
+    // captured value.
+    return () => { document.body.style.overflow = ""; };
+  }, [isFullscreen]);
+
+  // Keep the fullscreen canvas sized to the viewport.
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onResize = () => setFsSize({ w: window.innerWidth, h: window.innerHeight });
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [isFullscreen]);
+
+  // Escape closes the new-problem panel first, then leaves the visualize page.
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showNewProblemPanel) { setShowNewProblemPanel(false); return; }
+      changeDomain();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isFullscreen, showNewProblemPanel, changeDomain]);
+
+  // True once a plan is loaded and no LLM stage / error is in flight — the
+  // canvas, feedback box and verify status are all live. Shared by the normal
+  // card and the fullscreen overlay.
+  const canvasReady = renderedStates.length > 0 && !isProcessing && !isTransformerGenerating && !isLlmGenerating && !llmError && !transformerError;
+
+  // onLlmError handler shared by both StateCanvas instances (normal + overlay).
+  const handleCanvasLlmError = useCallback((err: string) => {
+    setLlmError(err);
+    logEventMutation.mutate({
+      sessionId: getSessionId(),
+      type: "render_crash",
+      data: {
+        domain: isCustomDomain ? customDomainName : selectedDomain,
+        isCustomDomain,
+        stateIndex: currentStateIndex,
+        renderMethod: renderMode,
+        error: String(err).slice(0, 500),
+      },
+    });
+  }, [isCustomDomain, customDomainName, selectedDomain, currentStateIndex, renderMode, logEventMutation]);
+
+  // FeedbackBox + VerifyStatus rendered identically in the card and the overlay.
+  const renderFeedbackBox = (compact = false) => (
+    <FeedbackBox
+      compact={compact}
+      context={{
+        domainName: isCustomDomain ? (customDomainName || "custom") : selectedDomain,
+        isCustomDomain,
+        savedDomainId: selectedSavedDomainId,
+        transformerHash: loadSavedDomainQuery.data?.transformerHash ?? null,
+        rendererHash: loadSavedDomainQuery.data?.rendererHash ?? null,
+        llmProvider,
+        problemHash,
+        stateIndex: currentStateIndex,
+        totalStates: renderedStates.length,
+        // Prefer raw PDDL predicates as ground truth (Phase 2 canonical form).
+        // Fall back to the enriched render state for pre-baked examples.
+        symbolicState: rawStates?.[currentStateIndex] ?? renderedStates[currentStateIndex],
+      }}
+      getImageDataUrl={() => {
+        const canvas = canvasContainerRef.current?.querySelector("canvas");
+        return canvas ? canvas.toDataURL("image/png") : null;
+      }}
+    />
+  );
+
+  const renderVerifyStatus = () => {
+    const rh = loadSavedDomainQuery.data?.rendererHash ?? null;
+    const th = loadSavedDomainQuery.data?.transformerHash ?? null;
+    const currentKey = `${rh ?? "norend"}-${th ?? "notrans"}-${currentStateIndex}`;
+    const entry = verifyByKey.get(currentKey) ?? null;
+    return (
+      <VerifyStatus
+        applicable={!!(rawStates && predicateSchema && pddlObjects)}
+        entry={entry}
+        stateIndex={currentStateIndex}
+      />
+    );
   };
 
   // Playback handlers (handlePlay/handlePause/handleNext/handlePrevious/
@@ -1606,9 +1804,9 @@ export default function Visualizer() {
         {/* ── Main layout ── */}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-          {/* ── Sidebar ── */}
+          {/* ── Sidebar (the options page) ── */}
           <AnimatePresence mode="popLayout">
-            {!isSidebarCollapsed && (
+            {(
               <motion.div
                 layout
                 initial={{ opacity: 0, x: -16 }}
@@ -1991,24 +2189,18 @@ export default function Visualizer() {
             )}
           </AnimatePresence>
 
-          {/* ── Visualization Column ── */}
+          {/* ── Visualization Column (options-page side; the visualize page is
+              the fullscreen overlay below) ── */}
           <motion.div layout transition={spring} className="flex-1 min-w-0 w-full">
 
-            {/* Sidebar toggle */}
-            <div className="mb-4">
-              <motion.button
-                whileTap={!isBusy ? { scale: 0.96 } : undefined}
-                onClick={() => { if (!isBusy) setIsSidebarCollapsed(!isSidebarCollapsed); }}
-                disabled={isBusy}
-                title={isBusy ? "Can't hide options while solving" : undefined}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] text-slate-400 text-xs font-medium transition-all duration-150 ${isBusy ? "opacity-40 cursor-not-allowed" : "hover:text-slate-200 hover:border-white/[0.14] hover:bg-white/[0.05]"}`}
-              >
-                <MenuIcon className="w-4 h-4" />
-                {isSidebarCollapsed ? "Show Options" : "Hide Options"}
-              </motion.button>
-            </div>
-
             {renderedStates.length > 0 ? (
+              isFullscreen ? (
+                /* Under-overlay placeholder — keeps a single live canvas/refs. */
+                <div className="rounded-2xl border border-white/[0.08] bg-[#111E30] py-24 px-10 flex flex-col items-center justify-center text-center"
+                  style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
+                  <p className="text-sm text-slate-400">Visualization is open. Use “Change Domain” to return here.</p>
+                </div>
+              ) : (
               <motion.div
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25, ease: easeOut }}
@@ -2141,20 +2333,7 @@ export default function Visualizer() {
                           isLast={currentStateIndex === renderedStates.length - 1}
                           llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
                           transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
-                          onLlmError={err => {
-                            setLlmError(err);
-                            logEventMutation.mutate({
-                              sessionId: getSessionId(),
-                              type: "render_crash",
-                              data: {
-                                domain: isCustomDomain ? customDomainName : selectedDomain,
-                                isCustomDomain,
-                                stateIndex: currentStateIndex,
-                                renderMethod: renderMode,
-                                error: String(err).slice(0, 500),
-                              },
-                            });
-                          }}
+                          onLlmError={handleCanvasLlmError}
                         />
                       </div>
                     )}
@@ -2174,126 +2353,24 @@ export default function Visualizer() {
                     onSpeedChange={setPlaybackSpeed}
                   />
 
-                  {renderedStates.length > 0 && !isTransformerGenerating && !isLlmGenerating && !llmError && !transformerError && (
-                    <FeedbackBox
-                      context={{
-                        domainName: isCustomDomain ? (customDomainName || "custom") : selectedDomain,
-                        isCustomDomain,
-                        savedDomainId: selectedSavedDomainId,
-                        transformerHash: loadSavedDomainQuery.data?.transformerHash ?? null,
-                        rendererHash: loadSavedDomainQuery.data?.rendererHash ?? null,
-                        llmProvider,
-                        problemHash,
-                        stateIndex: currentStateIndex,
-                        totalStates: renderedStates.length,
-                        // Prefer raw PDDL predicates as ground truth (Phase
-                        // 2 canonical form). Fall back to the enriched
-                        // render state for pre-baked examples that
-                        // pre-date raw_states.
-                        symbolicState: rawStates?.[currentStateIndex] ?? renderedStates[currentStateIndex],
-                      }}
-                      getImageDataUrl={() => {
-                        const canvas = canvasContainerRef.current?.querySelector("canvas");
-                        return canvas ? canvas.toDataURL("image/png") : null;
-                      }}
-                    />
-                  )}
+                  {canvasReady && renderFeedbackBox()}
 
-                  {renderedStates.length > 0 && !isTransformerGenerating && !isLlmGenerating && !llmError && !transformerError && (() => {
-                    const rh = loadSavedDomainQuery.data?.rendererHash ?? null;
-                    const th = loadSavedDomainQuery.data?.transformerHash ?? null;
-                    const currentKey = `${rh ?? "norend"}-${th ?? "notrans"}-${currentStateIndex}`;
-                    const entry = verifyByKey.get(currentKey) ?? null;
-                    return (
-                      <VerifyStatus
-                        applicable={!!(rawStates && predicateSchema && pddlObjects)}
-                        entry={entry}
-                        stateIndex={currentStateIndex}
-                      />
-                    );
-                  })()}
+                  {canvasReady && renderVerifyStatus()}
 
                 </div>
 
                 {/* Plan Steps — separate card (sidebar-collapsed mode) */}
                 {plan.length > 0 && (
-                  <div className="w-80 flex-shrink-0 rounded-2xl border border-white/[0.08] bg-[#111E30] overflow-hidden"
-                    style={{ boxShadow: "0 1px 0 rgba(255,255,255,0.04) inset" }}>
-                    <div className="px-4 py-3 border-b border-white/[0.05] bg-white/[0.02] flex items-center justify-between">
-                      <h3 className="text-xs font-semibold text-slate-300 flex items-center gap-2"
-                        style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                        <TerminalIcon className="w-3.5 h-3.5 text-green-500" />
-                        Plan Steps
-                      </h3>
-                      <span className="text-xs text-slate-500 tabular-nums">{plan.length} actions</span>
-                    </div>
-                    <div ref={planStepsRef}
-                      className="p-3 space-y-0.5 max-h-[600px] overflow-y-auto overscroll-contain"
-                      style={{ scrollBehavior: "smooth" }}>
-                      {/* State 0 — initial state (before any action fires) */}
-                      <motion.div
-                        initial={false}
-                        animate={currentStateIndex === 0 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
-                        transition={{ duration: 0.2 }}
-                        onClick={() => { setCurrentStateIndex(0); stopPlayback(); }}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCurrentStateIndex(0); stopPlayback(); } }}
-                        role="button"
-                        tabIndex={0}
-                        title="Show initial state (before any action)"
-                        className={`text-xs px-3 py-2 rounded-lg transition-colors font-mono cursor-pointer focus:outline-none focus:ring-1 focus:ring-green-500/40 ${
-                          currentStateIndex === 0
-                            ? "text-green-300 font-medium border-l-[2px] border-green-500"
-                            : "text-slate-700 hover:bg-white/[0.03] hover:text-slate-500"
-                        }`}>
-                        <span className={`mr-2 tabular-nums ${currentStateIndex === 0 ? "text-green-600" : "text-slate-700"}`}>
-                          00.
-                        </span>
-                        Initial State
-                      </motion.div>
-                      {plan.map((action, idx) => {
-                        // Jump the canvas to the state PRODUCED by this action.
-                        // plan[idx] transitions state[idx] → state[idx+1], so to
-                        // see the result of the action we set currentStateIndex
-                        // to idx+1. We also pause autoplay so the user's
-                        // manual selection isn't immediately overridden by the
-                        // ticker.
-                        const handleJumpToAction = () => {
-                          setCurrentStateIndex(idx + 1);
-                          stopPlayback();
-                        };
-                        return (
-                          <motion.div key={idx}
-                            initial={false}
-                            animate={idx === currentStateIndex - 1 ? { backgroundColor: "rgba(34,197,94,0.08)" } : { backgroundColor: "transparent" }}
-                            transition={{ duration: 0.2 }}
-                            onClick={handleJumpToAction}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                handleJumpToAction();
-                              }
-                            }}
-                            role="button"
-                            tabIndex={0}
-                            title={`Show state after this action`}
-                            className={`text-xs px-3 py-2 rounded-lg transition-colors font-mono cursor-pointer focus:outline-none focus:ring-1 focus:ring-green-500/40 ${
-                              idx === currentStateIndex - 1
-                                ? "text-green-300 font-medium border-l-[2px] border-green-500"
-                                : idx < currentStateIndex - 1
-                                ? "text-slate-700 hover:bg-white/[0.03] hover:text-slate-500"
-                                : "text-slate-500 hover:bg-white/[0.03] hover:text-slate-300"
-                            }`}>
-                            <span className={`mr-2 tabular-nums ${idx === currentStateIndex - 1 ? "text-green-600" : "text-slate-700"}`}>
-                              {String(idx + 1).padStart(2, "0")}.
-                            </span>
-                            {action}
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <PlanStepsList
+                    variant="card"
+                    plan={plan}
+                    currentStateIndex={currentStateIndex}
+                    onSelectIndex={handleSelectStep}
+                    listRef={planStepsRef}
+                  />
                 )}
               </motion.div>
+              )
 
             ) : (
               /* ── Empty State ── */
@@ -2374,6 +2451,274 @@ export default function Visualizer() {
           </p>
         </div>
       </footer>
+
+      {/* ── Fullscreen visualization overlay ──────────────────────────────────
+          Portaled to <body> so it escapes the page stacking context. z-45 sits
+          above the header (40) but below ModalBackdrop (50), so existing modals
+          (errors, duplicate-domain, example viewer) still render above it. */}
+      {isFullscreen && (renderedStates.length > 0 || isProcessing || isTransformerGenerating || isLlmGenerating) && createPortal(
+        <motion.div
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          transition={{ duration: 0.25, ease: easeOut }}
+          className="fixed inset-0 bg-[#0B1524]"
+          style={{
+            zIndex: 45,
+            backgroundImage: "radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)",
+            backgroundSize: "24px 24px",
+          }}
+        >
+          {/* (1) Drawing surface — the canvas fills the whole screen (its
+              background is the backdrop; domain objects stay centered). While
+              solving / building the visualizer, a centered animation + Stop
+              replaces it. */}
+          {isProcessing ? (
+            <div className="absolute inset-0 flex items-center justify-center p-8">
+              <div className="flex flex-col items-center gap-7 text-center">
+                <div className="relative w-20 h-20">
+                  <div className="absolute inset-0 rounded-full border-2 border-green-200/15" />
+                  <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-green-400 animate-spin" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-100" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                    {isCustomDomain || problemType === "custom" ? "Solving problem" : "Generating states"}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-2 font-mono">Running the planner… {formatTime(elapsedTime)}</p>
+                  {currentStrategy?.isOptimal && elapsedTime > 30 && (
+                    <p className="text-xs text-amber-400/80 mt-2 max-w-sm mx-auto leading-relaxed">
+                      Optimal search can take a while. Consider a satisficing strategy for faster results.
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={changeDomain}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-red-600/90 hover:bg-red-600 text-white transition-all duration-150"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
+                >
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                  Stop
+                </button>
+              </div>
+            </div>
+          ) : (isTransformerGenerating || isLlmGenerating) && !llmError && !transformerError ? (
+            <div className="absolute inset-0 flex items-center justify-center p-8">
+              <div className="flex flex-col items-center gap-5">
+                <CustomDomainLoading
+                  stage={isTransformerGenerating ? "transformer" : "renderer"}
+                  domainName={isCustomDomain ? customDomainName : selectedDomain}
+                />
+                <button
+                  onClick={changeDomain}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/[0.1] bg-white/[0.04] text-slate-300 text-xs font-medium hover:text-white hover:border-white/[0.18] transition-all duration-150"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+                  Stop
+                </button>
+              </div>
+            </div>
+          ) : renderedStates.length > 0 ? (
+            <div ref={canvasContainerRef} className="absolute inset-0">
+              <StateCanvas
+                key={vizRunId}
+                state={renderedStates[currentStateIndex]}
+                width={fsSize.w}
+                height={fsSize.h}
+                fillContainer
+                isFirst={currentStateIndex === 0}
+                isLast={currentStateIndex === renderedStates.length - 1}
+                llmRendererCode={renderMode === "llm" && llmRendererCode ? llmRendererCode : undefined}
+                transformerCode={isCustomDomain && llmTransformerCode ? llmTransformerCode : undefined}
+                onLlmError={handleCanvasLlmError}
+              />
+            </div>
+          ) : null}
+
+          {/* (2) Floating top toolbar — actions appear once the canvas is ready;
+              during generation only the domain label shows (Stop lives on the
+              loader). */}
+          <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-3 pointer-events-none">
+            <div className="flex items-center gap-2 pointer-events-auto">
+              {canvasReady && (
+                <>
+                  <button
+                    onClick={changeDomain}
+                    title="Back to options — choose a different domain or problem"
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md text-slate-300 text-xs font-medium hover:text-white hover:border-white/[0.16] transition-all duration-150"
+                  >
+                    <MenuIcon className="w-4 h-4" /> Change Domain
+                  </button>
+                  <button
+                    onClick={openNewProblemPanel}
+                    disabled={isBusy}
+                    title="Solve a new problem for the same domain"
+                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md text-slate-300 text-xs font-medium hover:text-white hover:border-white/[0.16] transition-all duration-150 disabled:opacity-40"
+                  >
+                    <UploadIcon className="w-4 h-4" /> New Problem
+                  </button>
+                </>
+              )}
+              <span className="px-3 py-2 rounded-xl border border-white/[0.06] bg-[#111E30]/70 backdrop-blur-md text-xs text-slate-400 font-mono">
+                {isCustomDomain ? (customDomainName || "Custom") : currentDomain?.name}
+              </span>
+            </div>
+            {canvasReady && (
+              <div className="flex items-center gap-2 pointer-events-auto">
+                <button
+                  onClick={() => setShowFsPlanSteps(s => !s)}
+                  className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md text-slate-300 text-xs font-medium hover:text-white hover:border-white/[0.16] transition-all duration-150"
+                >
+                  <TerminalIcon className="w-4 h-4" /> {showFsPlanSteps ? "Hide" : "Show"} Steps
+                </button>
+                <button
+                  onClick={changeDomain}
+                  title="Back to options (Esc)"
+                  className="flex items-center justify-center p-2 rounded-xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md text-slate-300 hover:text-white hover:border-white/[0.16] transition-all duration-150"
+                >
+                  <CloseIcon className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* (3) Floating playback bar (bottom-center) */}
+          {canvasReady && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md shadow-2xl overflow-hidden w-[min(680px,92vw)]">
+              <PlaybackControls
+                currentStateIndex={currentStateIndex}
+                totalStates={renderedStates.length}
+                isPlaying={isPlaying}
+                playbackSpeed={playbackSpeed}
+                onPrevious={handlePrevious}
+                onPlay={handlePlay}
+                onPause={handlePause}
+                onNext={handleNext}
+                onSeek={setCurrentStateIndex}
+                onSpeedChange={setPlaybackSpeed}
+              />
+            </div>
+          )}
+
+          {/* (4) Floating plan steps (right) */}
+          <AnimatePresence>
+            {showFsPlanSteps && canvasReady && plan.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }}
+                transition={spring}
+                className="absolute top-20 right-4 bottom-28"
+              >
+                <PlanStepsList
+                  variant="floating"
+                  plan={plan}
+                  currentStateIndex={currentStateIndex}
+                  onSelectIndex={handleSelectStep}
+                  listRef={planStepsRef}
+                  className="h-full"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* (5) Feedback — bottom-left of the playback bar (always shown),
+              a wide short bar matching the playback bar's height. */}
+          {canvasReady && (
+            <div className="absolute left-4 bottom-6 w-[620px] max-w-[calc(50vw-360px)] pointer-events-auto rounded-2xl border border-white/[0.08] bg-[#111E30]/95 backdrop-blur-md shadow-2xl overflow-hidden">
+              {renderFeedbackBox(true)}
+            </div>
+          )}
+
+          {/* (6) Verify status — bottom-right of the playback bar */}
+          {canvasReady && (
+            <div className="absolute right-4 bottom-6 w-[320px] max-w-[26vw] pointer-events-auto rounded-2xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md shadow-2xl overflow-hidden">
+              {renderVerifyStatus()}
+            </div>
+          )}
+
+          {/* (7) New-problem (same-domain) mini-panel */}
+          <AnimatePresence>
+            {showNewProblemPanel && (
+              <motion.div
+                initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}
+                transition={spring}
+                className="absolute top-20 left-1/2 -translate-x-1/2 w-[440px] max-w-[92vw] max-h-[72vh] overflow-auto rounded-2xl border border-white/[0.1] bg-[#111E30]/[0.97] backdrop-blur-xl shadow-2xl"
+              >
+                <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between sticky top-0 bg-[#111E30]/[0.97] backdrop-blur-xl z-10">
+                  <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                    <UploadIcon className="w-4 h-4 text-green-500" />
+                    New Problem &middot; {isCustomDomain ? (customDomainName || "Custom") : currentDomain?.name}
+                  </h3>
+                  <button onClick={() => setShowNewProblemPanel(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-all">
+                    <CloseIcon className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {isCustomDomain ? (
+                  <div className="px-4 py-4 space-y-3">
+                    <p className="text-xs text-slate-500">Provide a new problem PDDL for <strong className="text-slate-300">{customDomainName || "this domain"}</strong>. The existing renderer is reused.</p>
+                    <PillToggle<"file" | "text">
+                      options={[
+                        { id: "file", label: <><UploadIcon className="w-3 h-3" />Upload</> },
+                        { id: "text", label: <><FileCodeIcon className="w-3 h-3" />Paste</> },
+                      ]}
+                      value={customProblemInputMode}
+                      onChange={v => { setCustomProblemInputMode(v); if (v === "file") setCustomProblemText(""); else setCustomProblemFile(null); }}
+                    />
+                    {customProblemInputMode === "file" ? (
+                      <div className="relative">
+                        <input type="file" accept=".pddl"
+                          onChange={e => setCustomProblemFile(e.target.files?.[0] || null)}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                        <div className={`border-2 border-dashed rounded-xl p-5 text-center transition-all ${
+                          customProblemFile
+                            ? "border-green-500/40 bg-green-500/[0.06]"
+                            : "border-white/[0.08] hover:border-green-500/30 hover:bg-green-500/[0.04]"
+                        }`}>
+                          {customProblemFile ? (
+                            <><CheckCircleIcon className="w-6 h-6 text-green-500 mx-auto mb-1.5" />
+                            <p className="text-xs text-green-400 font-medium truncate px-2">{customProblemFile.name}</p></>
+                          ) : (
+                            <><UploadIcon className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
+                            <p className="text-xs text-slate-600">Drop .pddl file or click to browse</p></>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <Textarea
+                        value={customProblemText}
+                        onChange={e => setCustomProblemText(e.target.value)}
+                        placeholder={"(define (problem ...)\n  (:domain ...)\n  ...\n)"}
+                        className="font-mono text-xs min-h-[220px] bg-white/[0.04] border-white/[0.08] text-slate-300 placeholder:text-slate-700 focus:border-green-500/40 rounded-xl resize-none"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <ProblemInput
+                    domainName={currentDomain?.name}
+                    problemType={problemType}
+                    onProblemTypeChange={setProblemType}
+                    inputMode={inputMode}
+                    onInputModeChange={setInputMode}
+                    problemFile={problemFile}
+                    onProblemFileChange={setProblemFile}
+                    problemText={problemText}
+                    onProblemTextChange={setProblemText}
+                    onViewExample={() => setShowExampleProblem(true)}
+                  />
+                )}
+
+                <div className="px-4 py-3 border-t border-white/[0.06] sticky bottom-0 bg-[#111E30]/[0.97] backdrop-blur-xl">
+                  <button onClick={submitNewProblem} disabled={isBusy}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-500 disabled:opacity-40 transition-all duration-150">
+                    <WandIcon className="w-4 h-4" />
+                    {isProcessing ? "Processing…" : "Generate"}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>,
+        document.body
+      )}
 
       {/* ── Modals ── */}
       <ErrorModal

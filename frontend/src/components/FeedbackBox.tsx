@@ -25,6 +25,8 @@ interface FeedbackBoxProps {
   getImageDataUrl: () => string | null;
   /** Optional: hide while a generation/loading is in flight. */
   disabled?: boolean;
+  /** Horizontal, single-row layout (fits a short bar next to the playback controls). */
+  compact?: boolean;
 }
 
 const RATING_MIN = 1;
@@ -39,7 +41,7 @@ function ratingDescriptor(r: number): string {
   return "Totally off";
 }
 
-export function FeedbackBox({ context, getImageDataUrl, disabled }: FeedbackBoxProps) {
+export function FeedbackBox({ context, getImageDataUrl, disabled, compact }: FeedbackBoxProps) {
   const [rating, setRating] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -115,6 +117,62 @@ export function FeedbackBox({ context, getImageDataUrl, disabled }: FeedbackBoxP
 
   const sliderValue = rating ?? RATING_MIN;
   const tickCount = Math.round((RATING_MAX - RATING_MIN) / 1) + 1; // 1,2,3,4,5
+
+  // Compact: a single horizontal row sized to sit next to the playback bar.
+  if (compact) {
+    return (
+      <div className="px-5 py-4 flex items-center gap-5" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-slate-400 truncate">
+              How well does this image represent the state?
+            </span>
+            <span className="text-[10px] text-slate-600 uppercase tracking-wide whitespace-nowrap">
+              step {context.stateIndex + 1} / {context.totalStates}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={RATING_MIN} max={RATING_MAX} step={RATING_STEP}
+              value={sliderValue}
+              onChange={(e) => setRating(Number(e.target.value))}
+              disabled={disabled}
+              className="flex-1 accent-green-500"
+            />
+            <div className={`min-w-[64px] text-right tabular-nums text-sm font-medium ${rating === null ? "text-slate-600" : "text-slate-200"}`}>
+              {rating === null ? "—" : rating.toFixed(1)} / {RATING_MAX}
+            </div>
+          </div>
+          <div className="h-[14px] text-[11px] leading-[14px] truncate">
+            {error
+              ? <span className="text-red-400">{error}</span>
+              : rating !== null
+              ? <span className="text-slate-500">{ratingDescriptor(rating)}</span>
+              : <span className="text-slate-600">Drag to rate, then submit</span>}
+          </div>
+        </div>
+        <div className="flex items-stretch gap-3 shrink-0" style={{ width: 300 }}>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={needsComment ? "What's wrong? (required below 5)" : "Optional comment"}
+            disabled={disabled || rating === null}
+            rows={2}
+            className="flex-1 px-3 py-2 text-xs bg-white/[0.04] border border-white/[0.08] rounded-lg text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-white/[0.2] resize-none disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className="px-4 text-xs font-medium rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            {submitMutation.isPending ? "Submitting…" : "Submit"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 py-4 border-t border-white/[0.05] bg-black/[0.15] space-y-3">

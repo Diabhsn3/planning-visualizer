@@ -104,7 +104,17 @@ interface StateCanvasProps {
   transformerCode?: string;
   /** Callback when LLM renderer execution fails */
   onLlmError?: (error: string) => void;
+  /** Fill the parent (canvas spans width×height as a backdrop, controls float
+   *  over it). Used by the fullscreen visualize page. */
+  fillContainer?: boolean;
 }
+
+// Renderers are authored against a fixed 800×600 design space (see the
+// canvas-renderer-generator skill rules). When the canvas buffer is larger
+// than this we center that design box so the domain objects sit in the middle
+// while the renderer's background fills the whole (bigger) canvas.
+const DESIGN_W = 800;
+const DESIGN_H = 600;
 
 
 // ============================================
@@ -290,7 +300,7 @@ function LegendSwatch({ shape, color }: { shape?: string; color?: string }) {
   }
 }
 
-export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmRendererCode, transformerCode, onLlmError }: StateCanvasProps) {
+export function StateCanvas({ state, width = 800, height = 600, isFirst = false, isLast = false, llmRendererCode, transformerCode, onLlmError, fillContainer = false }: StateCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -299,7 +309,7 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
   // to be a module-level singleton, which leaked zoom/pan across concurrent
   // canvases and across new-plan loads. New plans remount this component (it's
   // keyed by the plan run in the parent), which resets the view to defaults.
-  const viewRef = useRef({ scale: 1, offsetX: 0, offsetY: 0 });
+  const viewRef = useRef({ scale: 1, offsetX: (width - DESIGN_W) / 2, offsetY: (height - DESIGN_H) / 2 });
 
   // Initialize from the per-instance defaults.
   const [scale, setScaleState] = useState(viewRef.current.scale);
@@ -572,19 +582,38 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
     setIsDragging(false);
   };
 
-  // Reset zoom and pan
+  // Reset zoom and re-center the design box.
   const handleReset = useCallback(() => {
+    const ox = (width - DESIGN_W) / 2;
+    const oy = (height - DESIGN_H) / 2;
     viewRef.current.scale = 1;
-    viewRef.current.offsetX = 0;
-    viewRef.current.offsetY = 0;
+    viewRef.current.offsetX = ox;
+    viewRef.current.offsetY = oy;
     setScaleState(1);
-    setOffsetState({ x: 0, y: 0 });
-  }, []);
+    setOffsetState({ x: ox, y: oy });
+  }, [width, height]);
+
+  // Re-center whenever the canvas buffer size changes (e.g. window resize in
+  // fullscreen). Runs once on mount too — a no-op for the default 800×600.
+  useEffect(() => {
+    const ox = (width - DESIGN_W) / 2;
+    const oy = (height - DESIGN_H) / 2;
+    viewRef.current.scale = 1;
+    viewRef.current.offsetX = ox;
+    viewRef.current.offsetY = oy;
+    setScaleState(1);
+    setOffsetState({ x: ox, y: oy });
+  }, [width, height]);
 
   return (
-    <div ref={containerRef} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-      {/* Zoom controls - above the canvas */}
-      <div style={{
+    <div ref={containerRef} style={fillContainer
+      ? { position: "relative", width, height }
+      : { display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* Zoom controls — above the canvas normally, floating top-center when filling */}
+      <div style={fillContainer ? {
+        position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 10,
+        display: "flex", gap: "8px",
+      } : {
         display: "flex",
         justifyContent: "flex-end",
         gap: "8px",
@@ -674,7 +703,7 @@ export function StateCanvas({ state, width = 800, height = 600, isFirst = false,
       </div>
 
       {/* Canvas + HTML legend overlay (replaces the old on-canvas legend) */}
-      <div style={{ position: "relative", width: "fit-content" }}>
+      <div style={fillContainer ? { position: "absolute", inset: 0 } : { position: "relative", width: "fit-content" }}>
         <canvas
           ref={canvasRef}
           width={width}
