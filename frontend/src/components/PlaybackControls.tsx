@@ -55,7 +55,6 @@ export function PlaybackControls({
 
   return (
     <div className="px-4 py-3 border-t border-white/[0.05] bg-black/[0.15] flex items-center gap-3">
-      {/* Transport buttons */}
       <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-xl border border-white/[0.06] p-1 shrink-0">
         <motion.button onClick={onPrevious} disabled={atStart}
           whileTap={{ scale: 0.92 }}
@@ -81,24 +80,20 @@ export function PlaybackControls({
         </motion.button>
       </div>
 
-      {/* Scrubber */}
       <div className="flex-1 min-w-0 px-1">
         <input type="range" min="0" max={totalStates - 1} value={currentStateIndex}
           onChange={e => onSeek(Number(e.target.value))}
           className="w-full" />
       </div>
 
-      {/* Step counter */}
       <div className="text-xs font-medium text-slate-500 bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.06] shrink-0"
         style={{ fontFamily: "'JetBrains Mono', monospace" }}>
         <AnimatedNumber value={currentStateIndex} />
         <span className="text-slate-700"> / {totalStates - 1}</span>
       </div>
 
-      {/* Divider */}
       <div className="w-px h-4 bg-white/[0.1] shrink-0" />
 
-      {/* Speed */}
       <input type="range" min="200" max="2000" step="200"
         value={2200 - playbackSpeed}
         onChange={e => onSpeedChange(2200 - Number(e.target.value))}

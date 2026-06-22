@@ -30,6 +30,8 @@ export interface VerifyStatusProps {
   entry: VerifyEntry | null;
   /** Current 0-based state index — used for the "Verifying state N" copy. */
   stateIndex: number;
+  /** "bar" (default) = bottom-of-card inset row; "pill" = compact toolbar chip. */
+  variant?: "bar" | "pill";
 }
 
 function fmt(n: number | null | undefined): string {
@@ -37,30 +39,18 @@ function fmt(n: number | null | undefined): string {
   return n.toFixed(2);
 }
 
-export function VerifyStatus({ applicable, entry, stateIndex }: VerifyStatusProps) {
+export function VerifyStatus({ applicable, entry, stateIndex, variant = "bar" }: VerifyStatusProps) {
   if (!applicable) return null;
 
   let body: ReactNode;
   if (entry === null) {
     body = <span className="text-slate-600">No verification yet for this state.</span>;
   } else if (entry.status === "pending") {
-    body = (
-      <span className="text-slate-400">
-        Verifying state {stateIndex + 1}…
-      </span>
-    );
+    body = <span className="text-slate-400">Verifying state {stateIndex + 1}…</span>;
   } else if (entry.status === "error") {
-    body = (
-      <span className="text-red-400">
-        Agent ✗ {entry.error}
-      </span>
-    );
+    body = <span className="text-red-400">Agent ✗ {entry.error}</span>;
   } else if (entry.result.parseFailure) {
-    body = (
-      <span className="text-amber-400">
-        Agent ✗ parse failure — see verifier page
-      </span>
-    );
+    body = <span className="text-amber-400">Agent ✗ parse failure</span>;
   } else {
     body = (
       <span className="text-slate-300">
@@ -68,19 +58,25 @@ export function VerifyStatus({ applicable, entry, stateIndex }: VerifyStatusProp
         <span className="tabular-nums text-slate-100">{fmt(entry.result.precision)}</span> · R=
         <span className="tabular-nums text-slate-100">{fmt(entry.result.recall)}</span>
         {entry.result.cacheHit && (
-          <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-500/70">
-            cached
-          </span>
+          <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-500/70">cached</span>
         )}
       </span>
     );
   }
 
+  if (variant === "pill") {
+    return (
+      <div
+        className="px-3.5 py-2 rounded-xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md text-xs text-slate-300 whitespace-nowrap"
+        style={mono}
+      >
+        {body}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className="px-6 py-2 border-t border-white/[0.05] bg-black/[0.15] text-xs"
-      style={mono}
-    >
+    <div className="px-6 py-2 border-t border-white/[0.05] bg-black/[0.15] text-xs" style={mono}>
       {body}
     </div>
   );

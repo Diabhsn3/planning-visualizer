@@ -1630,7 +1630,7 @@ export default function Visualizer() {
     />
   );
 
-  const renderVerifyStatus = () => {
+  const renderVerifyStatus = (variant: "bar" | "pill" = "bar") => {
     const rh = loadSavedDomainQuery.data?.rendererHash ?? null;
     const th = loadSavedDomainQuery.data?.transformerHash ?? null;
     const currentKey = `${rh ?? "norend"}-${th ?? "notrans"}-${currentStateIndex}`;
@@ -1640,6 +1640,7 @@ export default function Visualizer() {
         applicable={!!(rawStates && predicateSchema && pddlObjects)}
         entry={entry}
         stateIndex={currentStateIndex}
+        variant={variant}
       />
     );
   };
@@ -2326,6 +2327,7 @@ export default function Visualizer() {
             </div>
             {canvasReady && (
               <div className="flex items-center gap-2 pointer-events-auto">
+                {renderVerifyStatus("pill")}
                 <button
                   onClick={() => setShowFsPlanSteps(s => !s)}
                   className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md text-slate-300 text-xs font-medium hover:text-white hover:border-white/[0.16] transition-all duration-150"
@@ -2343,25 +2345,7 @@ export default function Visualizer() {
             )}
           </div>
 
-          {/* (3) Floating playback bar (bottom-center) */}
-          {canvasReady && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-2xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md shadow-2xl overflow-hidden w-[min(480px,92vw)]">
-              <PlaybackControls
-                currentStateIndex={currentStateIndex}
-                totalStates={renderedStates.length}
-                isPlaying={isPlaying}
-                playbackSpeed={playbackSpeed}
-                onPrevious={handlePrevious}
-                onPlay={handlePlay}
-                onPause={handlePause}
-                onNext={handleNext}
-                onSeek={setCurrentStateIndex}
-                onSpeedChange={setPlaybackSpeed}
-              />
-            </div>
-          )}
-
-          {/* (4) Floating plan steps (right) */}
+          {/* (4) Floating plan steps (right) — verify scores pinned at top */}
           <AnimatePresence>
             {showFsPlanSteps && canvasReady && plan.length > 0 && (
               <motion.div
@@ -2376,23 +2360,34 @@ export default function Visualizer() {
                   onSelectIndex={handleSelectStep}
                   listRef={planStepsRef}
                   className="h-full"
+
                 />
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* (5) Feedback — bottom-left of the playback bar (always shown),
-              a wide short bar matching the playback bar's height. */}
+          {/* (5) Bottom row — 60 % playback · 40 % feedback */}
           {canvasReady && (
-            <div className="absolute left-4 bottom-6 w-[500px] max-w-[calc(50vw-256px)] pointer-events-auto rounded-2xl border border-white/[0.08] bg-[#111E30]/95 backdrop-blur-md shadow-2xl overflow-hidden">
-              {renderFeedbackBox(true)}
-            </div>
-          )}
-
-          {/* (6) Verify status — bottom-right of the playback bar */}
-          {canvasReady && (
-            <div className="absolute right-4 bottom-6 w-[320px] max-w-[26vw] pointer-events-auto rounded-2xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md shadow-2xl overflow-hidden">
-              {renderVerifyStatus()}
+            <div className="absolute bottom-6 left-4 right-4 flex items-stretch gap-3 pointer-events-none">
+              {/* Playback 60% */}
+              <div className="flex-1 pointer-events-auto rounded-2xl border border-white/[0.08] bg-[#111E30]/85 backdrop-blur-md shadow-2xl overflow-hidden">
+                <PlaybackControls
+                  currentStateIndex={currentStateIndex}
+                  totalStates={renderedStates.length}
+                  isPlaying={isPlaying}
+                  playbackSpeed={playbackSpeed}
+                  onPrevious={handlePrevious}
+                  onPlay={handlePlay}
+                  onPause={handlePause}
+                  onNext={handleNext}
+                  onSeek={setCurrentStateIndex}
+                  onSpeedChange={setPlaybackSpeed}
+                />
+              </div>
+              {/* Feedback 40% */}
+              <div className="w-[40%] pointer-events-auto rounded-2xl border border-white/[0.08] bg-[#111E30]/95 backdrop-blur-md shadow-2xl overflow-hidden">
+                {renderFeedbackBox(true)}
+              </div>
             </div>
           )}
 

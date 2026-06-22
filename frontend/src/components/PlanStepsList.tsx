@@ -1,4 +1,4 @@
-import { type Ref } from "react";
+import { type Ref, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { TerminalIcon } from "@/components/Icons";
 
@@ -12,6 +12,8 @@ interface PlanStepsListProps {
   className?: string;
   /** Forwarded to the scroll container so the parent's active-step auto-scroll keeps working. */
   listRef?: Ref<HTMLDivElement>;
+  /** Optional content rendered between the title bar and the step list (e.g. agent verify scores). */
+  headerExtra?: ReactNode;
 }
 
 /**
@@ -26,6 +28,7 @@ export function PlanStepsList({
   variant = "card",
   className = "",
   listRef,
+  headerExtra,
 }: PlanStepsListProps) {
   const shell =
     variant === "floating"
@@ -45,6 +48,7 @@ export function PlanStepsList({
         </h3>
         <span className="text-xs text-slate-500 tabular-nums">{plan.length} actions</span>
       </div>
+      {headerExtra}
       <div ref={listRef}
         className={`p-3 space-y-0.5 overflow-y-auto overscroll-contain ${variant === "floating" ? "flex-1" : "max-h-[600px]"}`}
         style={{ scrollBehavior: "smooth" }}>
