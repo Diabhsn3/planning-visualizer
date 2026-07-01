@@ -42,8 +42,9 @@
  * — that's the whole point of the comparison study), but bounded.
  *
  * Other improvements baked in:
- *   - `temperature: 0.2` for reproducibility (so the artifact-store
- *     hash dedup actually has a chance of hitting on identical PDDLs).
+ *   - No `temperature` override — Claude Sonnet 5 (and Opus 4.7+) reject
+ *     non-default temperature/top_p/top_k with a 400. `temperature` is
+ *     still accepted as an optional override for callers on older models.
  *   - 240s timeout via AbortSignal — a stuck call no longer hangs.
  *   - Code extraction recognizes both `function foo` and
  *     `const foo = (...) =>` shapes.
@@ -74,7 +75,7 @@ export interface CallClaudeWithSkillOptions {
   maxTokens: number;
   /** e.g. "[LLM Renderer]" or "[LLM Interpreter]" */
   logTag: string;
-  /** Defaults to 0.2 — see header comment. */
+  /** Omitted by default — see header comment. */
   temperature?: number;
   /** Defaults to 90s. */
   timeoutMs?: number;
@@ -130,7 +131,7 @@ export async function callClaudeWithSkill(
     modelId,
     maxTokens,
     logTag,
-    temperature = 0.2,
+    temperature,
     // Renderer/transformer generation uses Skills + code-execution and
     // emits large code; under any concurrent API load (e.g. auto-verify
     // calls sharing the org rate limit) the request can be throttled and

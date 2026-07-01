@@ -35,7 +35,7 @@ const STAGE1_RESPONSE: GenerateTransformerResponse = {
   success: true,
   code: "export function transform(state) { return state; }",
   provider: "claude",
-  model: "claude-sonnet-4-5",
+  model: "claude-sonnet-5",
 };
 
 describe("Stage 1 → Stage 2 handoff", () => {
@@ -69,13 +69,13 @@ describe("Stage 1 → Stage 2 handoff", () => {
       success: false,
       error: "API timeout",
       provider: "claude",
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-5",
     };
     const stage2Err: GenerateRendererResponse = {
       success: false,
       error: "Renderer validation failed",
       provider: "claude",
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-5",
     };
     expect(stage1Err.success).toBe(false);
     expect(stage2Err.success).toBe(false);

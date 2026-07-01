@@ -29,8 +29,11 @@ export interface RunClaudeAgentLoopOptions {
   client: Anthropic;
   modelId: string;
   maxTokens: number;
-  /** 0–1. Lower = more deterministic. */
-  temperature: number;
+  /**
+   * 0–1. Lower = more deterministic. Omit for models that reject
+   * non-default sampling parameters (e.g. Claude Sonnet 5, Opus 4.7+).
+   */
+  temperature?: number;
   /** Hard timeout — request aborts on overrun. */
   timeoutMs: number;
   /** Tag for log lines, e.g. "[LLM Renderer]" or "[Verifier]". */
@@ -88,7 +91,7 @@ export async function runClaudeAgentLoop(
       {
         model: modelId,
         max_tokens: maxTokens,
-        temperature,
+        ...(temperature !== undefined ? { temperature } : {}),
         system: systemBlocks as any,
         ...(betas.length > 0 ? { betas: betas as any } : {}),
         ...(container ? { container } : {}),

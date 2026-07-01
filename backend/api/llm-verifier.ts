@@ -19,9 +19,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import crypto from "crypto";
 import { runClaudeAgentLoop } from "./llm-claude-kernel";
 
-const MODEL_ID = "claude-sonnet-4-5"; // Vision-capable Claude.
+const MODEL_ID = "claude-sonnet-5"; // Vision-capable Claude.
 const MAX_TOKENS = 4096;
-const TEMPERATURE = 0.0; // Maximally deterministic — same image → same s'.
+// No `temperature` override: Claude Sonnet 5 rejects non-default
+// temperature/top_p/top_k with a 400. Determinism now relies on the
+// model's own default sampling rather than temperature=0.
 const TIMEOUT_MS = 60_000;
 
 /**
@@ -250,7 +252,6 @@ export async function extractPredicates(
     client,
     modelId: MODEL_ID,
     maxTokens: MAX_TOKENS,
-    temperature: TEMPERATURE,
     timeoutMs: TIMEOUT_MS,
     logTag: "[Verifier]",
     systemBlocks,

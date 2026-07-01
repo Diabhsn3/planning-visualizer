@@ -147,7 +147,7 @@ export async function verifyImage(
   input: VerifyImageInput
 ): Promise<VerifyImageResult> {
   const imageHash = hashImage(input.pngBase64);
-  const extractorModelId = "claude-sonnet-4-5";
+  const extractorModelId = "claude-sonnet-5";
 
   // Cache lookup. Re-run on parse-failure cache hits — the previous run
   // produced nothing useful and the prompt/parser may have improved.

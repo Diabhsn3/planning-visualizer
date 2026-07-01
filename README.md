@@ -46,7 +46,7 @@ The visualizer includes hardcoded Python renderers for several classic planning 
 | **Rovers** | ✅ Implemented | Navigate rovers on a planet to collect samples and data. |
 
 ### Custom Domains
-Any valid PDDL domain can be uploaded. The LLM pipeline will attempt to generate a visualizer for it. You can choose between **Claude 3.5 Sonnet** and **Gemini 2.5 Flash** as the generation engine.
+Any valid PDDL domain can be uploaded. The LLM pipeline will attempt to generate a visualizer for it. You can choose between **Claude Sonnet 5** and **Gemini 2.5 Pro** as the generation engine.
 
 ---
 
@@ -155,7 +155,7 @@ Large problems with optimal strategies (A* + LM-cut) can take a very long time. 
 | **Frontend** | React 19, TypeScript 5.7, Tailwind CSS 4, Vite 6, tRPC 11, Radix UI |
 | **Backend API** | Node.js, Express 4, tRPC 11, TypeScript 5.9, Zod 4 |
 | **Planning Engine** | Python 3.11+, Fast Downward |
-| **LLM Integration** | Anthropic SDK (Claude 3.5 Sonnet), Google Gen AI SDK (Gemini 2.5 Flash) |
+| **LLM Integration** | Anthropic SDK (Claude Sonnet 5), Google Gen AI SDK (Gemini 2.5 Pro) |
 
 ---
 
